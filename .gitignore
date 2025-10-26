@@ -1,0 +1,21 @@
+# Bytecode and caches
+__pycache__/
+*.pyc
+*.pyo
+
+# Virtual environments
+.venv/
+.env/
+
+# Editor/OS
+.vscode/
+.DS_Store
+Thumbs.db
+
+# Tool outputs
+fur2amk_last_run.txt
+music/**
+
+# Misc
+*.wav
+*.spc
