@@ -1,5 +1,7 @@
 fur2amk
 
+In progress and at best can only be used for noise music at the moment.
+
 A converter that reads Furnace (.fur) modules and emits AddmusicK-compatible MML and BRR samples.
 
 Highlights
