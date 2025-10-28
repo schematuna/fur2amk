@@ -79,6 +79,9 @@ class Config:
         'echo': ['', 'hex', 8],           # Echo parameters
         'fir': ['', 'hex', 16],           # Fir parameters
         'master': ['', 'hex', 4],         # Master level (left and right)
+        # ARAM checking
+        'aram_check': [True, 'bool'],           # Emit an ARAM usage warning after generation
+        'aram_sample_budget_kb': [52, 'int'],   # Conservative sample budget in KB (approx)
     }
 
     flag_aliases: Dict[str, str] = {
@@ -564,12 +567,13 @@ class FurnaceParser:
                     ins.sn_gain = self._ru8(ds)
                 if length >= 5:
                     ins.sn_decay2susmode = self._ru8(ds)
-            # Note: a duplicate 'SN' case previously existed; removed to avoid dead code.
             elif code == 'SM':
                 # Sample instrument data: initial sample, flags, waveform len, sample map
                 ds = io.BytesIO(data)
                 if length >= 4:
-                    ins.initial_sample = self._ru16(ds) or None
+                    # Preserve raw 0-based initial sample index from Furnace.
+                    # 0 is a valid sample (first entry in Furnace UI); we'll map to 1-based later.
+                    ins.initial_sample = self._ru16(ds)
                     flags = self._ru8(ds)
                     ins.use_sample_map = bool(flags & 0x01)
                     wav_len = self._ru8(ds)  # unused
@@ -582,12 +586,69 @@ class FurnaceParser:
                             table.append((note_to_play, samp_to_play))
                         if table:
                             ins.sample_table = table
+                    # SM debug: show raw values if diagnostics enabled
+                    try:
+                        if bool(Config.flag('diag')):
+                            map_count = len(ins.sample_table) if ins.use_sample_map and ins.sample_table else 0
+                            print(f"[diag]   INS2 inst {idx:02d} SM: initial_raw={ins.initial_sample} flags=0x{flags:02X} use_map={ins.use_sample_map} map_entries={map_count}")
+                    except Exception:
+                        pass
             elif code == 'EN':
                 break
             else:
                 # skip unknown feature
                 pass
         mod.Instruments.append(ins)
+        # If no SM was parsed, emit a short notice under diagnostics
+        try:
+            if bool(Config.flag('diag')) and (ins.initial_sample is None):
+                print(f"[diag]   INS2 inst {idx:02d}: no SM feature present (initial_sample=None)")
+        except Exception:
+            pass
+        # Capture a concise diagnostic summary for this instrument for later printing
+        try:
+            ins_diag = getattr(mod, '_ins2_diag', None)
+            if ins_diag is None:
+                ins_diag = []
+                setattr(mod, '_ins2_diag', ins_diag)
+            # Collect unique non-zero sample indices referenced by the map
+            uniq_samples = []
+            seen = set()
+            preview: List[Tuple[int, int]] = []
+            if ins.use_sample_map and ins.sample_table:
+                for i, (_np, sp) in enumerate(ins.sample_table):
+                    # Keep raw 0-based indices for diagnostics to match Furnace UI.
+                    try:
+                        sidx = int(sp)
+                    except Exception:
+                        sidx = -1
+                    if sidx >= 0:
+                        if sidx not in seen:
+                            seen.add(sidx)
+                            uniq_samples.append(sidx)
+                        # include a short preview of first few entries
+                        if len(preview) < 8:
+                            preview.append((i, sidx))
+            else:
+                # Show initial sample even if it's 0 (valid in Furnace UI)
+                if ins.initial_sample is not None and int(ins.initial_sample) >= 0:
+                    uniq_samples = [int(ins.initial_sample)]
+            ins_diag.append({
+                'index': ins.index,
+                'name': ins.name,
+                'initial_sample': ins.initial_sample,
+                'use_sample_map': bool(ins.use_sample_map),
+                'unique_samples': uniq_samples,
+                'sample_map_preview': preview,
+                'sn_flags': ins.sn_flags,
+                'sn_gain': ins.sn_gain,
+                'sn_attack': ins.sn_attack,
+                'sn_decay': ins.sn_decay,
+                'sn_sustain': ins.sn_sustain,
+                'sn_release': ins.sn_release,
+            })
+        except Exception:
+            pass
 
     def _parse_PATN(self, mod: FurnaceModule, s: io.BytesIO) -> None:
         # Decode Furnace PATN block minimally (based on fur2tad logic)
@@ -801,22 +862,37 @@ class EventTable:
             try:
                 if ins.use_sample_map and ins.sample_table:
                     # Collect unique, non-zero sample indices from the 120-entry map
-                    uniq = []
+                    uniq_1based: List[int] = []
                     seen = set()
                     for (_note_to_play, samp_to_play) in ins.sample_table:
-                        sidx = int(samp_to_play or 0)
-                        if sidx <= 0:
+                        # Furnace SM uses 0-based sample indices; convert to 1-based for our module.Samples
+                        try:
+                            sidx_raw = int(samp_to_play)
+                        except Exception:
+                            sidx_raw = -1
+                        if sidx_raw < 0:
                             continue
-                        if sidx not in seen:
-                            seen.add(sidx)
-                            uniq.append(sidx)
-                    samples_for_ins = uniq
+                        sidx1 = sidx_raw + 1
+                        if sidx1 not in seen:
+                            seen.add(sidx1)
+                            uniq_1based.append(sidx1)
+                    samples_for_ins = uniq_1based
                 else:
-                    sidx = ins.initial_sample if (ins.initial_sample and ins.initial_sample > 0) else 1
-                    samples_for_ins = [int(sidx)]
+                    # Use initial_sample (0-based) if available; convert to 1-based
+                    try:
+                        if ins.initial_sample is not None and int(ins.initial_sample) >= 0:
+                            sidx1 = int(ins.initial_sample) + 1
+                        else:
+                            sidx1 = 1
+                    except Exception:
+                        sidx1 = 1
+                    samples_for_ins = [sidx1]
             except Exception:
-                sidx = ins.initial_sample if (ins.initial_sample and ins.initial_sample > 0) else 1
-                samples_for_ins = [int(sidx)]
+                try:
+                    sidx1 = int(ins.initial_sample) + 1 if (ins.initial_sample is not None and int(ins.initial_sample) >= 0) else 1
+                except Exception:
+                    sidx1 = 1
+                samples_for_ins = [sidx1]
             # Track used samples and populate instrument entries
             for sidx in samples_for_ins:
                 self.used_samples.add(sidx)
@@ -864,6 +940,70 @@ class MML:
     def add_amk_header(self) -> None:
         self.txt += '#amk 2\n\n'
 
+    # --- helpers ---
+    def _row_kind(self, row: FurnacePatternRow) -> str:
+        """Classify a Furnace row for emission.
+
+        Returns: 'note' | 'off' | 'cut' | 'empty'.
+        OFF = 255, CUT = 254 as per parser comment.
+        """
+        n = row.Note
+        if n is None:
+            return 'empty'
+        try:
+            v = int(n)
+        except Exception:
+            return 'empty'
+        if v == 255:
+            return 'off'
+        if v == 254:
+            return 'cut'
+        if 0 <= v <= 179:
+            return 'note'
+        return 'empty'
+
+    def _divisors(self, n: int) -> List[int]:
+        n = int(n)
+        if n <= 0:
+            return [1]
+        divs = []
+        i = 1
+        while i * i <= n:
+            if n % i == 0:
+                divs.append(i)
+                if i != n // i:
+                    divs.append(n // i)
+            i += 1
+        return sorted(divs)
+
+    def _run_to_denoms(self, run_rows: int, base_den: int) -> List[int]:
+        """Decompose a run of rows into a list of AMK length denominators to tie.
+
+        Each row is 1/base_den. We choose chunks that are divisors of base_den
+        and sum to run_rows. For each chunk, the length number is base_den/chunk.
+        Example: base_den=16, run=3 -> chunks [2,1] => denoms [8,16] -> c8^16.
+        """
+        run = max(1, int(run_rows))
+        bd = max(1, int(base_den))
+        divs = self._divisors(bd)
+        # allowed chunks are divisors of base_den
+        chunks = sorted(divs, reverse=True)
+        out: List[int] = []
+        rem = run
+        while rem > 0:
+            # pick largest chunk <= rem
+            pick = None
+            for c in chunks:
+                if c <= rem:
+                    pick = c
+                    break
+            if pick is None:
+                # fallback to 1-row chunks (shouldn't happen since 1 divides bd)
+                pick = 1
+            out.append(bd // pick)
+            rem -= pick
+        return out
+
     def add_spc_info(self) -> None:
         # Emit AddmusicK readme-style #spc block with #title/#game/#author/#length
         lines = ['#spc', '{']
@@ -884,6 +1024,22 @@ class MML:
             lines.append(f'  #comment "{first_line}"')
         lines.append('}')
         self.txt += '\n'.join(lines) + '\n\n'
+        # Print a concise INS2 summary when diagnostics are enabled
+        if bool(Config.flag('diag')):
+            mod = self.event_table.module
+            ins_diag = getattr(mod, '_ins2_diag', None)
+            if ins_diag:
+                print(f"[diag] INS2 instruments parsed: {len(ins_diag)}")
+                for d in ins_diag:
+                    idx = d.get('index'); name = d.get('name')
+                    init_s = d.get('initial_sample'); use_map = d.get('use_sample_map')
+                    uniq = d.get('unique_samples', [])
+                    prev = d.get('sample_map_preview', [])
+                    adsr = (d.get('sn_flags'), d.get('sn_gain'), d.get('sn_attack'), d.get('sn_decay'), d.get('sn_sustain'), d.get('sn_release'))
+                    print(f"[diag]   inst {int(idx):02d} '{name}': initial={init_s} use_map={use_map} uniq_samples={uniq} ADSR={adsr}")
+                    if prev:
+                        preview_str = ', '.join([f"{ni}->{si}" for (ni, si) in prev])
+                        print(f"[diag]     map_preview: [{preview_str}] ...")
 
     def add_sample_info(self) -> None:
         path_name = os.path.splitext(os.path.basename(self.module_path.replace('\\', '/')))[0]
@@ -905,7 +1061,7 @@ class MML:
                 sample_lines.append(f'  "{brr_rel}"')
                 add_any = True
         sample_lines.append('}')
-    # Even if no extra BRRs, we still want #samples { #optimized } for clarity
+        # Even if no extra BRRs, we still want #samples { #optimized } for clarity
         self.txt += '\n'.join(sample_lines) + '\n\n'
 
     def add_ins_info(self) -> None:
@@ -961,30 +1117,30 @@ class MML:
         # If we have parsed orders/patterns, emit simple note streams with basic durations per channel.
         mod = self.event_table.module
         if getattr(mod, 'OrdersPerChannel', None) and getattr(mod, 'PatternsByChannel', None) and any(mod.OrdersPerChannel):
+            # Compute shared defaults once
+            base_den = 4 * (mod.HighlightA or 4)
+            if base_den <= 0:
+                base_den = 16
+            # Compute AMK tempo so that one row matches Furnace timing approximately
+            tps = float(getattr(mod, 'TicksPerSecond', 0.0) or 0.0)
+            spd = int(getattr(mod, 'Speed1', 0) or 0)
+            if spd <= 0:
+                spd = 6
+            if tps > 0:
+                tempo = max(1, int(round(240.0 * tps / (base_den * spd))))
+            else:
+                tempo = int(getattr(mod, 'IT', 125) or 125)
+
+            # Emit global tempo outside of channel definitions, like common AMK style
+            self.txt += f't{tempo}\n\n'
+
             for c in range(mod.NumChannels):
                 self.txt += f'#%d\n' % c
-                # Base length: one row equals quarter/HighlightA of a whole note -> denominator = 4*HighlightA
-                base_den = 4 * (mod.HighlightA or 4)
-                if base_den <= 0:
-                    base_den = 16
-                # Compute AMK tempo so that one "row" matches Furnace timing approximately:
-                # row_seconds = Speed1 / TicksPerSecond
-                # In AMK: note_seconds = (4 / base_den) * (60 / t)
-                # Solve for t: t = 240 * TicksPerSecond / (base_den * Speed1)
-                tps = float(getattr(mod, 'TicksPerSecond', 0.0) or 0.0)
-                spd = int(getattr(mod, 'Speed1', 0) or 0)
-                if spd <= 0:
-                    spd = 6
-                tempo = None
-                if tps > 0:
-                    tempo = max(1, int(round(240.0 * tps / (base_den * spd))))
-                else:
-                    # Fallback to module.IT (if set) or a sane default
-                    tempo = int(getattr(mod, 'IT', 125) or 125)
-                self.txt += f'l{base_den} t{tempo} '
+                # No default length: emit explicit lengths for every note/rest
                 current_oct = None
                 current_ins = None  # Furnace instrument index (1-based)
                 current_amk_ins: Optional[int] = None  # AMK @ number actually in use
+                current_vol: Optional[int] = None  # 0..255
                 tokens: List[str] = []
                 orders = mod.OrdersPerChannel[c] if c < len(mod.OrdersPerChannel) else []
                 patmap = mod.PatternsByChannel[c] if c < len(mod.PatternsByChannel) else {}
@@ -1001,14 +1157,15 @@ class MML:
                 N = len(flat_rows)
                 while i < N:
                     row = flat_rows[i]
+                    kind = self._row_kind(row)
                     # Track instrument changes (don’t emit @ yet; defer until note to choose sample variant)
                     if row.Ins is not None and row.Ins != current_ins and row.Ins != 255:
                         current_ins = int(row.Ins)
                         current_amk_ins = None  # force re-select on next note
 
                     # Determine if this is a note or rest
-                    if row.Note is not None and 0 <= int(row.Note) <= 179:
-                        note_idx = int(row.Note)
+                    if kind == 'note':
+                        note_idx = int(row.Note)  # type: ignore[arg-type]
                         # Ensure we have some instrument context
                         if current_ins is None or current_ins == 255:
                             current_ins = 1
@@ -1022,46 +1179,48 @@ class MML:
                         if current_oct != octv:
                             tokens.append(f'o{octv}')
                             current_oct = octv
+                        # Apply volume if present on this row and changed
+                        if row.Vol is not None:
+                            v = max(0, min(255, int(row.Vol)))
+                            if current_vol != v:
+                                tokens.append(f'v{v}')
+                                current_vol = v
                         # Count run length of same note continuing (no new note starts)
                         run = 1
                         j = i + 1
                         while j < N:
                             r2 = flat_rows[j]
-                            # stop if next row starts a new note or instrument change
-                            if (r2.Note is not None and 0 <= int(r2.Note) <= 179) or (r2.Ins is not None and r2.Ins != current_ins and r2.Ins != 255):
+                            k2 = self._row_kind(r2)
+                            # stop if next row starts a new note, OFF/CUT, or instrument change
+                            if (k2 in ('note','off','cut')) or (r2.Ins is not None and r2.Ins != current_ins and r2.Ins != 255):
                                 break
                             run += 1
                             j += 1
                         # Emit note with duration expressed as ties if run>1
-                        if run == 1:
-                            tokens.append(name)
-                        else:
-                            # Try compact length if divisible, else tie repeats
-                            if base_den % run == 0:
-                                tokens.append(f'{name}{base_den // run}')
-                            else:
-                                tokens.append(name)
-                                for _ in range(run - 1):
-                                    tokens.append('^ ' + name)
+                        # Always emit explicit duration numbers and numeric ties
+                        denoms = self._run_to_denoms(run, base_den)
+                        # First segment includes note name
+                        tokens.append(f'{name}{denoms[0]}')
+                        # Subsequent segments are ties with numbers only
+                        for d in denoms[1:]:
+                            tokens.append(f'^{d}')
                         i = j
                         continue
                     else:
-                        # Rest run
+                        # Rest or OFF/CUT run
                         run = 1
                         j = i + 1
                         while j < N:
                             r2 = flat_rows[j]
-                            if r2.Note is not None and 0 <= int(r2.Note) <= 179:
+                            if self._row_kind(r2) == 'note':
                                 break
                             run += 1
                             j += 1
-                        if run == 1:
-                            tokens.append('r')
-                        else:
-                            if base_den % run == 0:
-                                tokens.append(f'r{base_den // run}')
-                            else:
-                                tokens.extend(['r'] * run)
+                        # Always emit explicit rest duration and numeric ties
+                        denoms = self._run_to_denoms(run, base_den)
+                        tokens.append(f'r{denoms[0]}')
+                        for d in denoms[1:]:
+                            tokens.append(f'^{d}')
                         i = j
                         continue
                 self.txt += ' '.join(tokens) + '\n\n'
@@ -1233,7 +1392,7 @@ class MML:
                 return None
             ins = mod.Instruments[ins_idx - 1]
             # Determine sample index to use
-            samp_idx = None
+            samp_idx_1based: Optional[int] = None
             n = int(note_idx)
             if ins.use_sample_map and ins.sample_table:
                 # Furnace provides 120 entries; clamp into range
@@ -1243,13 +1402,23 @@ class MML:
                 if n120 >= len(ins.sample_table):
                     n120 = n120 % len(ins.sample_table)
                 _note_to_play, samp_to_play = ins.sample_table[n120]
-                if int(samp_to_play or 0) > 0:
-                    samp_idx = int(samp_to_play)
-            if samp_idx is None:
-                samp_idx = ins.initial_sample if (ins.initial_sample and ins.initial_sample > 0) else 1
+                try:
+                    sidx_raw = int(samp_to_play)
+                except Exception:
+                    sidx_raw = -1
+                if sidx_raw >= 0:
+                    samp_idx_1based = sidx_raw + 1
+            if samp_idx_1based is None:
+                try:
+                    if ins.initial_sample is not None and int(ins.initial_sample) >= 0:
+                        samp_idx_1based = int(ins.initial_sample) + 1
+                    else:
+                        samp_idx_1based = 1
+                except Exception:
+                    samp_idx_1based = 1
             # Map to AMK instrument number
             if hasattr(self, 'insnum_map') and isinstance(self.insnum_map, dict):
-                return self.insnum_map.get((ins_idx, int(samp_idx)))
+                return self.insnum_map.get((ins_idx, int(samp_idx_1based)))
             # Fallback: sequential mapping (unlikely to be correct, but avoids crash)
             return 30 + int(ins_idx)
         except Exception:
