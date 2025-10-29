@@ -166,15 +166,6 @@ class Config:
         else:
             current[0] = value
 
-    @staticmethod
-    def get_module_flags(module: "FurnaceModule") -> None:
-        """Optionally derive some defaults from the module metadata.
-        For now this is a no-op placeholder; we can set defaults based on module later.
-        """
-        _ = module
-        return
-
-
 # --------------------------------------------------------------------------------------
 # Furnace parsing (stub) and adapter types
 
@@ -212,7 +203,7 @@ class FurnaceInstrument:
     sn_gain: Optional[int] = None    # 0..255 raw gain value
     sn_decay2susmode: Optional[int] = None
     # Sample mapping from INS2 'SM'
-    initial_sample: Optional[int] = None  # 1-based sample index
+    initial_sample: Optional[int] = 0  # sample 0 by default
     use_sample_map: bool = False
     sample_table: List[Tuple[int, int]] = field(default_factory=lambda: [(0, 1)] * 120)
 
@@ -268,11 +259,8 @@ class FurnaceParser:
     def parse(self, filename: str) -> FurnaceModule:
         data = self._read_file_bytes(filename)
         # Try as-is, else zlib-decompress and retry
-        if not data.startswith(b"-Furnace module-"):
-            try:
-                data = zlib.decompress(data)
-            except Exception:
-                pass
+        if data[0] == 0x78:  # zlib magic byte
+            data = zlib.decompress(data)
         if not data.startswith(b"-Furnace module-"):
             raise CompileErrorException("Not a Furnace .fur file (magic not found)")
 
@@ -304,73 +292,32 @@ class FurnaceParser:
             # Fall back to scanning for INFO in the stream
             pass
 
-        if not inst_ptrs and not samp_ptrs:
-            # Fallback: linear scan for blocks (best-effort)
-            bio.seek(32)
-            while True:
-                blk = bio.read(4)
-                if not blk or len(blk) < 4:
-                    break
-                size_b = bio.read(4)
-                if len(size_b) < 4:
-                    break
-                bsize = int.from_bytes(size_b, 'little', signed=False)
-                payload = bio.read(bsize)
-                if len(payload) < bsize:
-                    break
-                self._handle_block(mod, blk, payload, version)
-        else:
-            # Pointer-driven parse of SMP2 and INS2 blocks
-            for off in samp_ptrs:
-                if 0 < off+8 <= len(data):
-                    tag = data[off:off+4]
-                    size = int.from_bytes(data[off+4:off+8], 'little')
-                    if tag == b'SMP2' and off+8+size <= len(data):
-                        self._parse_SMP2(mod, io.BytesIO(data[off+8:off+8+size]))
-            for off in inst_ptrs:
-                if 0 < off+8 <= len(data):
-                    tag = data[off:off+4]
-                    size = int.from_bytes(data[off+4:off+8], 'little')
-                    if tag == b'INS2' and off+8+size <= len(data):
-                        self._parse_INS2(mod, io.BytesIO(data[off+8:off+8+size]))
-
-        # As a catch-all, only scan for INS2 if none were found. Avoid sample signature scans.
-        if not mod.Instruments:
-            self._scan_and_parse_blocks(mod, data, b'INS2', self._parse_INS2)
+        # Pointer-driven parse of SMP2 and INS2 blocks
+        for off in samp_ptrs:
+            if 0 < off+8 <= len(data):
+                tag = data[off:off+4]
+                size = int.from_bytes(data[off+4:off+8], 'little')
+                if tag == b'SMP2' and off+8+size <= len(data):
+                    self._parse_SMP2(mod, io.BytesIO(data[off+8:off+8+size]))
+        for off in inst_ptrs:
+            if 0 < off+8 <= len(data):
+                tag = data[off:off+4]
+                size = int.from_bytes(data[off+4:off+8], 'little')
+                if tag == b'INS2' and off+8+size <= len(data):
+                    self._parse_INS2(mod, io.BytesIO(data[off+8:off+8+size]))
 
         # Finally, scan for PATN blocks to populate pattern data
         self._scan_and_parse_blocks(mod, data, b'PATN', lambda m, s: self._parse_PATN(m, s))
-
-        # Fallback instruments if none parsed but count known
-        if not mod.Instruments and getattr(mod, '_inst_count', 0) > 0:
-            for i in range(1, int(mod._inst_count) + 1):
-                mod.Instruments.append(FurnaceInstrument(index=i, name=f'Inst{i}'))
 
         # Ensure at least one pattern for downstream assumptions
         if not mod.Patterns:
             mod.Orders = [0]
             empty_row = FurnacePatternRow()
             mod.Patterns[0] = [[empty_row for _ in range(mod.NumChannels)] for __ in range(64)]
+
         return mod
 
     # ------------- block handlers -------------
-
-    def _handle_block(self, mod: FurnaceModule, blk: bytes, payload: bytes, version: int) -> None:
-        tag = blk.decode('ascii', errors='ignore')
-        s = io.BytesIO(payload)
-        if tag == 'INFO':
-            self._parse_INFO(mod, s)
-        elif tag == 'SONG':
-            self._parse_SONG(mod, s)
-        elif tag == 'SMP2':
-            self._parse_SMP2(mod, s)
-        elif tag == 'INS2':
-            self._parse_INS2(mod, s)
-        elif tag == 'PATN':
-            self._parse_PATN(mod, s)
-        else:
-            # ignore other blocks for now
-            pass
 
     def _parse_INFO(self, mod: FurnaceModule, s: io.BytesIO) -> Tuple[List[int], List[int]]:
         # Read subset as per docs; many fields will be ignored.
@@ -418,16 +365,6 @@ class FurnaceParser:
         inst_ptrs = list(self._read_u32_list(s, inst_count))
         wav_ptrs = list(self._read_u32_list(s, wavetable_count))
         samp_ptrs = list(self._read_u32_list(s, sample_count))
-        # Capture diagnostics
-        try:
-            nz_samp_ptrs = [p for p in samp_ptrs if p]
-            mod._diag_info = {  # type: ignore[attr-defined]
-                'inst_count': int(inst_count),
-                'sample_count': int(sample_count),
-                'nonzero_sample_ptrs': len(nz_samp_ptrs),
-            }
-        except Exception:
-            pass
         # skip pattern pointers array
         _ = s.read(4 * int(gpat_count))
         # After pointers, read orders and channel metadata (common song data)
@@ -481,7 +418,7 @@ class FurnaceParser:
         loop_end = self._ri32(s)
         s.read(16)  # presence bitfields
         raw = s.read(length)
-        idx = len(mod.Samples) + 1
+        idx = len(mod.Samples)
         samp = FurnaceSample(index=idx, name=self._sanitize_name(name or f'Sample{idx}'))
         samp.c4_rate = int(c4_rate) if c4_rate else None
         samp.sample_rate = int(comp_rate) if comp_rate else None
@@ -530,12 +467,12 @@ class FurnaceParser:
         except Exception:
             pass
 
-    # Note: legacy SMPL sample parsing removed; rely on INFO pointers and SMP2 only.
-
     def _parse_INS2(self, mod: FurnaceModule, s: io.BytesIO) -> None:
         fmt_version = self._ru16(s)
         ins_type = self._ru16(s)
-        idx = len(mod.Instruments) + 1
+        if ins_type != 29:
+            print(f"Warning: INS2 instrument type {ins_type} not supported, only SNES samples allowed.")
+        idx = len(mod.Instruments)
         ins = FurnaceInstrument(index=idx, name=f'Inst{idx}')
         # Parse features until EN
         while True:
@@ -571,8 +508,6 @@ class FurnaceParser:
                 # Sample instrument data: initial sample, flags, waveform len, sample map
                 ds = io.BytesIO(data)
                 if length >= 4:
-                    # Preserve raw 0-based initial sample index from Furnace.
-                    # 0 is a valid sample (first entry in Furnace UI); we'll map to 1-based later.
                     ins.initial_sample = self._ru16(ds)
                     flags = self._ru8(ds)
                     ins.use_sample_map = bool(flags & 0x01)
@@ -586,67 +521,26 @@ class FurnaceParser:
                             table.append((note_to_play, samp_to_play))
                         if table:
                             ins.sample_table = table
-                    # SM debug: show raw values if diagnostics enabled
-                    try:
-                        if bool(Config.flag('diag')):
-                            map_count = len(ins.sample_table) if ins.use_sample_map and ins.sample_table else 0
-                            print(f"[diag]   INS2 inst {idx:02d} SM: initial_raw={ins.initial_sample} flags=0x{flags:02X} use_map={ins.use_sample_map} map_entries={map_count}")
-                    except Exception:
-                        pass
             elif code == 'EN':
                 break
             else:
                 # skip unknown feature
+                # usually MA (macro data) or NE (NES DPCM sample map data)
                 pass
         mod.Instruments.append(ins)
-        # If no SM was parsed, emit a short notice under diagnostics
+
+        # If no SM was parsed, we assume it's using sample 0 by default
         try:
-            if bool(Config.flag('diag')) and (ins.initial_sample is None):
-                print(f"[diag]   INS2 inst {idx:02d}: no SM feature present (initial_sample=None)")
+            if bool(Config.flag('diag')) and (ins.initial_sample == 0):
+                print(f"[diag]   INS2 inst {idx:02d}: no SM feature present, assuming default instrument with sample 0")
         except Exception:
             pass
-        # Capture a concise diagnostic summary for this instrument for later printing
+
+        # print instrument number, name, sample number, and if it uses the sample map
         try:
-            ins_diag = getattr(mod, '_ins2_diag', None)
-            if ins_diag is None:
-                ins_diag = []
-                setattr(mod, '_ins2_diag', ins_diag)
-            # Collect unique non-zero sample indices referenced by the map
-            uniq_samples = []
-            seen = set()
-            preview: List[Tuple[int, int]] = []
-            if ins.use_sample_map and ins.sample_table:
-                for i, (_np, sp) in enumerate(ins.sample_table):
-                    # Keep raw 0-based indices for diagnostics to match Furnace UI.
-                    try:
-                        sidx = int(sp)
-                    except Exception:
-                        sidx = -1
-                    if sidx >= 0:
-                        if sidx not in seen:
-                            seen.add(sidx)
-                            uniq_samples.append(sidx)
-                        # include a short preview of first few entries
-                        if len(preview) < 8:
-                            preview.append((i, sidx))
-            else:
-                # Show initial sample even if it's 0 (valid in Furnace UI)
-                if ins.initial_sample is not None and int(ins.initial_sample) >= 0:
-                    uniq_samples = [int(ins.initial_sample)]
-            ins_diag.append({
-                'index': ins.index,
-                'name': ins.name,
-                'initial_sample': ins.initial_sample,
-                'use_sample_map': bool(ins.use_sample_map),
-                'unique_samples': uniq_samples,
-                'sample_map_preview': preview,
-                'sn_flags': ins.sn_flags,
-                'sn_gain': ins.sn_gain,
-                'sn_attack': ins.sn_attack,
-                'sn_decay': ins.sn_decay,
-                'sn_sustain': ins.sn_sustain,
-                'sn_release': ins.sn_release,
-            })
+            if bool(Config.flag('diag')):
+                sm_text = "with sample map" if ins.use_sample_map else "no sample map"
+                print(f"[diag]   INS2 inst {idx:02d}: '{ins.name}', initial sample {ins.initial_sample}, {sm_text}")
         except Exception:
             pass
 
@@ -862,36 +756,35 @@ class EventTable:
             try:
                 if ins.use_sample_map and ins.sample_table:
                     # Collect unique, non-zero sample indices from the 120-entry map
-                    uniq_1based: List[int] = []
+                    uniq: List[int] = []
                     seen = set()
                     for (_note_to_play, samp_to_play) in ins.sample_table:
-                        # Furnace SM uses 0-based sample indices; convert to 1-based for our module.Samples
+                        # Furnace SM uses 0-based sample indices
                         try:
-                            sidx_raw = int(samp_to_play)
+                            sidx1 = int(samp_to_play)
                         except Exception:
-                            sidx_raw = -1
-                        if sidx_raw < 0:
+                            sidx1 = -1
+                        if sidx1 < 0:
                             continue
-                        sidx1 = sidx_raw + 1
                         if sidx1 not in seen:
                             seen.add(sidx1)
-                            uniq_1based.append(sidx1)
-                    samples_for_ins = uniq_1based
+                            uniq.append(sidx1)
+                    samples_for_ins = uniq
                 else:
-                    # Use initial_sample (0-based) if available; convert to 1-based
+                    # Use initial_sample (0-based) if available
                     try:
                         if ins.initial_sample is not None and int(ins.initial_sample) >= 0:
-                            sidx1 = int(ins.initial_sample) + 1
+                            sidx1 = int(ins.initial_sample)
                         else:
-                            sidx1 = 1
+                            sidx1 = 0
                     except Exception:
-                        sidx1 = 1
+                        sidx1 = 0
                     samples_for_ins = [sidx1]
             except Exception:
                 try:
-                    sidx1 = int(ins.initial_sample) + 1 if (ins.initial_sample is not None and int(ins.initial_sample) >= 0) else 1
+                    sidx1 = int(ins.initial_sample) if (ins.initial_sample is not None and int(ins.initial_sample) >= 0) else 0
                 except Exception:
-                    sidx1 = 1
+                    sidx1 = 0
                 samples_for_ins = [sidx1]
             # Track used samples and populate instrument entries
             for sidx in samples_for_ins:
@@ -1024,22 +917,6 @@ class MML:
             lines.append(f'  #comment "{first_line}"')
         lines.append('}')
         self.txt += '\n'.join(lines) + '\n\n'
-        # Print a concise INS2 summary when diagnostics are enabled
-        if bool(Config.flag('diag')):
-            mod = self.event_table.module
-            ins_diag = getattr(mod, '_ins2_diag', None)
-            if ins_diag:
-                print(f"[diag] INS2 instruments parsed: {len(ins_diag)}")
-                for d in ins_diag:
-                    idx = d.get('index'); name = d.get('name')
-                    init_s = d.get('initial_sample'); use_map = d.get('use_sample_map')
-                    uniq = d.get('unique_samples', [])
-                    prev = d.get('sample_map_preview', [])
-                    adsr = (d.get('sn_flags'), d.get('sn_gain'), d.get('sn_attack'), d.get('sn_decay'), d.get('sn_sustain'), d.get('sn_release'))
-                    print(f"[diag]   inst {int(idx):02d} '{name}': initial={init_s} use_map={use_map} uniq_samples={uniq} ADSR={adsr}")
-                    if prev:
-                        preview_str = ', '.join([f"{ni}->{si}" for (ni, si) in prev])
-                        print(f"[diag]     map_preview: [{preview_str}] ...")
 
     def add_sample_info(self) -> None:
         path_name = os.path.splitext(os.path.basename(self.module_path.replace('\\', '/')))[0]
@@ -1080,7 +957,7 @@ class MML:
                 samp_entry = next(iter(self.event_table.sample_dict.values()), ("Sample1.brr", "$01 $00"))
             samp_name, samp_tuning = samp_entry
             # ADSR/GAIN
-            ins = self.event_table.module.Instruments[ins_idx - 1]
+            ins = self.event_table.module.Instruments[ins_idx]
             # Default: no envelope -> $00 $00 $7F
             da = 0x00
             sr = 0x00
@@ -1138,7 +1015,7 @@ class MML:
                 self.txt += f'#%d\n' % c
                 # No default length: emit explicit lengths for every note/rest
                 current_oct = None
-                current_ins = None  # Furnace instrument index (1-based)
+                current_ins = None  # Furnace instrument index
                 current_amk_ins: Optional[int] = None  # AMK @ number actually in use
                 current_vol: Optional[int] = None  # 0..255
                 tokens: List[str] = []
@@ -1168,7 +1045,7 @@ class MML:
                         note_idx = int(row.Note)  # type: ignore[arg-type]
                         # Ensure we have some instrument context
                         if current_ins is None or current_ins == 255:
-                            current_ins = 1
+                            current_ins = 0
                             current_amk_ins = None
                         # Determine which sample this note should use for this instrument
                         amk_num = self._resolve_amk_instrument_for_note(current_ins, note_idx)
@@ -1244,15 +1121,6 @@ class MML:
         total = 0
         with_pcm = 0
         created = 0
-        if bool(Config.flag('diag')):
-            info = getattr(mod, '_diag_info', {})
-            if info:
-                print(f"[diag] INFO: samples={info.get('sample_count')} insts={info.get('inst_count')} nonzero_sample_ptrs={info.get('nonzero_sample_ptrs')}")
-            smp2_diag = getattr(mod, '_smp2_diag', None)
-            if smp2_diag:
-                print(f"[diag] SMP2 blocks parsed: {len(smp2_diag)}")
-                for d in smp2_diag:
-                    print(f"[diag]   {d['index']:02d} '{d['name']}' bytes={d['bytes']} depth={d['depth']} pcm16={d['pcm16_len']} loop=[{d['loop_start']},{d['loop_end']}] c4={d['c4_rate']} sr={d['sample_rate']}")
         for s in mod.Samples:
             total += 1
             # Target BRR path
@@ -1390,9 +1258,10 @@ class MML:
             mod = self.event_table.module
             if ins_idx <= 0 or ins_idx > len(mod.Instruments):
                 return None
-            ins = mod.Instruments[ins_idx - 1]
+            ins = mod.Instruments[ins_idx]
+
             # Determine sample index to use
-            samp_idx_1based: Optional[int] = None
+            samp_idx: Optional[int] = None
             n = int(note_idx)
             if ins.use_sample_map and ins.sample_table:
                 # Furnace provides 120 entries; clamp into range
@@ -1407,18 +1276,18 @@ class MML:
                 except Exception:
                     sidx_raw = -1
                 if sidx_raw >= 0:
-                    samp_idx_1based = sidx_raw + 1
-            if samp_idx_1based is None:
+                    samp_idx = sidx_raw + 1
+            if samp_idx is None:
                 try:
                     if ins.initial_sample is not None and int(ins.initial_sample) >= 0:
-                        samp_idx_1based = int(ins.initial_sample) + 1
+                        samp_idx = int(ins.initial_sample)
                     else:
-                        samp_idx_1based = 1
+                        samp_idx = 0
                 except Exception:
-                    samp_idx_1based = 1
+                    samp_idx = 1
             # Map to AMK instrument number
             if hasattr(self, 'insnum_map') and isinstance(self.insnum_map, dict):
-                return self.insnum_map.get((ins_idx, int(samp_idx_1based)))
+                return self.insnum_map.get((ins_idx, int(samp_idx)))
             # Fallback: sequential mapping (unlikely to be correct, but avoids crash)
             return 30 + int(ins_idx)
         except Exception:
@@ -1467,13 +1336,6 @@ def parse_cli(argv: List[str]) -> Tuple[str, List[Tuple[str, str]]]:
 def main() -> None:
     module_path, flag_pairs = parse_cli(sys.argv)
 
-    # Load module (Furnace)
-    parser = FurnaceParser()
-    module = parser.parse(module_path)
-
-    # Populate config possibly using module context
-    Config.get_module_flags(module)
-
     # Apply CLI flags
     for flag, arg in flag_pairs:
         name = flag.lstrip('-').strip()
@@ -1482,6 +1344,10 @@ def main() -> None:
         except (ValueError, KeyError) as e:
             print(f"Flag error for '{flag}': {e}")
             sys.exit(1)
+
+    # Load module (Furnace)
+    parser = FurnaceParser()
+    module = parser.parse(module_path)
 
     # Build events and MML
     evtbl = EventTable(module)
