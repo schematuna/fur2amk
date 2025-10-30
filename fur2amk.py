@@ -410,6 +410,7 @@ class FurnaceParser:
         length = self._ru32(s)
         comp_rate = self._ru32(s)
         c4_rate = self._ru32(s)
+        print(f"Debug: Parsing SMP2 sample '{name}' length={length} comp_rate={comp_rate} c4_rate={c4_rate}", file=sys.stderr)
         depth = self._ru8(s)
         loop_dir = self._ru8(s)
         flags = self._ru8(s)
@@ -436,6 +437,7 @@ class FurnaceParser:
                 samp.pcm16 = pcm16
             elif samp.depth == 9:
                 # BRR data (9 bytes per block). Keep raw for direct write.
+                print(f"Debug: Sample '{samp.name}' is BRR data, storing raw BRR", file=sys.stderr)
                 samp.brr_raw = raw
                 samp.pcm16 = []
             else:
@@ -447,25 +449,6 @@ class FurnaceParser:
             samp.loop_start = int(loop_start)
             samp.loop_end = int(loop_end)
         mod.Samples.append(samp)
-        # Diagnostics per sample
-        try:
-            diag = getattr(mod, '_smp2_diag', None)
-            if diag is None:
-                diag = []
-                setattr(mod, '_smp2_diag', diag)
-            diag.append({
-                'index': idx,
-                'name': samp.name,
-                'bytes': len(raw),
-                'depth': samp.depth,
-                'pcm16_len': len(pcm16),
-                'loop_start': samp.loop_start,
-                'loop_end': samp.loop_end,
-                'c4_rate': samp.c4_rate,
-                'sample_rate': samp.sample_rate,
-            })
-        except Exception:
-            pass
 
     def _parse_INS2(self, mod: FurnaceModule, s: io.BytesIO) -> None:
         fmt_version = self._ru16(s)
@@ -743,8 +726,9 @@ class EventTable:
             tuning_word = 0x0100
             try:
                 if s.c4_rate and s.c4_rate > 0:
-                    # Heuristic: 256 * 32000 / c4_rate (clamped)
-                    val = int(round(256.0 * 32000.0 / float(s.c4_rate)))
+                    # MAGIC NUMBERS to convert from c4_rate to AMK instrument tuning value
+                    # stolen from it2amk's SampConv
+                    val = int(round(float(s.c4_rate) * 768 / 12539))
                     tuning_word = max(0, min(0xFFFF, val))
             except Exception:
                 tuning_word = 0x0100
