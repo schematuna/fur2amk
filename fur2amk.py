@@ -1004,12 +1004,12 @@ class MML:
             if spd <= 0:
                 spd = 6
             if tps > 0:
-                tempo = max(1, int(round(240.0 * tps / (base_den * spd))))
+                bpm = max(1, int(round(240.0 * tps / (base_den * spd))))
             else:
-                tempo = int(getattr(mod, 'IT', 125) or 125)
+                bpm = int(getattr(mod, 'IT', 125) or 125)
 
-            # Emit global tempo outside of channel definitions, like common AMK style
-            self.txt += f't{tempo}\n\n'
+            amk_tempo = bpm * 8192 // 20025
+            self.txt += f't{amk_tempo}\n\n'
 
             for c in range(mod.NumChannels):
                 self.txt += f'#%d\n' % c
