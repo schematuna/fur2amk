@@ -11,11 +11,13 @@ from __future__ import annotations
 
 import os
 import sys
-import argparse
-import subprocess
-import wave
 from typing import Any, Dict, List, Optional, Tuple
-import struct
+
+from furnace_parser import (
+    FurnaceParser,
+    FurnaceModule,
+    FurnacePatternRow,
+)
 
 # TODO: support mid-sample loop points in BRR validation/writing
 #       warn if tick rate is not 60Hz (NTSC)... is PAL supported?
@@ -23,8 +25,6 @@ import struct
 #       support global tuning
 
 # --------------------------------------------------------------------------------------
-# Config (ported structure from it2amk, simplified implementation)
-
 
 class Config:
     flags: Dict[str, List[Any]] = {
@@ -108,12 +108,6 @@ class Config:
             current[0] = vv
         else:
             current[0] = value
-
-from furnace_parser import (
-    FurnaceParser,
-    FurnaceModule,
-    FurnacePatternRow,
-)
 
 
 # --------------------------------------------------------------------------------------
@@ -330,19 +324,20 @@ class MML:
         mod = self.event_table.module
         title = getattr(mod, 'SongName', '') or ''
         author = getattr(mod, 'Author', '') or ''
+        info_align_width = 8
         if title:
-            lines.append(f'  #title "{title}"')
+            lines.append(f'    {'#title':<{info_align_width}} "{title}"')
         if Config.flag('game'):
-            lines.append(f'  #game "{Config.flag("game")}"')
+            lines.append(f'    {'#game':<{info_align_width}} "{Config.flag("game")}"')
         if author:
-            lines.append(f'  #author "{author}"')
+            lines.append(f'    {'#author':<{info_align_width}} "{author}"')
         if Config.flag('length'):
-            lines.append(f'  #length "{Config.flag("length")}"')
+            lines.append(f'    {'#length':<{info_align_width}} "{Config.flag("length")}"')
         # Optional comment: use first line of Message if present
         msg = str(getattr(mod, 'Message', '') or '').strip()
         if msg:
             first_line = msg.splitlines()[0]
-            lines.append(f'  #comment "{first_line}"')
+            lines.append(f'    {'#comment':<{info_align_width}} "{first_line}"')
         lines.append('}')
         self.txt += '\n'.join(lines) + '\n\n'
 
@@ -353,8 +348,7 @@ class MML:
         # Attempt to dump samples to BRR files (unless disabled)
         if not bool(Config.flag('nosmpl')):
             self._dump_samples_to_brr(sample_dir)
-        sample_lines = [f'#path "{path_name}"', '', '#samples', '{', '  #optimized']
-        add_any = False
+        sample_lines = [f'#path "{path_name}"', '', '#samples', '{', '    #optimized']
         # Prefer listing only BRRs we actually generated to avoid missing files
         mod = self.event_table.module
         for samp in sorted(mod.Samples, key=lambda x: x.index):
@@ -363,8 +357,7 @@ class MML:
             brr_abs = os.path.join(sample_dir, brr_rel)
             if os.path.exists(brr_abs) and os.path.getsize(brr_abs) > 0:
                 # Match AMK style: list quoted filenames only
-                sample_lines.append(f'  "{brr_rel}"')
-                add_any = True
+                sample_lines.append(f'    "{brr_rel}"')
         sample_lines.append('}')
         # Even if no extra BRRs, we still want #samples { #optimized } for clarity
         self.txt += '\n'.join(sample_lines) + '\n\n'
@@ -377,6 +370,9 @@ class MML:
         # Map of (instrument_index, sample_index) -> AMK instrument number
         self.insnum_map: Dict[Tuple[int, int], int] = {}
         next_num = 30
+        name_col = max(len(name) for name, _ in self.event_table.sample_dict.values())
+        # get max sample name length for alignment
+        name_field_width = name_col + 2  # account for quotes
         for ins_idx, samp_idx in self.event_table.ins_list:
             # Resolve sample filename and tuning
             samp_entry = self.event_table.sample_dict.get(samp_idx)
@@ -405,7 +401,8 @@ class MML:
                         ga = max(0, min(0x7F, int(ins.sn_gain)))
             except Exception:
                 pass
-            lines.append(f'  "{samp_name}" ${da:02X} ${sr:02X} ${ga:02X} {samp_tuning} ;@{next_num}')
+            quoted_name = f'"{samp_name}"'
+            lines.append(f'    {quoted_name:<{name_field_width}} ${da:02X} ${sr:02X} ${ga:02X} {samp_tuning} ;@{next_num}')
             self.insnum_map[(ins_idx, samp_idx)] = next_num
             next_num += 1
         lines.append('}')
@@ -415,24 +412,30 @@ class MML:
     def convert(self) -> None:
         # If we have parsed orders/patterns, emit simple note streams with basic durations per channel.
         mod = self.event_table.module
+
+        # Global tempo and volume
+        base_den = 4 * (mod.HighlightA or 4)
+        if base_den <= 0:
+            base_den = 16
+        tps = float(getattr(mod, 'TicksPerSecond', 0.0) or 0.0)
+        spd = int(getattr(mod, 'Speed1', 0) or 0)
+        if spd <= 0:
+            spd = 6
+        if tps > 0:
+            bpm = max(1, int(round(240.0 * tps / (base_den * spd))))
+        else:
+            bpm = int(getattr(mod, 'IT', 125) or 125)
+
+        amk_tempo = bpm * 8192 // 20025
+
+        # get global volume if set
+        gvol = getattr(mod, 'GV', None)
+        # treat w200 as 100%
+        amk_volume = min(int(gvol * 200), 255)
+
+        self.txt += f'w{amk_volume} t{amk_tempo}\n\n'
+
         if getattr(mod, 'OrdersPerChannel', None) and getattr(mod, 'PatternsByChannel', None) and any(mod.OrdersPerChannel):
-            # Compute shared defaults once
-            base_den = 4 * (mod.HighlightA or 4)
-            if base_den <= 0:
-                base_den = 16
-            # Compute AMK tempo so that one row matches Furnace timing approximately
-            tps = float(getattr(mod, 'TicksPerSecond', 0.0) or 0.0)
-            spd = int(getattr(mod, 'Speed1', 0) or 0)
-            if spd <= 0:
-                spd = 6
-            if tps > 0:
-                bpm = max(1, int(round(240.0 * tps / (base_den * spd))))
-            else:
-                bpm = int(getattr(mod, 'IT', 125) or 125)
-
-            amk_tempo = bpm * 8192 // 20025
-            self.txt += f't{amk_tempo}\n\n'
-
             for c in range(mod.NumChannels):
                 self.txt += f'#%d\n' % c
                 # No default length: emit explicit lengths for every note/rest
@@ -498,11 +501,11 @@ class MML:
                         # Emit note with duration expressed as ties if run>1
                         # Always emit explicit duration numbers and numeric ties
                         denoms = self._run_to_denoms(run, base_den)
-                        # First segment includes note name
-                        tokens.append(f'{name}{denoms[0]}')
-                        # Subsequent segments are ties with numbers only
+                        note_token = f'{name}{denoms[0]}'
                         for d in denoms[1:]:
-                            tokens.append(f'^{d}')
+                            note_token += f'^{d}'
+                        # First segment includes note name
+                        tokens.append(note_token)
                         i = j
                         continue
                     else:
@@ -517,9 +520,10 @@ class MML:
                             j += 1
                         # Always emit explicit rest duration and numeric ties
                         denoms = self._run_to_denoms(run, base_den)
-                        tokens.append(f'r{denoms[0]}')
+                        rest_token = f'r{denoms[0]}'
                         for d in denoms[1:]:
-                            tokens.append(f'^{d}')
+                            rest_token += f'^{d}'
+                        tokens.append(rest_token)
                         i = j
                         continue
                 self.txt += ' '.join(tokens) + '\n\n'
