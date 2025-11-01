@@ -17,12 +17,10 @@ import sys
 import argparse
 import subprocess
 import wave
-from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional, Tuple
-import io
 import struct
-import zlib
 
+# TODO: support mid-sample loop points in BRR validation/writing
 
 # --------------------------------------------------------------------------------------
 # CLI helpers (previous path cache)
@@ -49,10 +47,6 @@ def _save_previous_module(path: str) -> None:
 
 # --------------------------------------------------------------------------------------
 # Config (ported structure from it2amk, simplified implementation)
-
-
-class CompileErrorException(Exception):
-    pass
 
 
 class Config:
@@ -166,503 +160,11 @@ class Config:
         else:
             current[0] = value
 
-# --------------------------------------------------------------------------------------
-# Furnace parsing (stub) and adapter types
-
-
-@dataclass
-class FurnaceSample:
-    index: int
-    name: str
-    # Minimal fields needed for AMK sample list (expand later):
-    brr_path: Optional[str] = None
-    brr_raw: Optional[bytes] = None  # Raw BRR data if sample is stored as BRR
-    c4_rate: Optional[int] = None  # Hz
-    vol: int = 64  # 0..64
-    pan: int = 128  # 0..255 center
-    # Raw PCM payload and metadata from SMP2
-    pcm16: List[int] = field(default_factory=list)  # mono 16-bit samples
-    sample_rate: Optional[int] = None
-    depth: int = 16
-    loop_start: Optional[int] = None
-    loop_end: Optional[int] = None
-
-
-@dataclass
-class FurnaceInstrument:
-    index: int
-    name: str
-    gbv: int = 64  # instrument global volume
-    dfp: int = 128 # default pan
-    # SNES ADSR/GAIN from INS2 'SN'
-    sn_attack: Optional[int] = None  # 0..15
-    sn_decay: Optional[int] = None   # 0..7
-    sn_sustain: Optional[int] = None # 0..7
-    sn_release: Optional[int] = None # 0..31
-    sn_flags: Optional[int] = None   # bit4 envelope on, bits0..2 gain mode
-    sn_gain: Optional[int] = None    # 0..255 raw gain value
-    sn_decay2susmode: Optional[int] = None
-    # Sample mapping from INS2 'SM'
-    initial_sample: Optional[int] = 0  # sample 0 by default
-    use_sample_map: bool = False
-    sample_table: List[Tuple[int, int]] = field(default_factory=lambda: [(0, 1)] * 120)
-
-
-@dataclass
-class FurnacePatternRow:
-    # Extremely simplified row placeholder
-    Note: Optional[int] = None  # 0..119, 254=cut, 255=off
-    Ins: Optional[int] = None
-    Vol: Optional[int] = None   # 0..64
-    Pan: Optional[int] = None   # 0..255
-    Effects: List[Tuple[int, int]] = field(default_factory=list)
-
-
-@dataclass
-class FurnacePattern:
-    rows: List[List[FurnacePatternRow]] = field(default_factory=list)  # 64 x channels
-
-
-@dataclass
-class FurnaceModule:
-    # A normalized adapter exposing the subset EventTable/MML expect
-    SongName: str = ''
-    Message: str = ''
-    GV: int = 128               # global volume (0..128)
-    IT: int = 125               # tempo
-    IS: int = 6                 # speed (ticks per row)
-    # Legacy placeholders (unused by the new path)
-    Orders: List[int] = field(default_factory=list)
-    Patterns: Dict[int, List[List[FurnacePatternRow]]] = field(default_factory=dict)  # legacy, not used
-    Instruments: List[FurnaceInstrument] = field(default_factory=list)
-    Samples: List[FurnaceSample] = field(default_factory=list)
-    NumChannels: int = 8
-    # New structures for pattern conversion
-    PatternLength: int = 64
-    OrdersPerChannel: List[List[int]] = field(default_factory=list)  # [ch][order_idx] -> pattern_id
-    PatternsByChannel: List[Dict[int, List[FurnacePatternRow]]] = field(default_factory=list)  # [ch][pat_id] -> rows
-    # Timing
-    HighlightA: int = 4
-    HighlightB: int = 16
-    TicksPerSecond: float = 0.0
-    Speed1: int = 6
-    Speed2: int = 0
-
-
-class FurnaceParser:
-    """Placeholder: Wire real parsing from fur2tad.FurnaceFile next.
-
-    Minimal reader: scan blocks, extract song name (INFO/SONG), samples (SMP2),
-    and instrument placeholders (INS2). Patterns/orders are ignored for now.
-    """
-
-    def parse(self, filename: str) -> FurnaceModule:
-        data = self._read_file_bytes(filename)
-        # Try as-is, else zlib-decompress and retry
-        if data[0] == 0x78:  # zlib magic byte
-            data = zlib.decompress(data)
-        if not data.startswith(b"-Furnace module-"):
-            raise CompileErrorException("Not a Furnace .fur file (magic not found)")
-
-        mod = FurnaceModule()
-        mod.SongName = os.path.splitext(os.path.basename(filename))[0]
-        mod.NumChannels = 8  # default for SNES
-
-        # Keep data around for pointer-based seeks
-        self._data = data
-        bio = io.BytesIO(data)
-        # Header (32 bytes)
-        magic = bio.read(16)
-        version = self._ru16(bio)
-        bio.read(2)  # reserved
-        info_ptr = self._ru32(bio)
-        bio.read(8)  # reserved
-
-        # First, try to read INFO at info_ptr
-        inst_ptrs: List[int] = []
-        samp_ptrs: List[int] = []
-        try:
-            if 0 < info_ptr < len(data) - 8:
-                tag = data[info_ptr:info_ptr+4]
-                size = int.from_bytes(data[info_ptr+4:info_ptr+8], 'little')
-                if tag == b'INFO' and (info_ptr+8+size) <= len(data):
-                    payload = data[info_ptr+8:info_ptr+8+size]
-                    inst_ptrs, samp_ptrs = self._parse_INFO(mod, io.BytesIO(payload))
-        except Exception:
-            # Fall back to scanning for INFO in the stream
-            pass
-
-        # Pointer-driven parse of SMP2 and INS2 blocks
-        for off in samp_ptrs:
-            if 0 < off+8 <= len(data):
-                tag = data[off:off+4]
-                size = int.from_bytes(data[off+4:off+8], 'little')
-                if tag == b'SMP2' and off+8+size <= len(data):
-                    self._parse_SMP2(mod, io.BytesIO(data[off+8:off+8+size]))
-        for off in inst_ptrs:
-            if 0 < off+8 <= len(data):
-                tag = data[off:off+4]
-                size = int.from_bytes(data[off+4:off+8], 'little')
-                if tag == b'INS2' and off+8+size <= len(data):
-                    self._parse_INS2(mod, io.BytesIO(data[off+8:off+8+size]))
-
-        # Finally, scan for PATN blocks to populate pattern data
-        self._scan_and_parse_blocks(mod, data, b'PATN', lambda m, s: self._parse_PATN(m, s))
-
-        # Ensure at least one pattern for downstream assumptions
-        if not mod.Patterns:
-            mod.Orders = [0]
-            empty_row = FurnacePatternRow()
-            mod.Patterns[0] = [[empty_row for _ in range(mod.NumChannels)] for __ in range(64)]
-
-        return mod
-
-    # ------------- block handlers -------------
-
-    def _parse_INFO(self, mod: FurnaceModule, s: io.BytesIO) -> Tuple[List[int], List[int]]:
-        # Read subset as per docs; many fields will be ignored.
-        # time base, speed1, speed2, arp time
-        tb = self._ru8(s); sp1 = self._ru8(s); sp2 = self._ru8(s); arp = self._ru8(s)
-        tps = self._rf32(s)  # ticks per second
-        pat_len = self._ru16(s)
-        ord_len = self._ru16(s)
-        hlA = self._ru8(s); hlB = self._ru8(s)
-        inst_count = self._ru16(s); wavetable_count = self._ru16(s); sample_count = self._ru16(s)
-        mod._inst_count = inst_count  # type: ignore[attr-defined]
-        mod.PatternLength = max(1, int(pat_len) or 64)
-        # store timing
-        mod.HighlightA = int(hlA) or 4
-        mod.HighlightB = int(hlB) or 16
-        mod.TicksPerSecond = float(tps)
-        mod.Speed1 = int(sp1)
-        mod.Speed2 = int(sp2)
-        # global pattern count
-        gpat_count = self._ru32(s)
-        chips = s.read(32)
-        # If first chip is SNES (0x87), set channels to 8
-        if len(chips) >= 1 and chips[0] == 0x87:
-            mod.NumChannels = 8
-        # Ensure containers sized by channels
-        if not mod.OrdersPerChannel or len(mod.OrdersPerChannel) != mod.NumChannels:
-            mod.OrdersPerChannel = [[] for _ in range(mod.NumChannels)]
-        if not mod.PatternsByChannel or len(mod.PatternsByChannel) != mod.NumChannels:
-            mod.PatternsByChannel = [dict() for _ in range(mod.NumChannels)]
-        # legacy fields per spec
-        s.read(32)   # sound chip volumes
-        s.read(32)   # sound chip panning
-        s.read(128)  # sound chip flag pointers / flags
-        # Read song name and author
-        name = self._rstr(s)
-        author = self._rstr(s)
-        if name:
-            mod.SongName = name.replace('/', '-').replace('\\', '-')
-        # tuning
-        a4 = self._rf32(s)
-        # Read the 20-ish 1-byte compatibility flags up to pointer tables (match fur2tad order)
-        for _i in range(20):
-            s.read(1)
-        # Now read pointers to instruments/wavetables/samples/patterns
-        inst_ptrs = list(self._read_u32_list(s, inst_count))
-        wav_ptrs = list(self._read_u32_list(s, wavetable_count))
-        samp_ptrs = list(self._read_u32_list(s, sample_count))
-        # skip pattern pointers array
-        _ = s.read(4 * int(gpat_count))
-        # After pointers, read orders and channel metadata (common song data)
-        # Orders: for each of 8 channels, ord_len bytes
-        try:
-            for ch in range(mod.NumChannels):
-                col = []
-                for _i in range(ord_len):
-                    col.append(self._ru8(s))
-                mod.OrdersPerChannel[ch] = col
-            # Skip effect column counts, channel flags, and names
-            s.read(mod.NumChannels)  # effect_column_count
-            s.read(mod.NumChannels)  # channels_hidden
-            s.read(mod.NumChannels)  # channels_collapsed
-            for _ in range(mod.NumChannels):
-                _ = self._rstr(s)  # channel name
-            for _ in range(mod.NumChannels):
-                _ = self._rstr(s)  # short channel name
-        except Exception:
-            # If orders parsing fails, leave OrdersPerChannel empty to avoid misleading output
-            pass
-        return inst_ptrs, samp_ptrs
-
-    def _parse_SONG(self, mod: FurnaceModule, s: io.BytesIO) -> None:
-        # Similar to INFO but for subsongs; we only care about the name as fallback.
-        s.read(1)  # time base
-        s.read(1)  # speed1
-        s.read(1)  # speed2
-        s.read(1)  # arp
-        _ = self._rf32(s)  # ticks per second
-        _ = self._ru16(s)  # pattern len
-        _ = self._ru16(s)  # orders len
-        s.read(1); s.read(1)  # highlight A/B
-        _ = self._ru16(s)  # virt tempo num
-        _ = self._ru16(s)  # virt tempo den
-        name = self._rstr(s)
-        comment = self._rstr(s)
-        if name and (not getattr(mod, 'SongName', None)):
-            mod.SongName = name.replace('/', '-').replace('\\', '-')
-
-    def _parse_SMP2(self, mod: FurnaceModule, s: io.BytesIO) -> None:
-        name = self._rstr(s)
-        length = self._ru32(s)
-        comp_rate = self._ru32(s)
-        c4_rate = self._ru32(s)
-        print(f"Debug: Parsing SMP2 sample '{name}' length={length} comp_rate={comp_rate} c4_rate={c4_rate}", file=sys.stderr)
-        depth = self._ru8(s)
-        loop_dir = self._ru8(s)
-        flags = self._ru8(s)
-        flags2 = self._ru8(s)
-        loop_start = self._ri32(s)
-        loop_end = self._ri32(s)
-        s.read(16)  # presence bitfields
-        raw = s.read(length)
-        idx = len(mod.Samples)
-        samp = FurnaceSample(index=idx, name=self._sanitize_name(name or f'Sample{idx}'))
-        samp.c4_rate = int(c4_rate) if c4_rate else None
-        samp.sample_rate = int(comp_rate) if comp_rate else None
-        samp.depth = int(depth or 16)
-        # Interpret raw payload: depth 16/8 are PCM, depth 9 is BRR blocks
-        pcm16: List[int] = []
-        try:
-            if samp.depth == 16:
-                n = len(raw) // 2
-                pcm16 = list(struct.unpack('<' + 'h' * n, raw[: n * 2]))
-                samp.pcm16 = pcm16
-            elif samp.depth == 8:
-                # Signed 8-bit to 16-bit
-                pcm16 = [int(struct.unpack('<b', bytes([b]))[0]) << 8 for b in raw]
-                samp.pcm16 = pcm16
-            elif samp.depth == 9:
-                # BRR data (9 bytes per block). Keep raw for direct write.
-                print(f"Debug: Sample '{samp.name}' is BRR data, storing raw BRR", file=sys.stderr)
-                samp.brr_raw = raw
-                samp.pcm16 = []
-            else:
-                samp.pcm16 = []
-        except Exception:
-            samp.pcm16 = []
-        # Loop markers
-        if loop_start is not None and loop_end is not None and loop_start >= 0 and loop_end > loop_start:
-            samp.loop_start = int(loop_start)
-            samp.loop_end = int(loop_end)
-        mod.Samples.append(samp)
-
-    def _parse_INS2(self, mod: FurnaceModule, s: io.BytesIO) -> None:
-        fmt_version = self._ru16(s)
-        ins_type = self._ru16(s)
-        if ins_type != 29:
-            print(f"Warning: INS2 instrument type {ins_type} not supported, only SNES samples allowed.")
-        idx = len(mod.Instruments)
-        ins = FurnaceInstrument(index=idx, name=f'Inst{idx}')
-        # Parse features until EN
-        while True:
-            code_b = s.read(2)
-            if len(code_b) < 2:
-                break
-            length = self._ru16(s)
-            data = s.read(length)
-            code = code_b.decode('ascii', errors='ignore')
-            if code == 'NA':
-                # instrument name as STR
-                name_stream = io.BytesIO(data)
-                nm = self._rstr(name_stream)
-                if nm:
-                    ins.name = self._sanitize_name(nm)
-            elif code == 'SN':
-                # SNES ADSR/gain per newIns.md
-                ds = io.BytesIO(data)
-                if length >= 2:
-                    ad = self._ru8(ds)
-                    sr = self._ru8(ds)
-                    ins.sn_attack = ad & 0x0F
-                    ins.sn_decay = (ad >> 4) & 0x07
-                    ins.sn_sustain = (sr >> 5) & 0x07
-                    ins.sn_release = sr & 0x1F
-                if length >= 3:
-                    ins.sn_flags = self._ru8(ds)
-                if length >= 4:
-                    ins.sn_gain = self._ru8(ds)
-                if length >= 5:
-                    ins.sn_decay2susmode = self._ru8(ds)
-            elif code == 'SM':
-                # Sample instrument data: initial sample, flags, waveform len, sample map
-                ds = io.BytesIO(data)
-                if length >= 4:
-                    ins.initial_sample = self._ru16(ds)
-                    flags = self._ru8(ds)
-                    ins.use_sample_map = bool(flags & 0x01)
-                    wav_len = self._ru8(ds)  # unused
-                    # Sample map 120 entries if enabled
-                    if ins.use_sample_map:
-                        table: List[Tuple[int, int]] = []
-                        for _ in range(120):
-                            note_to_play = self._ru16(ds)
-                            samp_to_play = self._ru16(ds)
-                            table.append((note_to_play, samp_to_play))
-                        if table:
-                            ins.sample_table = table
-            elif code == 'EN':
-                break
-            else:
-                # skip unknown feature
-                # usually MA (macro data) or NE (NES DPCM sample map data)
-                pass
-        mod.Instruments.append(ins)
-
-        # If no SM was parsed, we assume it's using sample 0 by default
-        try:
-            if bool(Config.flag('diag')) and (ins.initial_sample == 0):
-                print(f"[diag]   INS2 inst {idx:02d}: no SM feature present, assuming default instrument with sample 0")
-        except Exception:
-            pass
-
-        # print instrument number, name, sample number, and if it uses the sample map
-        try:
-            if bool(Config.flag('diag')):
-                sm_text = "with sample map" if ins.use_sample_map else "no sample map"
-                print(f"[diag]   INS2 inst {idx:02d}: '{ins.name}', initial sample {ins.initial_sample}, {sm_text}")
-        except Exception:
-            pass
-
-    def _parse_PATN(self, mod: FurnaceModule, s: io.BytesIO) -> None:
-        # Decode Furnace PATN block minimally (based on fur2tad logic)
-        song_index = self._ru8(s)  # ignore
-        channel = self._ru8(s)
-        pat_index = self._ru16(s)
-        _pat_name = self._rstr(s)
-        # Ensure containers
-        while len(mod.PatternsByChannel) < mod.NumChannels:
-            mod.PatternsByChannel.append({})
-        rows = [FurnacePatternRow() for _ in range(mod.PatternLength or 64)]
-        idx = 0
-        def read_effect(note: FurnacePatternRow, have_type: bool, have_value: bool):
-            t = self._ru8(s) if have_type else None
-            v = self._ru8(s) if have_value else None
-            if (t is not None) and (v is None):
-                v = 0
-            if have_type or have_value:
-                if t is None:
-                    t = 0
-                if v is None:
-                    v = 0
-                note.Effects.append((t, v))
-        while idx < len(rows):
-            b = self._ru8(s)
-            if b == 0xFF:
-                break
-            if b & 0x80:
-                idx += 2 + (b & 0x7F)
-                continue
-            note = rows[idx]
-            eff1 = None
-            eff2 = None
-            if b & 0x20:
-                eff1 = self._ru8(s)
-            if b & 0x40:
-                eff2 = self._ru8(s)
-            if b & 0x01:
-                note.Note = self._ru8(s)
-            if b & 0x02:
-                note.Ins = self._ru8(s)
-            if b & 0x04:
-                vol = self._ru8(s)
-                note.Vol = min(255, vol * 2 + (vol & 1))  # scale to 0-255 like fur2tad
-            # effects in first column
-            read_effect(note, bool(b & 0x08), bool(b & 0x10))
-            # expanded effects masks in eff1/eff2
-            def handle_mask(mask: int):
-                read_effect(note, bool(mask & 0x04), bool(mask & 0x08))
-                read_effect(note, bool(mask & 0x10), bool(mask & 0x20))
-                read_effect(note, bool(mask & 0x40), bool(mask & 0x80))
-            if eff1 is not None:
-                handle_mask(eff1)
-            if eff2 is not None:
-                handle_mask(eff2)
-            idx += 1
-        # Store
-        if channel < len(mod.PatternsByChannel):
-            mod.PatternsByChannel[channel][pat_index] = rows
-
-    # ------------- helpers -------------
-
-    def _read_file_bytes(self, filename: str) -> bytes:
-        with open(filename, 'rb') as f:
-            return f.read()
-
-    def _ru8(self, s: io.BytesIO) -> int:
-        b = s.read(1)
-        return b[0] if b else 0
-
-    def _ru16(self, s: io.BytesIO) -> int:
-        b = s.read(2)
-        if len(b) < 2:
-            return 0
-        return int.from_bytes(b, 'little', signed=False)
-
-    def _ru32(self, s: io.BytesIO) -> int:
-        b = s.read(4)
-        if len(b) < 4:
-            return 0
-        return int.from_bytes(b, 'little', signed=False)
-
-    def _ri32(self, s: io.BytesIO) -> int:
-        b = s.read(4)
-        if len(b) < 4:
-            return 0
-        return int.from_bytes(b, 'little', signed=True)
-
-    def _rf32(self, s: io.BytesIO) -> float:
-        b = s.read(4)
-        if len(b) < 4:
-            return 0.0
-        return struct.unpack('<f', b)[0]
-
-    def _rstr(self, s: io.BytesIO) -> str:
-        out = bytearray()
-        while True:
-            c = s.read(1)
-            if not c:
-                break
-            if c == b'\x00':
-                break
-            out.extend(c)
-        try:
-            return out.decode('utf-8', errors='replace')
-        except Exception:
-            return ''
-
-    def _sanitize_name(self, text: str) -> str:
-        # Keep alnum, space, underscore, dash; replace others with underscore.
-        return ''.join(ch if (ch.isalnum() or ch in ' _-') else '_' for ch in text).strip() or 'Sample'
-
-    def _read_u32_list(self, s: io.BytesIO, n: int):
-        for _ in range(int(n)):
-            b = s.read(4)
-            if len(b) < 4:
-                yield 0
-            else:
-                yield int.from_bytes(b, 'little', signed=False)
-
-    def _scan_and_parse_blocks(self, mod: FurnaceModule, data: bytes, tag: bytes, handler):
-        i = 0
-        n = len(data)
-        while True:
-            i = data.find(tag, i)
-            if i < 0 or i + 8 > n:
-                break
-            size = int.from_bytes(data[i+4:i+8], 'little', signed=False)
-            if size <= 0 or i + 8 + size > n:
-                i += 1
-                continue
-            try:
-                handler(mod, io.BytesIO(data[i+8:i+8+size]))
-            except Exception:
-                # skip malformed occurrence
-                pass
-            i += 8 + size
+from furnace_parser import (
+    FurnaceParser,
+    FurnaceModule,
+    FurnacePatternRow,
+)
 
 
 # --------------------------------------------------------------------------------------
@@ -1091,6 +593,59 @@ class MML:
             self.txt += f'#%d\n' % c
             self.txt += '\n'
 
+    def validate_and_fix_brr_data(self, data: bytes, loop_end: int) -> bytes:
+        """Validate BRR data and fix invalid nibbles if needed.
+
+        Args:
+            data: Raw BRR data (multiple of 9 bytes).
+            loop_end: Loop sample offset
+        Returns:
+            Validated/fixed BRR data.
+        """
+        # check that last block has end flag set
+        if len(data) % 9 != 0:
+            raise ValueError("BRR data length is not a multiple of 9")
+        fixed_data = bytearray(data)
+
+        loop_end_byte = (loop_end // 16 * 9) - 9
+        # loop over every 9-byte block and set loop and end flags appropriately
+        for i in range(0, len(fixed_data), 9):
+            # check loop flag
+            loop_flag = (fixed_data[i] & 0x02) != 0
+
+            # debug
+            # if loop_flag:
+            #     print(f"byte {i}: loop flag is set, loop_end_byte={loop_end_byte}")
+            # if (i==loop_end_byte):
+            #     print(f"byte {i}: expected loop end byte")
+
+            end_flag = (fixed_data[i] & 0x01) != 0
+            if (i == loop_end_byte) and not loop_flag:
+                print(f"[diag] warning: BRR loop end block missing loop flag; fixing")
+                fixed_data[i] |= 2
+
+            # TODO : furnace seems to set loop flag on EVERY block
+            # not even sure why this works. Removing them breaks things.
+            # elif (i != loop_end_byte) and loop_flag:
+            #     print(f"[diag] warning: BRR block erroneously has loop flag; fixing")
+            #     fixed_data[i] &= 0xFD # 0xFF ^ 0x02
+
+            # debug
+            # elif (i == loop_end_byte) and loop_flag:
+            #     print(f"[diag] info: BRR loop end block has correct loop flag")
+
+            # end block can be missing for some furnace BRR samples
+            # seems to happen for samples that are converted to BRR from PCM
+            if (i + 9 >= len(fixed_data)) and not end_flag:
+                print(f"[diag] warning: BRR last block missing end flag; fixing")
+                fixed_data[i] |= 1
+            
+            # debug
+            # elif (i + 9 >= len(fixed_data)) and end_flag:
+            #     print(f"[diag] info: BRR last block has correct end flag")
+                
+        return fixed_data
+
     def _dump_samples_to_brr(self, out_dir: str) -> None:
         """Write PCM to temporary WAVs and encode to BRR using snesbrr.exe if available."""
         mod = self.event_table.module
@@ -1116,21 +671,22 @@ class MML:
             try:
                 if os.path.exists(brr_path):
                     os.remove(brr_path)
-                    if bool(Config.flag('diag')):
-                        print(f"[diag] removed existing BRR: {os.path.basename(brr_path)}")
             except OSError:
                 pass
             # If the sample already contains raw BRR data, wrap it with AMK 2-byte loop header and write
             if s.brr_raw:
                 try:
                     data = s.brr_raw
-                    # Ensure (len - 2) % 9 == 0 by adding header; raw data itself should be multiple of 9
+                    # Ensure len % 9 == 0 by adding header; raw data itself should be multiple of 9
                     if len(data) % 9 != 0:
                         # Truncate to the nearest lower whole block to satisfy AMK; log diagnostics
                         trunc = (len(data) // 9) * 9
                         if bool(Config.flag('diag')):
                             print(f"[diag] warning: BRR raw not block-aligned ({len(data)}); truncating to {trunc}")
                         data = data[:trunc]
+                    
+                    data = self.validate_and_fix_brr_data(data, s.loop_end)
+
                     loop_off = 0
                     if s.loop_start is not None and s.loop_start >= 0:
                         # Convert PCM loop start (samples) to BRR byte offset: floor(loop/16)*9
