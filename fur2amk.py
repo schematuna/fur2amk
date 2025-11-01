@@ -23,6 +23,9 @@ from furnace_parser import (
 #       warn if tick rate is not 60Hz (NTSC)... is PAL supported?
 #       get game name from Furnace module metadata if available
 #       support global tuning
+#       support 0B and 0D, special furnace order jumps for advanced looping
+#       preserve furnace channel names
+#       grab SNES chip flags for echo/FIR
 
 # --------------------------------------------------------------------------------------
 
@@ -438,7 +441,6 @@ class MML:
         if getattr(mod, 'OrdersPerChannel', None) and getattr(mod, 'PatternsByChannel', None) and any(mod.OrdersPerChannel):
             for c in range(mod.NumChannels):
                 self.txt += f'#%d\n' % c
-                # No default length: emit explicit lengths for every note/rest
                 current_oct = None
                 current_ins = None  # Furnace instrument index
                 current_amk_ins: Optional[int] = None  # AMK @ number actually in use
@@ -457,7 +459,13 @@ class MML:
 
                 i = 0
                 N = len(flat_rows)
+                cur_order_num = -1
+                # TODO: use AMK group labels for identical patterns/lines
                 while i < N:
+                    orderNum = i // mod.PatternLength
+                    if cur_order_num != orderNum:
+                        cur_order_num = orderNum
+                        tokens.append(f'\n; order {orderNum}\n')
                     row = flat_rows[i]
                     kind = self._row_kind(row)
                     # Track instrument changes (don’t emit @ yet; defer until note to choose sample variant)
