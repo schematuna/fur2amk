@@ -1,13 +1,10 @@
 """
 fur2amk
 
-First-pass scaffold to merge:
-- Input parsing: Furnace (.fur) parsing logic (to be ported from fur2tad)
-- Output generation: AMK MML generation logic (inspired by it2amk)
+Requires furnace files saved in Furnace 0.6pre5 or later
 
-This file intentionally includes lightweight stubs for the Furnace parser and
-event conversion so the CLI and MML writer can run now. We’ll wire real parsing
-and conversion next by porting from fur2tad and mapping to the AMK event model.
+Requires all samples to be converted to BRR format prior to use.
+
 """
 
 from __future__ import annotations
@@ -21,29 +18,9 @@ from typing import Any, Dict, List, Optional, Tuple
 import struct
 
 # TODO: support mid-sample loop points in BRR validation/writing
-
-# --------------------------------------------------------------------------------------
-# CLI helpers (previous path cache)
-
-previous_textfile_filename = "fur2amk_last_run.txt"
-
-
-def _get_previous_module() -> Optional[str]:
-    try:
-        with open(previous_textfile_filename, "r", encoding="utf-8") as f:
-            result = f.read().strip()
-            return result or None
-    except FileNotFoundError:
-        return None
-
-
-def _save_previous_module(path: str) -> None:
-    try:
-        with open(previous_textfile_filename, "w", encoding="utf-8") as f:
-            f.write(path)
-    except OSError:
-        pass
-
+#       warn if tick rate is not 60Hz (NTSC)... is PAL supported?
+#       get game name from Furnace module metadata if available
+#       support global tuning
 
 # --------------------------------------------------------------------------------------
 # Config (ported structure from it2amk, simplified implementation)
@@ -53,13 +30,8 @@ class Config:
     flags: Dict[str, List[Any]] = {
         'nosmpl': [False, 'bool'],        # Skip sample conversion/dumping
         'diag': [False, 'bool'],          # Diagnostic logging
-        'addmml': [[], None],             # List of MML snippets to add
         'game': ['', 'string'],           # Game title
-        'author': ['', 'string'],         # Author name
         'length': ['', 'time'],           # SPC length
-        'tmult': [2, 'real'],             # Tempo multiplier
-        'vmult': [1.0, 'real'],           # Volume multiplier
-        'chipc': [1, 'int'],              # Number of SPC chip instances
         'vcurve': ['accurate', 'string'], # accurate, linear, x^2
         'panning': ['accurate', 'string'],# linear, accurate
         'tspeed': [False, 'bool'],        # Use txxx for Axx commands
@@ -68,11 +40,6 @@ class Config:
         'mcmd': ['v', 'string'],          # Which volume command to use for the M effect
         'svcmd': ['v', 'string'],         # Which volume command to use for global sample volume
         'ivcmd': ['v', 'string'],         # Which volume command to use for global instrument volume
-        'resample': [1.0, 'real'],        # Constant resample ratio across all samples
-        'amplify': [0.92, 'real'],        # Constant amplify ratio across all samples
-        'echo': ['', 'hex', 8],           # Echo parameters
-        'fir': ['', 'hex', 16],           # Fir parameters
-        'master': ['', 'hex', 4],         # Master level (left and right)
         # ARAM checking
         'aram_check': [True, 'bool'],           # Emit an ARAM usage warning after generation
         'aram_sample_budget_kb': [52, 'int'],   # Conservative sample budget in KB (approx)
@@ -80,13 +47,8 @@ class Config:
 
     flag_aliases: Dict[str, str] = {
         'ns': 'nosmpl',
-        'mm': 'addmml',
         'gm': 'game',
-        'au': 'author',
         'ln': 'length',
-        't': 'tmult',
-        'vm': 'vmult',
-        'c': 'chipc',
         'vc': 'vcurve',
         'p': 'panning',
         'ts': 'tspeed',
@@ -95,11 +57,6 @@ class Config:
         'm': 'mcmd',
         'sv': 'svcmd',
         'iv': 'ivcmd',
-        'r': 'resample',
-        'a': 'amplify',
-        'e': 'echo',
-        'f': 'fir',
-        'ml': 'master',
     }
 
     @staticmethod
@@ -120,14 +77,6 @@ class Config:
 
         current = Config.flags[key]
         default_val, ftype = current[0], current[1]
-
-        if ftype is None:
-            # addmml special-case: allow repeated values
-            if key == 'addmml':
-                current[0].append(value)
-            else:
-                current[0] = value
-            return
 
         if ftype == 'bool':
             if isinstance(value, bool):
@@ -195,10 +144,7 @@ class Event:
 
 
 class EventTable:
-    """Build an event list from the FurnaceModule.
-
-    MVP: produce empty tracks; later, port full row/effect traversal from fur2tad.
-    """
+    """Build an event list from the FurnaceModule.    """
 
     def __init__(self, module: FurnaceModule) -> None:
         self.events: List[List[Event]] = [[] for _ in range(8)]
@@ -216,10 +162,6 @@ class EventTable:
         self.convert()
 
     def convert(self) -> None:
-        # TODO: Traverse Orders/Patterns from FurnaceModule and emit per-channel events
-        # For now: initialize T/V once at tick 0 for header completeness
-        self.g_events.append(Event(0, 'T', self.module.IT, visible=False))
-        self.g_events.append(Event(0, 'V', self.module.GV, visible=False))
         # Build trivial instrument/sample dictionary from module
         for s in self.module.Samples:
             self.used_samples.add(s.index)
@@ -312,7 +254,6 @@ class MML:
         self.add_spc_info()
         self.add_sample_info()
         self.add_ins_info()
-        self.add_init_info()
         self.convert()
 
     # Sections
@@ -388,12 +329,13 @@ class MML:
         lines = ['#spc', '{']
         mod = self.event_table.module
         title = getattr(mod, 'SongName', '') or ''
+        author = getattr(mod, 'Author', '') or ''
         if title:
             lines.append(f'  #title "{title}"')
         if Config.flag('game'):
             lines.append(f'  #game "{Config.flag("game")}"')
-        if Config.flag('author'):
-            lines.append(f'  #author "{Config.flag("author")}"')
+        if author:
+            lines.append(f'  #author "{author}"')
         if Config.flag('length'):
             lines.append(f'  #length "{Config.flag("length")}"')
         # Optional comment: use first line of Message if present
@@ -468,12 +410,6 @@ class MML:
             next_num += 1
         lines.append('}')
         self.txt += '\n'.join(lines) + '\n\n'
-
-    def add_init_info(self) -> None:
-        # Basic init MML stub; can be expanded to include echo/fir/master
-        addmml = Config.flag('addmml')
-        if addmml:
-            self.txt += '\n'.join(addmml) + '\n\n'
 
     # Conversion
     def convert(self) -> None:
@@ -647,18 +583,10 @@ class MML:
         return fixed_data
 
     def _dump_samples_to_brr(self, out_dir: str) -> None:
-        """Write PCM to temporary WAVs and encode to BRR using snesbrr.exe if available."""
         mod = self.event_table.module
         if not getattr(mod, 'Samples', None):
             return
-        # Resolve encoder path
-        here = os.path.dirname(os.path.abspath(__file__))
-        candidates = [
-            os.path.normpath(os.path.join(here, '..', 'snesbrr', 'snesbrr.exe')),
-        ]
-        encoder = next((p for p in candidates if os.path.exists(p)), None)
         total = 0
-        with_pcm = 0
         created = 0
         for s in mod.Samples:
             total += 1
@@ -701,86 +629,11 @@ class MML:
                 except Exception:
                     if bool(Config.flag('diag')):
                         print(f"[diag] failed to write raw BRR for {s.index:02d} {s.name}")
-                    # fall through to try PCM encode if available
-            # If we don't have PCM, skip
-            if not s.pcm16:
-                if bool(Config.flag('diag')):
-                    print(f"[diag] skip: no PCM for {s.index:02d} {s.name}")
-                continue
-            with_pcm += 1
-            # Write WAV
-            wav_path = os.path.join(out_dir, fname_base + '.wav')
-            try:
-                with wave.open(wav_path, 'wb') as wf:
-                    wf.setnchannels(1)
-                    wf.setsampwidth(2)
-                    # Prefer a standard 32000 Hz output to match SNES native rate
-                    rate = 32000
-                    wf.setframerate(rate)
-                    # Pack samples little-endian
-                    frames = struct.pack('<' + 'h' * len(s.pcm16), *s.pcm16)
-                    wf.writeframes(frames)
-            except Exception:
-                # Couldn't write WAV; skip encoding
-                if bool(Config.flag('diag')):
-                    print(f"[diag] failed to write WAV for {s.index:02d} {s.name}")
-                continue
-            # Encode to BRR (overwrite target)
-            if encoder:
-                cmd = [encoder, '--encode']
-                # Loop start in samples (WAV frames), if available
-                if s.loop_start is not None and s.loop_start >= 0:
-                    # Align to BRR block boundary (16 samples)
-                    ls = int(s.loop_start)
-                    if ls < 0:
-                        ls = 0
-                    ls &= ~0xF
-                    cmd += ['--loop-start', str(ls)]
-                cmd += [wav_path, brr_path]
-                try:
-                    if bool(Config.flag('diag')):
-                        print(f"[diag] encode: {' '.join(cmd)}")
-                    subprocess.run(cmd, check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                except Exception:
-                    # Leave WAV; user can encode manually if needed
-                    if bool(Config.flag('diag')):
-                        print(f"[diag] encoder failed for {s.index:02d} {s.name}")
-                    pass
-            # If an encoder was used and produced a raw BRR without AMK header, prepend 2-byte loop header
-            try:
-                if os.path.exists(brr_path) and os.path.getsize(brr_path) > 0:
-                    with open(brr_path, 'rb') as f:
-                        br = f.read()
-                    # If file already seems to have header (len-2 divisible by 9), keep; else add header
-                    needs_header = (len(br) - 2) % 9 != 0
-                    if needs_header:
-                        loop_off = 0
-                        if s.loop_start is not None and s.loop_start >= 0:
-                            loop_off = (int(s.loop_start) // 16) * 9
-                        header = bytes((loop_off & 0xFF, (loop_off >> 8) & 0xFF))
-                        # Ensure payload is integral blocks
-                        if len(br) % 9 != 0:
-                            trunc = (len(br) // 9) * 9
-                            if bool(Config.flag('diag')):
-                                print(f"[diag] warning: encoder BRR not block-aligned ({len(br)}); truncating to {trunc}")
-                            br = br[:trunc]
-                        with open(brr_path, 'wb') as f:
-                            f.write(header + br)
-                        if bool(Config.flag('diag')):
-                            print(f"[diag] inserted AMK header: {os.path.basename(brr_path)} loop_off={loop_off}")
-            except Exception:
-                pass
-            # Optionally remove WAV to keep folder clean if BRR exists
-            try:
-                if os.path.exists(brr_path) and os.path.getsize(brr_path) > 0:
-                    created += 1
-                    os.remove(wav_path)
-                    if bool(Config.flag('diag')):
-                        print(f"[diag] created: {os.path.basename(brr_path)}")
-            except OSError:
-                pass
+            else:
+                print(f"[diag] info: sample {s.index:02d} {s.name} has no raw BRR data, skipping")
+            
         if bool(Config.flag('diag')):
-            print(f"[diag] summary: samples={total} with_pcm={with_pcm} brr_created={created}")
+            print(f"[diag] summary: samples={total} brr_created={created}")
 
     def _note_name_and_octave(self, i: int) -> Tuple[str, int]:
         # Map Furnace note index (0=C-0) to AMK note name and octave using oN
@@ -848,10 +701,8 @@ class MML:
 
 def parse_cli(argv: List[str]) -> Tuple[str, List[Tuple[str, str]]]:
     if len(argv) < 2:
-        prev = _get_previous_module()
         usage = (
-            'Usage: python fur2amk.py <furnace_file.fur> <flags>\n' +
-            (f'Previous: {prev}\n' if prev else '')
+            'Usage: python fur2amk.py <furnace_file.fur> <flags>'
         )
         print(usage)
         sys.exit(1)
@@ -898,9 +749,6 @@ def main() -> None:
     out_path = os.path.join('music', f'{song_name}.txt')
     mml.save(out_path)
     print(f"Wrote {out_path}")
-
-    # Cache last path
-    _save_previous_module(module_path)
 
 
 if __name__ == "__main__":
