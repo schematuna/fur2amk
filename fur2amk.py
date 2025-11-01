@@ -469,8 +469,8 @@ class MML:
                 # I don't see a good way to separate tokenization logic from formatting logic
                 # once the amk tokens are created there's not a good way to back out what their pattern associations were
                 # I think we just have to process by output line here
-                # We also store prior processed lines in a a buffer and detect repeats as we go for labelled loops
-                #     need to remove volume/instrument info when detecting dupes
+                # We can also store prior processed lines in a buffer and detect repeats as we go for labelled loops
+                #     - need to remove volume/instrument info when detecting dupes
                 # Will implement these formatting nuances after rest of effects are done, in case they add complexity.
                 # Probably want a new class MMLLine
                 while i < N:
@@ -480,12 +480,14 @@ class MML:
                         cur_measure_num = measureNum
                         cur_order_num = orderNum
                         self.txt += ' '.join(line_tokens) + '\n'
+                        line_tokens = []
                         self.txt += f'; order {orderNum}\n'
                     if cur_measure_num != measureNum:
                         cur_measure_num = measureNum
                         # not desirable for shorter measures, comment out for now
+                        # line_tokens = []
                         # self.txt += ' '.join(line_tokens) + '\n\n'
-                        # line_tokens = f'\n'
+                        # self.txt += f'\n'
                     row = flat_rows[i]
                     kind = self._row_kind(row)
                     # Track instrument changes (don’t emit @ yet; defer until note to choose sample variant)
