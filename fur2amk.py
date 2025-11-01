@@ -417,7 +417,10 @@ class MML:
         mod = self.event_table.module
 
         # Global tempo and volume
-        base_den = 4 * (mod.HighlightA or 4)
+        base_num = mod.HighlightA
+        if (base_num <= 0):
+            base_num = 4
+        base_den = mod.HighlightB
         if base_den <= 0:
             base_den = 16
         tps = float(getattr(mod, 'TicksPerSecond', 0.0) or 0.0)
@@ -445,7 +448,7 @@ class MML:
                 current_ins = None  # Furnace instrument index
                 current_amk_ins: Optional[int] = None  # AMK @ number actually in use
                 current_vol: Optional[int] = None  # 0..255
-                tokens: List[str] = []
+                line_tokens: List[str] = []
                 orders = mod.OrdersPerChannel[c] if c < len(mod.OrdersPerChannel) else []
                 patmap = mod.PatternsByChannel[c] if c < len(mod.PatternsByChannel) else {}
                 # Flatten rows for this channel
@@ -460,12 +463,29 @@ class MML:
                 i = 0
                 N = len(flat_rows)
                 cur_order_num = -1
-                # TODO: use AMK group labels for identical patterns/lines
+                cur_measure_num = -1
+                # TODO: use AMK group labels for identical patterns/measures
+                #       line length-dependent breaks by measure
+                # I don't see a good way to separate tokenization logic from formatting logic
+                # once the amk tokens are created there's not a good way to back out what their pattern associations were
+                # I think we just have to process by output line here
+                # We also store prior processed lines in a a buffer and detect repeats as we go for labelled loops
+                #     need to remove volume/instrument info when detecting dupes
+                # Will implement these formatting nuances after rest of effects are done, in case they add complexity.
+                # Probably want a new class MMLLine
                 while i < N:
                     orderNum = i // mod.PatternLength
+                    measureNum = (i // base_den)
                     if cur_order_num != orderNum:
+                        cur_measure_num = measureNum
                         cur_order_num = orderNum
-                        tokens.append(f'\n; order {orderNum}\n')
+                        self.txt += ' '.join(line_tokens) + '\n'
+                        self.txt += f'; order {orderNum}\n'
+                    if cur_measure_num != measureNum:
+                        cur_measure_num = measureNum
+                        # not desirable for shorter measures, comment out for now
+                        # self.txt += ' '.join(line_tokens) + '\n\n'
+                        # line_tokens = f'\n'
                     row = flat_rows[i]
                     kind = self._row_kind(row)
                     # Track instrument changes (don’t emit @ yet; defer until note to choose sample variant)
@@ -483,17 +503,17 @@ class MML:
                         # Determine which sample this note should use for this instrument
                         amk_num = self._resolve_amk_instrument_for_note(current_ins, note_idx)
                         if amk_num is not None and amk_num != current_amk_ins:
-                            tokens.append(f'@{amk_num}')
+                            line_tokens.append(f'@{amk_num}')
                             current_amk_ins = amk_num
                         name, octv = self._note_name_and_octave(note_idx)
                         if current_oct != octv:
-                            tokens.append(f'o{octv}')
+                            line_tokens.append(f'o{octv}')
                             current_oct = octv
                         # Apply volume if present on this row and changed
                         if row.Vol is not None:
                             v = max(0, min(255, int(row.Vol)))
                             if current_vol != v:
-                                tokens.append(f'v{v}')
+                                line_tokens.append(f'v{v}')
                                 current_vol = v
                         # Count run length of same note continuing (no new note starts)
                         run = 1
@@ -513,7 +533,7 @@ class MML:
                         for d in denoms[1:]:
                             note_token += f'^{d}'
                         # First segment includes note name
-                        tokens.append(note_token)
+                        line_tokens.append(note_token)
                         i = j
                         continue
                     else:
@@ -531,10 +551,10 @@ class MML:
                         rest_token = f'r{denoms[0]}'
                         for d in denoms[1:]:
                             rest_token += f'^{d}'
-                        tokens.append(rest_token)
+                        line_tokens.append(rest_token)
                         i = j
                         continue
-                self.txt += ' '.join(tokens) + '\n\n'
+                self.txt += ' '.join(line_tokens) + '\n\n'
             return
         # Fallback: emit 8 empty channels as before
         for c in range(8):
