@@ -473,6 +473,10 @@ class MML:
                 #     - need to remove volume/instrument info when detecting dupes
                 # Will implement these formatting nuances after rest of effects are done, in case they add complexity.
                 # Probably want a new class MMLLine
+                # 1st pass is line breaks informed by pattern length, makes MMLLine objects
+                # 2nd pass is line deduplication with labels
+                # also need to handle inner/outer loops, cause I'll want to take care of stuff like r1^1^1^1^1^1
+                # Somewhere in there too-long lines need to be handled, probably before de-dupe step
                 while i < N:
                     orderNum = i // mod.PatternLength
                     measureNum = (i // base_den)
