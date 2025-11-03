@@ -12,7 +12,25 @@ class CompileErrorException(Exception):
     pass
 
 
-# Adapter types used by the rest of the pipeline
+@dataclass
+class FurnaceSNESFlags:
+    antiClick: Optional[bool] = None
+    echo: Optional[bool] = None
+    echoDelay: Optional[int] = None
+    echoFeedback: Optional[int] = None
+    echoFilter0: Optional[int] = None
+    echoFilter1: Optional[int] = None
+    echoFilter2: Optional[int] = None
+    echoFilter3: Optional[int] = None
+    echoFilter4: Optional[int] = None
+    echoFilter5: Optional[int] = None
+    echoFilter6: Optional[int] = None
+    echoFilter7: Optional[int] = None
+    echoMask: Optional[int] = None
+    echoVolL: Optional[int] = None
+    echoVolR: Optional[int] = None
+    volScaleL: Optional[int] = None
+    volScaleR: Optional[int] = None
 
 
 @dataclass
@@ -88,7 +106,7 @@ class FurnaceModule:
     TicksPerSecond: float = 0.0
     Speed1: int = 6
     Speed2: int = 0
-    SNESFlags: Dict[str, str] = field(default_factory=dict)  # from FLAG block
+    SNESFlags: FurnaceSNESFlags = field(default_factory=FurnaceSNESFlags)
 
 
 class FurnaceParser:
@@ -429,7 +447,24 @@ class FurnaceParser:
                 continue
             key, value = line.split('=', 1)
             flags[key.strip()] = value.strip()
-        mod.SNESFlags = flags
+
+        mod.SNESFlags.antiClick = bool(flags.get('antiClick', '0'))
+        mod.SNESFlags.echo = bool(flags.get('echo', '0'))
+        mod.SNESFlags.echoDelay = int(flags.get('echoDelay', '0'))
+        mod.SNESFlags.echoFeedback = int(flags.get('echoFeedback', '0'))
+        mod.SNESFlags.echoFilter0 = int(flags.get('echoFilter0', '0'))
+        mod.SNESFlags.echoFilter1 = int(flags.get('echoFilter1', '0'))
+        mod.SNESFlags.echoFilter2 = int(flags.get('echoFilter2', '0'))
+        mod.SNESFlags.echoFilter3 = int(flags.get('echoFilter3', '0'))
+        mod.SNESFlags.echoFilter4 = int(flags.get('echoFilter4', '0'))
+        mod.SNESFlags.echoFilter5 = int(flags.get('echoFilter5', '0'))
+        mod.SNESFlags.echoFilter6 = int(flags.get('echoFilter6', '0'))
+        mod.SNESFlags.echoFilter7 = int(flags.get('echoFilter7', '0'))
+        mod.SNESFlags.echoMask = int(flags.get('echoMask', '0'))
+        mod.SNESFlags.echoVolL = int(flags.get('echoVolL', '0'))
+        mod.SNESFlags.echoVolR = int(flags.get('echoVolR', '0'))
+        mod.SNESFlags.volScaleL = int(flags.get('volScaleL', '0'))
+        mod.SNESFlags.volScaleR = int(flags.get('volScaleR', '0'))
 
     # ------------- helpers -------------
 
