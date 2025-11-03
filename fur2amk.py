@@ -5,6 +5,12 @@ Requires furnace files saved in Furnace 0.6pre5 or later
 
 Requires all samples to be converted to BRR format prior to use.
 
+Furnace projects may require optimization if AMK throws an error about ARAM.
+There are two ways to do this:
+    1. decrease the SNES echo delay in the chip manager
+    2. reduce sample sizes by downsampling or trimming
+        - need to switch to 8 or 16 bit PCM first, edit, then back to BRR
+
 """
 
 from __future__ import annotations
@@ -25,7 +31,6 @@ from furnace_parser import (
 #       support global tuning
 #       support 0B and 0D, special furnace order jumps for advanced looping
 #       preserve furnace channel names
-#       grab SNES chip flags for echo/FIR
 
 # --------------------------------------------------------------------------------------
 
@@ -440,6 +445,33 @@ class MML:
         amk_volume = min(int(gvol * 200), 255)
 
         self.txt += f'w{amk_volume} t{amk_tempo}\n\n'
+
+
+        # make echo commmands
+        # these are being read as strings for some reaso
+        # FurnaceSNESFlags(antiClick=True, echo=True, echoDelay=7, echoFeedback=-128, echoFilter0=77, 
+        #                  echoFilter1=17, echoFilter2=-6, echoFilter3=-12, echoFilter4=-6, echoFilter5=-5, 
+        #                  echoFilter6=-6, echoFilter7=0, echoMask=255, echoVolL=80, echoVolR=-80, 
+        #                  volScaleL=30, volScaleR=30)
+        sn = mod.SNESFlags
+        mask = sn.echoMask
+        # map echo volues from -128..127 to 0..255
+        evoll = sn.echoVolL + 128
+        evolr = sn.echoVolR + 128
+        # echo delay is already 00->0F
+        edl = sn.echoDelay
+        efb = sn.echoFeedback + 128
+        # Default FIR index to 1 when echo is enabled, else 0
+        echoOn = sn.echo
+        # TODO: implement filter coefficients
+        fir_idx = 0x01 if echoOn else 0x00
+
+        self.txt += f'$EF ${mask:02X} ${evoll:02X} ${evolr:02X}\n'
+        self.txt += f'$F1 ${edl:02X} ${efb:02X} ${fir_idx:02X}\n\n'
+
+        # TODO: what to do with volume scales?
+        volumeScaleL = sn.volScaleL
+        volumeScaleR = sn.volScaleR
 
         if getattr(mod, 'OrdersPerChannel', None) and getattr(mod, 'PatternsByChannel', None) and any(mod.OrdersPerChannel):
             for c in range(mod.NumChannels):
