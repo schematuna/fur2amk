@@ -447,31 +447,42 @@ class MML:
         self.txt += f'w{amk_volume} t{amk_tempo}\n\n'
 
 
-        # make echo commmands
-        # these are being read as strings for some reaso
-        # FurnaceSNESFlags(antiClick=True, echo=True, echoDelay=7, echoFeedback=-128, echoFilter0=77, 
-        #                  echoFilter1=17, echoFilter2=-6, echoFilter3=-12, echoFilter4=-6, echoFilter5=-5, 
-        #                  echoFilter6=-6, echoFilter7=0, echoMask=255, echoVolL=80, echoVolR=-80, 
-        #                  volScaleL=30, volScaleR=30)
+        # Convert -128->127 ranged values to 2's complement hex
+        def to_hex(val):
+            return f"${(val & 0xFF):02X}" if val >= 0 else f"${((val + 256) & 0xFF):02X}"
+
+        # make echo commands
         sn = mod.SNESFlags
         mask = sn.echoMask
-        # map echo volues from -128..127 to 0..255
-        evoll = sn.echoVolL + 128
-        evolr = sn.echoVolR + 128
+        # furnace volume ranges from -128..127
+        # not entirely clear how negative volumes are handled in furnace
+        # but AMK treats negative volumes as surround volume
+        evoll = sn.echoVolL
+        evolr = sn.echoVolR
         # echo delay is already 00->0F
         edl = sn.echoDelay
-        efb = sn.echoFeedback + 128
-        # Default FIR index to 1 when echo is enabled, else 0
+        # feedback, AKA "reverb". Negative numbers are surround reverb.
+        efb = sn.echoFeedback
         echoOn = sn.echo
-        # TODO: implement filter coefficients
         fir_idx = 0x01 if echoOn else 0x00
 
-        self.txt += f'$EF ${mask:02X} ${evoll:02X} ${evolr:02X}\n'
-        self.txt += f'$F1 ${edl:02X} ${efb:02X} ${fir_idx:02X}\n\n'
+        self.txt += f'$EF {to_hex(mask)} {to_hex(evoll)} {to_hex(evolr)}\n'
+        self.txt += f'$F1 {to_hex(edl)} {to_hex(efb)} {to_hex(fir_idx)}\n'
 
-        # TODO: what to do with volume scales?
+        # filter coefficients. Passthrough, negative numbers stored as 2's complement
+        coeffs = [
+            sn.echoFilter0, sn.echoFilter1, sn.echoFilter2, sn.echoFilter3,
+            sn.echoFilter4, sn.echoFilter5, sn.echoFilter6, sn.echoFilter7
+        ]
+        coeffs_hex = ' '.join(to_hex(c) for c in coeffs)
+        self.txt += f'$F5 {coeffs_hex}\n\n'
+
+        # from furnace docs: "scale volumes to prevent clipping/distortion"
         volumeScaleL = sn.volScaleL
         volumeScaleR = sn.volScaleR
+        if volumeScaleL != volumeScaleR:
+            print(f"Looks like you have different volume scales for left and right channels ({volumeScaleL} vs {volumeScaleR}).", file=sys.stderr)
+            print("AMK does not support volume scaling so this may not sound right.", file=sys.stderr)
 
         if getattr(mod, 'OrdersPerChannel', None) and getattr(mod, 'PatternsByChannel', None) and any(mod.OrdersPerChannel):
             for c in range(mod.NumChannels):
