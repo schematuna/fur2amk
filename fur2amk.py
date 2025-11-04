@@ -31,6 +31,7 @@ from furnace_parser import (
 #       support global tuning
 #       support 0B and 0D, special furnace order jumps for advanced looping
 #       preserve furnace channel names
+#       support GAIN, both via SNES instrument data and GAIN SNES macro
 
 # --------------------------------------------------------------------------------------
 
@@ -203,7 +204,12 @@ class EventTable:
                 else:
                     # Use initial_sample (0-based) if available
                     try:
-                        if ins.initial_sample is not None and int(ins.initial_sample) >= 0:
+                        # first, check if this is a noise instrument
+                        snes_macro_data = ins.get_snes_macro_flags()
+                        if snes_macro_data.is_noise:
+                            # use negative index with value -freq to indicate noise instrument
+                            sidx1 = -snes_macro_data.noise_freq
+                        elif ins.initial_sample is not None and int(ins.initial_sample) >= 0:
                             sidx1 = int(ins.initial_sample)
                         else:
                             sidx1 = 0
@@ -259,6 +265,11 @@ class MML:
         self.add_volume_tempo_info()
         self.add_echo_info()
         self.convert()
+
+    # Convert -128->127 ranged values to 2's complement hex
+    @staticmethod
+    def to_hex(val):
+        return f"${(val & 0xFF):02X}" if val >= 0 else f"${((val + 256) & 0xFF):02X}"
 
     # Sections
     def add_amk_header(self) -> None:
@@ -384,18 +395,25 @@ class MML:
         # get max sample name length for alignment
         name_field_width = name_col + 2  # account for quotes
         for ins_idx, samp_idx in self.event_table.ins_list:
-            # Resolve sample filename and tuning
-            samp_entry = self.event_table.sample_dict.get(samp_idx)
-            if not samp_entry:
-                # Fallback to first sample
-                samp_entry = next(iter(self.event_table.sample_dict.values()), ("Sample1.brr", "$01 $00"))
-            samp_name, samp_tuning = samp_entry
+            if samp_idx < 0:
+                # Noise instrument
+                samp_name = f'n{abs(samp_idx):02X}'
+                print(f"Info: Emitting noise instrument {samp_name} for instrument {ins_idx}.", file=sys.stderr)
+            else:
+                # Resolve sample filename and tuning
+                samp_entry = self.event_table.sample_dict.get(samp_idx)
+                if not samp_entry:
+                    # Fallback to first sample
+                    samp_entry = next(iter(self.event_table.sample_dict.values()), ("Sample1.brr", "$01 $00"))
+                samp_name, samp_tuning = samp_entry
+                samp_name = f'"{samp_name}"'
             # ADSR/GAIN
             ins = self.event_table.module.Instruments[ins_idx]
-            # Default: no envelope -> $00 $00 $7F
+            # Default: no envelope -> $00 $00
             da = 0x00
             sr = 0x00
-            ga = 0x7F
+            # Default to no GAIN
+            ga = 0x00
             try:
                 if ins.sn_flags is not None and (ins.sn_flags & 0x10):
                     d = int(ins.sn_decay or 0)
@@ -405,14 +423,14 @@ class MML:
                     da = ((d & 0x7) | 0x8) << 4 | (a & 0xF)
                     sr = ((ssv & 0x7) << 5) | (rv & 0x1F)
                     # When ADSR is on, GA is ignored by AMK; keep placeholder $7F.
-                else:
+                # else:
                     # ADSR off: use raw GAIN value if provided (clamped to 7-bit)
-                    if ins.sn_gain is not None:
-                        ga = max(0, min(0x7F, int(ins.sn_gain)))
+                    # if ins.sn_gain is not None:
+                        # TODO: figure out gain
+                        # ga = max(0, max(0x7F, int(ins.sn_gain)))
             except Exception:
                 pass
-            quoted_name = f'"{samp_name}"'
-            lines.append(f'    {quoted_name:<{name_field_width}} ${da:02X} ${sr:02X} ${ga:02X} {samp_tuning} ;@{next_num}')
+            lines.append(f'    {samp_name:<{name_field_width}} ${da:02X} ${sr:02X} ${ga:02X} {samp_tuning} ;@{next_num}')
             self.insnum_map[(ins_idx, samp_idx)] = next_num
             next_num += 1
         lines.append('}')
@@ -449,10 +467,6 @@ class MML:
     def add_echo_info(self) -> None:
         mod = self.event_table.module
 
-        # Convert -128->127 ranged values to 2's complement hex
-        def to_hex(val):
-            return f"${(val & 0xFF):02X}" if val >= 0 else f"${((val + 256) & 0xFF):02X}"
-
         # make echo commands
         sn = mod.SNESFlags
         mask = sn.echoMask
@@ -468,10 +482,10 @@ class MML:
         echoOn = sn.echo
         fir_idx = 0x01 if echoOn else 0x00
 
-        self.txt += f'$EF {to_hex(mask)} {to_hex(evoll)} {to_hex(evolr)}\n'
-        self.txt += f'$F1 {to_hex(edl)} {to_hex(efb)} {to_hex(fir_idx)}\n'
+        self.txt += f'$EF {self.to_hex(mask)} {self.to_hex(evoll)} {self.to_hex(evolr)}\n'
+        self.txt += f'$F1 {self.to_hex(edl)} {self.to_hex(efb)} {self.to_hex(fir_idx)}\n'
 
-        coeffs_hex = ' '.join(to_hex(c) for c in sn.echoFilterCoeffs)
+        coeffs_hex = ' '.join(self.to_hex(c) for c in sn.echoFilterCoeffs)
         self.txt += f'$F5 {coeffs_hex}\n\n'
 
         # from furnace docs: "scale volumes to prevent clipping/distortion"
@@ -491,6 +505,7 @@ class MML:
                 self.txt += f'#%d\n' % c
                 current_oct = None
                 current_ins = None  # Furnace instrument index
+                current_echo = True # start with echo enabled by default
                 current_amk_ins: Optional[int] = None  # AMK @ number actually in use
                 current_vol: Optional[int] = None  # 0..255
                 line_tokens: List[str] = []
@@ -554,9 +569,15 @@ class MML:
                             current_amk_ins = None
                         # Determine which sample this note should use for this instrument
                         amk_num = self._resolve_amk_instrument_for_note(current_ins, note_idx)
+                            
                         if amk_num is not None and amk_num != current_amk_ins:
                             line_tokens.append(f'@{amk_num}')
                             current_amk_ins = amk_num
+                            ins_echo = mod.Instruments[current_ins].get_snes_macro_flags().is_echo
+                            # if instrument echo setting differs from previous, toggle echo
+                            if ins_echo != current_echo:
+                                current_echo = ins_echo
+                                line_tokens.append('$F4 $03')
                         name, octv = self._note_name_and_octave(note_idx)
                         if current_oct != octv:
                             line_tokens.append(f'o{octv}')
@@ -756,7 +777,10 @@ class MML:
                     samp_idx = sidx_raw + 1
             if samp_idx is None:
                 try:
-                    if ins.initial_sample is not None and int(ins.initial_sample) >= 0:
+                    if ins.get_snes_macro_flags().is_noise:
+                        # use negative index with value -freq to indicate noise instrument
+                        samp_idx = -ins.get_snes_macro_flags().noise_freq
+                    elif ins.initial_sample is not None and int(ins.initial_sample) >= 0:
                         samp_idx = int(ins.initial_sample)
                     else:
                         samp_idx = 0
