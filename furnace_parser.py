@@ -65,10 +65,42 @@ class FurnaceInstrument:
     # Instrument macros (INS2 'MA'): code -> macro definition
     macros: Dict[int, "FurnaceMacro"] = field(default_factory=dict)
 
+    def get_snes_macro_flags(self) -> FurnaceSNESMacroData:
+        snesmacros = FurnaceSNESMacroData()
+        for macro in self.macros.values():
+            if macro.code == 2:  # code 2 corresponds to pitch freq
+                snesmacros.noise_freq = macro.values[0]
+            if macro.code == 5:  # code 5 corresponds to extra1 macro
+                special_snes_flags = macro.values[0]
+                snesmacros.is_noise = (special_snes_flags & 0x01) != 0
+                snesmacros.is_echo = (special_snes_flags & 0x02) != 0
+                snesmacros.is_pitch_mod = (special_snes_flags & 0x04) != 0
+                snesmacros.invert_right = (special_snes_flags & 0x08) != 0
+                snesmacros.invert_left = (special_snes_flags & 0x10) != 0
+            if macro.code == 6:  # code 6 corresponds to gain
+                snesmacros.direct_gain = macro.values[0]
+                snesmacros.exponential_gain = macro.values[1]
+        return snesmacros
+
+@dataclass
+class FurnaceSNESMacroData:
+    is_noise: bool = False
+    is_echo: bool = True # per-instrument echo enablement
+    is_pitch_mod: bool = False
+    invert_right: bool = False # not sure
+    invert_left: bool = False  # what these are for
+    noise_freq: Optional[int] = None # ranges 0 to 32
+    direct_gain: Optional[int] = None  # direct gain value from gain macro
+    exponential_gain: Optional[int] = None  # exponential gain from gain macro
 
 @dataclass
 class FurnaceMacro:
     # Representation of a single macro as parsed from INS2 'MA'
+    # for snes, codes are interpreted as:
+    #  duty (2) = pitch freq
+    #  wave (3) = waveform
+    #  extra1 (5) = special
+    #  extra2 (6) = gain
     code: int                   # macro code (0..21, 255=end)
     length: int                 # number of steps, basically the length of values list
     loop: int                   # loop position (unused)
@@ -82,7 +114,6 @@ class FurnaceMacro:
 
 @dataclass
 class FurnacePatternRow:
-    # Extremely simplified row placeholder
     Note: Optional[int] = None  # 0..119, 254=cut, 255=off
     Ins: Optional[int] = None
     Vol: Optional[int] = None   # 0..64
