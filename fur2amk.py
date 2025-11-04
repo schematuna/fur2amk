@@ -256,6 +256,8 @@ class MML:
         self.add_spc_info()
         self.add_sample_info()
         self.add_ins_info()
+        self.add_volume_tempo_info()
+        self.add_echo_info()
         self.convert()
 
     # Sections
@@ -416,9 +418,7 @@ class MML:
         lines.append('}')
         self.txt += '\n'.join(lines) + '\n\n'
 
-    # Conversion
-    def convert(self) -> None:
-        # If we have parsed orders/patterns, emit simple note streams with basic durations per channel.
+    def add_volume_tempo_info(self) -> None:
         mod = self.event_table.module
 
         # Global tempo and volume
@@ -446,6 +446,8 @@ class MML:
 
         self.txt += f'w{amk_volume} t{amk_tempo}\n\n'
 
+    def add_echo_info(self) -> None:
+        mod = self.event_table.module
 
         # Convert -128->127 ranged values to 2's complement hex
         def to_hex(val):
@@ -469,12 +471,7 @@ class MML:
         self.txt += f'$EF {to_hex(mask)} {to_hex(evoll)} {to_hex(evolr)}\n'
         self.txt += f'$F1 {to_hex(edl)} {to_hex(efb)} {to_hex(fir_idx)}\n'
 
-        # filter coefficients. Passthrough, negative numbers stored as 2's complement
-        coeffs = [
-            sn.echoFilter0, sn.echoFilter1, sn.echoFilter2, sn.echoFilter3,
-            sn.echoFilter4, sn.echoFilter5, sn.echoFilter6, sn.echoFilter7
-        ]
-        coeffs_hex = ' '.join(to_hex(c) for c in coeffs)
+        coeffs_hex = ' '.join(to_hex(c) for c in sn.echoFilterCoeffs)
         self.txt += f'$F5 {coeffs_hex}\n\n'
 
         # from furnace docs: "scale volumes to prevent clipping/distortion"
@@ -483,6 +480,11 @@ class MML:
         if volumeScaleL != volumeScaleR:
             print(f"Looks like you have different volume scales for left and right channels ({volumeScaleL} vs {volumeScaleR}).", file=sys.stderr)
             print("AMK does not support volume scaling so this may not sound right.", file=sys.stderr)
+
+    # Conversion
+    def convert(self) -> None:
+        # If we have parsed orders/patterns, emit simple note streams with basic durations per channel.
+        mod = self.event_table.module
 
         if getattr(mod, 'OrdersPerChannel', None) and getattr(mod, 'PatternsByChannel', None) and any(mod.OrdersPerChannel):
             for c in range(mod.NumChannels):
@@ -507,6 +509,7 @@ class MML:
                 N = len(flat_rows)
                 cur_order_num = -1
                 cur_measure_num = -1
+                base_den = mod.HighlightB
                 # TODO: use AMK group labels for identical patterns/measures
                 #       line length-dependent breaks by measure
                 # I don't see a good way to separate tokenization logic from formatting logic

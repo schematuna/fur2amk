@@ -18,14 +18,7 @@ class FurnaceSNESFlags:
     echo: Optional[bool] = None
     echoDelay: Optional[int] = None
     echoFeedback: Optional[int] = None
-    echoFilter0: Optional[int] = None
-    echoFilter1: Optional[int] = None
-    echoFilter2: Optional[int] = None
-    echoFilter3: Optional[int] = None
-    echoFilter4: Optional[int] = None
-    echoFilter5: Optional[int] = None
-    echoFilter6: Optional[int] = None
-    echoFilter7: Optional[int] = None
+    echoFilterCoeffs: Optional[List[int]] = None
     echoMask: Optional[int] = None
     echoVolL: Optional[int] = None
     echoVolR: Optional[int] = None
@@ -69,6 +62,22 @@ class FurnaceInstrument:
     initial_sample: Optional[int] = 0  # sample 0 by default
     use_sample_map: bool = False
     sample_table: List[Tuple[int, int]] = field(default_factory=lambda: [(0, 1)] * 120)
+    # Instrument macros (INS2 'MA'): code -> macro definition
+    macros: Dict[int, "FurnaceMacro"] = field(default_factory=dict)
+
+
+@dataclass
+class FurnaceMacro:
+    # Representation of a single macro as parsed from INS2 'MA'
+    code: int                   # macro code (0..21, 255=end)
+    length: int                 # number of steps, basically the length of values list
+    loop: int                   # loop position (unused)
+    release: int                # release position (unused)
+    type: int                   # 0=normal,1=ADSR,2=LFO
+    instant_release: bool       # instant release flag (>=182) (unused)
+    delay: int                  # macro delay
+    speed: int                  # step length in ticks
+    values: List[int]           # parsed integer values (length entries)
 
 
 @dataclass
@@ -369,11 +378,87 @@ class FurnaceParser:
                             table.append((note_to_play, samp_to_play))
                         if table:
                             ins.sample_table = table
+            elif code == 'MA':
+                # Instrument macro data per newIns.md
+                ds = io.BytesIO(data)
+                header_len = self._ru16(ds)
+
+                def _read_macro_values(word_kind: int, count: int) -> Tuple[bytes, List[int]]:
+                    # word_kind: 0=8u,1=8s,2=16s,3=32s
+                    if word_kind == 0:
+                        size, signed = 1, False
+                    elif word_kind == 1:
+                        size, signed = 1, True
+                    elif word_kind == 2:
+                        size, signed = 2, True
+                    else:
+                        size, signed = 4, True
+                    byte_len = size * max(0, count)
+                    raw = ds.read(byte_len)
+                    vals: List[int] = []
+                    try:
+                        if size == 1:
+                            if signed:
+                                vals = list(struct.unpack('<' + 'b' * count, raw[:count]))
+                            else:
+                                vals = list(struct.unpack('<' + 'B' * count, raw[:count]))
+                        elif size == 2:
+                            vals = list(struct.unpack('<' + 'h' * count, raw[: 2 * count]))
+                        else:
+                            vals = list(struct.unpack('<' + 'i' * count, raw[: 4 * count]))
+                    except Exception:
+                        vals = []
+                    return vals
+
+                # Loop until code 255 (stop)
+                while True:
+                    # Peek next byte to ensure there is data
+                    peek = ds.read(1)
+                    if not peek:
+                        break
+                    # The interpretation of duty, wave and extra macros depends on chip/instrument type
+                    # for snes
+                    #  duty = pitch frew
+                    #  wave = waveform
+                    #  extra1 = special
+                    #  extra2 = gain
+                    macro_code = peek[0]
+                    if macro_code == 255:
+                        # Explicit end-of-macros marker
+                        break
+                    macro_length = self._ru8(ds)
+                    macro_loop = self._ru8(ds)
+                    macro_release = self._ru8(ds)
+                    macro_mode = self._ru8(ds) # no idea what this is for
+                    open_type_word = self._ru8(ds)
+                    macro_delay = self._ru8(ds)
+                    macro_speed = self._ru8(ds)
+
+                    word_kind = (open_type_word >> 6) & 0x03
+                    macro_type = (open_type_word >> 1) & 0x03  # 0=normal,1=ADSR,2=LFO
+                    macro_open = bool(open_type_word & 0x01)
+                    instant_rel = bool(open_type_word & 0x08)
+
+                    values = _read_macro_values(word_kind, macro_length)
+
+                    # Store macro by code; last occurrence wins if duplicates
+                    ins.macros[int(macro_code)] = FurnaceMacro(
+                        code=int(macro_code),
+                        length=int(macro_length),
+                        loop=int(macro_loop),
+                        release=int(macro_release),
+                        type=int(macro_type),
+                        instant_release=instant_rel,
+                        delay=int(macro_delay),
+                        speed=int(macro_speed),
+                        values=values,
+                    )
             elif code == 'EN':
                 break
             else:
                 # skip unknown feature
                 pass
+
         mod.Instruments.append(ins)
 
     def _parse_PATN(self, mod: FurnaceModule, s: io.BytesIO) -> None:
@@ -452,14 +537,9 @@ class FurnaceParser:
         mod.SNESFlags.echo = bool(flags.get('echo', '0'))
         mod.SNESFlags.echoDelay = int(flags.get('echoDelay', '0'))
         mod.SNESFlags.echoFeedback = int(flags.get('echoFeedback', '0'))
-        mod.SNESFlags.echoFilter0 = int(flags.get('echoFilter0', '0'))
-        mod.SNESFlags.echoFilter1 = int(flags.get('echoFilter1', '0'))
-        mod.SNESFlags.echoFilter2 = int(flags.get('echoFilter2', '0'))
-        mod.SNESFlags.echoFilter3 = int(flags.get('echoFilter3', '0'))
-        mod.SNESFlags.echoFilter4 = int(flags.get('echoFilter4', '0'))
-        mod.SNESFlags.echoFilter5 = int(flags.get('echoFilter5', '0'))
-        mod.SNESFlags.echoFilter6 = int(flags.get('echoFilter6', '0'))
-        mod.SNESFlags.echoFilter7 = int(flags.get('echoFilter7', '0'))
+        mod.SNESFlags.echoFilterCoeffs = [
+            int(flags.get(f'echoFilter{i}', '0')) for i in range(8)
+        ]
         mod.SNESFlags.echoMask = int(flags.get('echoMask', '0'))
         mod.SNESFlags.echoVolL = int(flags.get('echoVolL', '0'))
         mod.SNESFlags.echoVolR = int(flags.get('echoVolR', '0'))
