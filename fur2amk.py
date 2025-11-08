@@ -145,6 +145,26 @@ class Event:
         self.value = value
         self.visible = visible
 
+# subclass for different instrument types?
+class Instrument:
+    def __init__(self, index: int, sample_index: int = None, is_noise: bool = False, noise_freq: int = 0) -> None:
+        self.index = index
+        self.is_noise = is_noise
+        if is_noise:
+            self.noise_freq = noise_freq
+            self.sample_index = None
+        else:
+            self.sample_index = sample_index
+            self.noise_freq = 0
+
+    @classmethod
+    def noise(cls, index: int, noise_freq: int) -> "Instrument":
+        return cls(index=index, is_noise=True, noise_freq=noise_freq)
+
+    @classmethod
+    def sample(cls, index: int, sample_index: int) -> "Instrument":
+        return cls(index=index, sample_index=sample_index, is_noise=False)
+
 
 class EventTable:
     """Build an event list from the FurnaceModule.    """
@@ -160,7 +180,7 @@ class EventTable:
         self.sample_dict: Dict[int, Tuple[str, str]] = {}
         self.ins_dict: Dict[int, Any] = {}
         # List of (instrument_index, sample_index) pairs to emit in #instruments
-        self.ins_list: List[Tuple[int, int]] = []
+        self.ins_list: List[Tuple[int, Instrument]] = []
         self.loop_tick: int = 0
         self.convert()
 
@@ -183,9 +203,13 @@ class EventTable:
             self.sample_dict[s.index] = (fname, tune_str)
         # For each instrument, gather unique samples referenced by its sample map
         for ins in self.module.Instruments:
-            samples_for_ins: List[int] = []
+            instruments: List[Instrument] = []
             try:
-                if ins.use_sample_map and ins.sample_table:
+                # first, check if this is a noise instrument
+                snes_macro_data = ins.get_snes_macro_flags()
+                if snes_macro_data.is_noise:
+                    instruments.append(Instrument.noise(index=ins.index, noise_freq=snes_macro_data.noise_freq))
+                elif ins.use_sample_map and ins.sample_table:
                     # Collect unique, non-zero sample indices from the 120-entry map
                     uniq: List[int] = []
                     seen = set()
@@ -200,32 +224,28 @@ class EventTable:
                         if sidx1 not in seen:
                             seen.add(sidx1)
                             uniq.append(sidx1)
-                    samples_for_ins = uniq
+                    for sidx in uniq:
+                        instruments.append(Instrument.sample(index=ins.index, sample_index=sidx))
                 else:
                     # Use initial_sample (0-based) if available
                     try:
-                        # first, check if this is a noise instrument
-                        snes_macro_data = ins.get_snes_macro_flags()
-                        if snes_macro_data.is_noise:
-                            # use negative index with value -freq to indicate noise instrument
-                            sidx1 = -snes_macro_data.noise_freq
-                        elif ins.initial_sample is not None and int(ins.initial_sample) >= 0:
+                        if ins.initial_sample is not None and int(ins.initial_sample) >= 0:
                             sidx1 = int(ins.initial_sample)
                         else:
                             sidx1 = 0
                     except Exception:
                         sidx1 = 0
-                    samples_for_ins = [sidx1]
+                    instruments.append(Instrument.sample(index=ins.index, sample_index=sidx1))
             except Exception:
                 try:
                     sidx1 = int(ins.initial_sample) if (ins.initial_sample is not None and int(ins.initial_sample) >= 0) else 0
                 except Exception:
                     sidx1 = 0
-                samples_for_ins = [sidx1]
+                instruments.append(Instrument.sample(index=ins.index, sample_index=sidx1))
             # Track used samples and populate instrument entries
-            for sidx in samples_for_ins:
-                self.used_samples.add(sidx)
-                self.ins_list.append((ins.index, sidx))
+            for inst in instruments:
+                self.used_samples.add(inst.sample_index)
+                self.ins_list.append((ins.index, inst))
 
 
 # --------------------------------------------------------------------------------------
@@ -247,7 +267,6 @@ class MMLState:
             'IV': None, 'SV': None, 'EV': None, 'EX': None, 'EE': None, 'H': 0x00,
             'Z1': None,
         }
-
 
 class MML:
     def __init__(self, event_table: EventTable, module_path: str) -> None:
@@ -389,11 +408,15 @@ class MML:
         lines = ['#instruments', '{']
         # Assign AMK instrument numbers starting at 30 in the order we emit
         # Map of (instrument_index, sample_index) -> AMK instrument number
+        # TODO: change insnum_map structure to account for noise instruments
+        # rather than relying on negative sample indices
+        # map instrument string
         self.insnum_map: Dict[Tuple[int, int], int] = {}
         next_num = 30
         name_col = max(len(name) for name, _ in self.event_table.sample_dict.values())
         # get max sample name length for alignment
         name_field_width = name_col + 2  # account for quotes
+        # if using sample maps, each sample for an instrument gets its own AMK instrument
         for ins_idx, samp_idx in self.event_table.ins_list:
             if samp_idx < 0:
                 # Noise instrument
