@@ -51,17 +51,25 @@ class FurnaceInstrument:
     gbv: int = 64  # instrument global volume
     dfp: int = 128 # default pan
     # SNES ADSR/GAIN from INS2 'SN'
-    sn_attack: Optional[int] = None  # 0..15
-    sn_decay: Optional[int] = None   # 0..7
-    sn_sustain: Optional[int] = None # 0..7
-    sn_release: Optional[int] = None # 0..31
-    sn_flags: Optional[int] = None   # bit4 envelope on, bits0..2 gain mode
-    sn_gain: Optional[int] = None    # 0..255 raw gain value
-    sn_decay2susmode: Optional[int] = None
+    sn_envelope_on: Optional[bool] = None  # whether adsr or gain is enabled
+
+    # SNES ADSR fields
+    sn_attack: Optional[int] = None     # 0..15
+    sn_decay: Optional[int] = None      # 0..7
+    sn_sustain: Optional[int] = None    # 0..7
+    sn_release: Optional[int] = None    # 0..31
+    decay2: Optional[int] = None        # 0..31, special decay for some sustain modes
+    sustain_mode: Optional[int] = None  # 0: direct, 1: sustain (release with dec), 2: sustain (release with exp), 3: sustain (release with rel)
+
+    # SNES gain fields
+    gain_mode: Optional[int] = None  # 0: direct, 4: dec, 5: exp, 6: inc, 7: bent
+    sn_gain: Optional[int] = None    # 0..127 raw gain value
+
     # Sample mapping from INS2 'SM'
     initial_sample: Optional[int] = 0  # sample 0 by default
     use_sample_map: bool = False
     sample_table: List[Tuple[int, int]] = field(default_factory=lambda: [(0, 1)] * 120)
+    
     # Instrument macros (INS2 'MA'): code -> macro definition
     macros: Dict[int, "FurnaceMacro"] = field(default_factory=dict)
 
@@ -360,6 +368,8 @@ class FurnaceParser:
     def _parse_INS2(self, mod: FurnaceModule, s: io.BytesIO) -> None:
         _fmt_version = self._ru16(s)
         ins_type = self._ru16(s)
+        if ins_type != 29:
+            print(f"Warning: Unsupported instrument type {ins_type}, SNES instruments expected. Output may be incorrect.")
         idx = len(mod.Instruments)
         ins = FurnaceInstrument(index=idx, name=f'Inst{idx}')
         # Parse features until EN
@@ -388,10 +398,17 @@ class FurnaceParser:
                     ins.sn_release = sr & 0x1F
                 if length >= 3:
                     ins.sn_flags = self._ru8(ds)
+                    ins.sn_envelope_on = bool(ins.sn_flags & 0x10)
+                    # only in versions <137
+                    sn_sustain_effective = bool(ins.sn_flags & 0x08)
+                    ins.gain_mode = ins.sn_flags & 0x07
                 if length >= 4:
                     ins.sn_gain = self._ru8(ds)
                 if length >= 5:
-                    ins.sn_decay2susmode = self._ru8(ds)
+                    val = self._ru8(ds)
+                    # bits 5-6: sustain mode, bits 0-4: decay 2
+                    ins.decay2 = val & 0x1F,  # bits 0-4
+                    ins.sustain_mode = (val >> 5) & 0x03  # bits 5-6
             elif code == 'SM':
                 # Sample instrument data: initial sample, flags, waveform len, sample map
                 ds = io.BytesIO(data)
