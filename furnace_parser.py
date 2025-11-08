@@ -397,11 +397,11 @@ class FurnaceParser:
                     ins.sn_sustain = (sr >> 5) & 0x07
                     ins.sn_release = sr & 0x1F
                 if length >= 3:
-                    ins.sn_flags = self._ru8(ds)
-                    ins.sn_envelope_on = bool(ins.sn_flags & 0x10)
+                    sn_flags = self._ru8(ds)
+                    ins.sn_envelope_on = bool(sn_flags & 0x10)
                     # only in versions <137
-                    sn_sustain_effective = bool(ins.sn_flags & 0x08)
-                    ins.gain_mode = ins.sn_flags & 0x07
+                    sn_sustain_effective = bool(sn_flags & 0x08)
+                    ins.gain_mode = sn_flags & 0x07
                 if length >= 4:
                     ins.sn_gain = self._ru8(ds)
                 if length >= 5:
