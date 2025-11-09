@@ -43,6 +43,16 @@ class FurnaceSample:
     loop_start: Optional[int] = None
     loop_end: Optional[int] = None
 
+@dataclass
+class FurnaceSNESMacroData:
+    is_noise: bool = False
+    is_echo: bool = True # per-instrument echo enablement
+    is_pitch_mod: bool = False
+    invert_right: bool = False # not sure
+    invert_left: bool = False  # what these are for
+    noise_freq: Optional[int] = None # ranges 0 to 32
+    direct_gain: Optional[int] = None  # direct gain value from gain macro
+    exponential_gain: Optional[int] = None  # exponential gain from gain macro
 
 @dataclass
 class FurnaceInstrument:
@@ -51,15 +61,16 @@ class FurnaceInstrument:
     gbv: int = 64  # instrument global volume
     dfp: int = 128 # default pan
     # SNES ADSR/GAIN from INS2 'SN'
-    sn_envelope_on: Optional[bool] = None  # whether adsr or gain is enabled
+    sn_envelope_on: Optional[bool] = True  # whether adsr or gain is enabled
 
     # SNES ADSR fields
-    sn_attack: Optional[int] = None     # 0..15
-    sn_decay: Optional[int] = None      # 0..7
-    sn_sustain: Optional[int] = None    # 0..7
-    sn_release: Optional[int] = None    # 0..31
-    decay2: Optional[int] = None        # 0..31, special decay for some sustain modes
-    sustain_mode: Optional[int] = None  # 0: direct, 1: sustain (release with dec), 2: sustain (release with exp), 3: sustain (release with rel)
+    # set defaults because furnace file won't have snes values if unchanged from default instrument
+    sn_attack: Optional[int] = 15     # 0..15
+    sn_decay: Optional[int] = 7      # 0..7
+    sn_sustain: Optional[int] = 7    # 0..7
+    sn_release: Optional[int] = 0    # 0..31
+    decay2: Optional[int] = 0        # 0..31, special decay for some sustain modes
+    sustain_mode: Optional[int] = 0  # 0: direct, 1: sustain (release with dec), 2: sustain (release with exp), 3: sustain (release with rel)
 
     # SNES gain fields
     gain_mode: Optional[int] = None  # 0: direct, 4: dec, 5: exp, 6: inc, 7: bent
@@ -73,34 +84,28 @@ class FurnaceInstrument:
     # Instrument macros (INS2 'MA'): code -> macro definition
     macros: Dict[int, "FurnaceMacro"] = field(default_factory=dict)
 
-    def get_snes_macro_flags(self) -> FurnaceSNESMacroData:
-        snesmacros = FurnaceSNESMacroData()
+    snes_macro_data: FurnaceSNESMacroData = field(default_factory=FurnaceSNESMacroData)
+
+    # Parse SNES-specific macro flags from macros
+    # call after all macros have been read
+    def parse_snes_macro_flags(self):
         for macro in self.macros.values():
             if macro.code == 2:  # code 2 corresponds to pitch freq
-                snesmacros.noise_freq = macro.values[0]
+                self.snes_macro_data.noise_freq = macro.values[0]
             if macro.code == 5:  # code 5 corresponds to extra1 macro
                 special_snes_flags = macro.values[0]
-                snesmacros.is_noise = (special_snes_flags & 0x01) != 0
-                snesmacros.is_echo = (special_snes_flags & 0x02) != 0
-                snesmacros.is_pitch_mod = (special_snes_flags & 0x04) != 0
-                snesmacros.invert_right = (special_snes_flags & 0x08) != 0
-                snesmacros.invert_left = (special_snes_flags & 0x10) != 0
+                self.snes_macro_data.is_noise = (special_snes_flags & 0x01) != 0
+                self.snes_macro_data.is_echo = (special_snes_flags & 0x02) != 0
+                self.snes_macro_data.is_pitch_mod = (special_snes_flags & 0x04) != 0
+                self.snes_macro_data.invert_right = (special_snes_flags & 0x08) != 0
+                self.snes_macro_data.invert_left = (special_snes_flags & 0x10) != 0
             if macro.code == 6:  # code 6 corresponds to gain
-                snesmacros.direct_gain = macro.values[0]
-                snesmacros.exponential_gain = macro.values[1]
-        return snesmacros
+                self.snes_macro_data.direct_gain = macro.values[0]
+                self.snes_macro_data.exponential_gain = macro.values[1]
 
-@dataclass
-class FurnaceSNESMacroData:
-    is_noise: bool = False
-    is_echo: bool = True # per-instrument echo enablement
-    is_pitch_mod: bool = False
-    invert_right: bool = False # not sure
-    invert_left: bool = False  # what these are for
-    noise_freq: Optional[int] = None # ranges 0 to 32
-    direct_gain: Optional[int] = None  # direct gain value from gain macro
-    exponential_gain: Optional[int] = None  # exponential gain from gain macro
-
+            if self.snes_macro_data.is_noise and self.snes_macro_data.noise_freq is None:
+                print(f"Info: Instrument {self.index} is noise but has no noise_freq set; defaulting to 29.")
+                self.snes_macro_data.noise_freq = 29
 @dataclass
 class FurnaceMacro:
     # Representation of a single macro as parsed from INS2 'MA'
@@ -210,7 +215,7 @@ class FurnaceParser:
             # Fall back to scanning for INFO in the stream
             pass
 
-    # Pointer-driven parse of SMP2, INS2, and PATN blocks
+        # Pointer-driven parse of SMP2, INS2, and PATN blocks
         for off in samp_ptrs:
             if 0 < off+8 <= len(data):
                 tag = data[off:off+4]
@@ -501,6 +506,8 @@ class FurnaceParser:
                         speed=int(macro_speed),
                         values=values,
                     )
+
+                    ins.parse_snes_macro_flags()  # to process macros if needed
             elif code == 'EN':
                 break
             else:

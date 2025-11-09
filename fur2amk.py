@@ -146,7 +146,7 @@ class Event:
         self.visible = visible
 
 # subclass for different instrument types?
-class Instrument:
+class EventInstrument:
     def __init__(self, index: int, sample_index: int = None, is_noise: bool = False, noise_freq: int = 0) -> None:
         self.index = index
         self.is_noise = is_noise
@@ -158,11 +158,11 @@ class Instrument:
             self.noise_freq = 0
 
     @classmethod
-    def noise(cls, index: int, noise_freq: int) -> "Instrument":
+    def noise(cls, index: int, noise_freq: int) -> "EventInstrument":
         return cls(index=index, is_noise=True, noise_freq=noise_freq)
 
     @classmethod
-    def sample(cls, index: int, sample_index: int) -> "Instrument":
+    def sample(cls, index: int, sample_index: int) -> "EventInstrument":
         return cls(index=index, sample_index=sample_index, is_noise=False)
 
 
@@ -180,7 +180,7 @@ class EventTable:
         self.sample_dict: Dict[int, Tuple[str, str]] = {}
         self.ins_dict: Dict[int, Any] = {}
         # List of (instrument_index, sample_index) pairs to emit in #instruments
-        self.ins_list: List[Tuple[int, Instrument]] = []
+        self.ins_list: List[Tuple[int, EventInstrument]] = []
         self.loop_tick: int = 0
         self.convert()
 
@@ -191,57 +191,43 @@ class EventTable:
             # Build sample filename and tuning string
             fname = f"{s.index:02d}_" + (s.name or f"Sample{s.index}").replace(' ', '_') + '.brr'
             tuning_word = 0x0100
-            try:
-                if s.c4_rate and s.c4_rate > 0:
-                    # MAGIC NUMBERS to convert from c4_rate to AMK instrument tuning value
-                    # stolen from it2amk's SampConv
-                    val = int(round(float(s.c4_rate) * 768 / 12539))
-                    tuning_word = max(0, min(0xFFFF, val))
-            except Exception:
-                tuning_word = 0x0100
+            if s.c4_rate and s.c4_rate > 0:
+                # MAGIC NUMBERS to convert from c4_rate to AMK instrument tuning value
+                # stolen from it2amk's SampConv
+                val = int(round(float(s.c4_rate) * 768 / 12539))
+                tuning_word = max(0, min(0xFFFF, val))
             tune_str = f"${(tuning_word >> 8) & 0xFF:02X} ${(tuning_word & 0xFF):02X}"
             self.sample_dict[s.index] = (fname, tune_str)
         # For each instrument, gather unique samples referenced by its sample map
         for ins in self.module.Instruments:
-            instruments: List[Instrument] = []
-            try:
-                # first, check if this is a noise instrument
-                snes_macro_data = ins.get_snes_macro_flags()
-                if snes_macro_data.is_noise:
-                    instruments.append(Instrument.noise(index=ins.index, noise_freq=snes_macro_data.noise_freq))
-                elif ins.use_sample_map and ins.sample_table:
-                    # Collect unique, non-zero sample indices from the 120-entry map
-                    uniq: List[int] = []
-                    seen = set()
-                    for (_note_to_play, samp_to_play) in ins.sample_table:
-                        # Furnace SM uses 0-based sample indices
-                        try:
-                            sidx1 = int(samp_to_play)
-                        except Exception:
-                            sidx1 = -1
-                        if sidx1 < 0:
-                            continue
-                        if sidx1 not in seen:
-                            seen.add(sidx1)
-                            uniq.append(sidx1)
-                    for sidx in uniq:
-                        instruments.append(Instrument.sample(index=ins.index, sample_index=sidx))
+            instruments: List[EventInstrument] = []
+            # first, check if this is a noise instrument
+            if ins.snes_macro_data.is_noise:
+                if ins.snes_macro_data.noise_freq is None:
+                    noise_freq = 29  # default noise freq if unset
+                    print(f"Warning: Instrument {ins.index} is a noise instrument but has no noise frequency set; You should set it explicitly in Furnace.", file=sys.stderr)
+                instruments.append(EventInstrument.noise(index=ins.index, noise_freq=ins.snes_macro_data.noise_freq))
+            elif ins.use_sample_map and ins.sample_table:
+                # Collect unique, non-zero sample indices from the 120-entry map
+                uniq: List[int] = []
+                seen = set()
+                for (_note_to_play, samp_to_play) in ins.sample_table:
+                    # Furnace SM uses 0-based sample indices
+                    sidx1 = int(samp_to_play)
+                    if sidx1 < 0:
+                        continue
+                    if sidx1 not in seen:
+                        seen.add(sidx1)
+                        uniq.append(sidx1)
+                for sidx in uniq:
+                    instruments.append(EventInstrument.sample(index=ins.index, sample_index=sidx))
+            else:
+                # Use initial_sample (0-based) if available
+                if ins.initial_sample is not None and int(ins.initial_sample) >= 0:
+                    sidx1 = int(ins.initial_sample)
                 else:
-                    # Use initial_sample (0-based) if available
-                    try:
-                        if ins.initial_sample is not None and int(ins.initial_sample) >= 0:
-                            sidx1 = int(ins.initial_sample)
-                        else:
-                            sidx1 = 0
-                    except Exception:
-                        sidx1 = 0
-                    instruments.append(Instrument.sample(index=ins.index, sample_index=sidx1))
-            except Exception:
-                try:
-                    sidx1 = int(ins.initial_sample) if (ins.initial_sample is not None and int(ins.initial_sample) >= 0) else 0
-                except Exception:
                     sidx1 = 0
-                instruments.append(Instrument.sample(index=ins.index, sample_index=sidx1))
+                instruments.append(EventInstrument.sample(index=ins.index, sample_index=sidx1))
             # Track used samples and populate instrument entries
             for inst in instruments:
                 self.used_samples.add(inst.sample_index)
@@ -411,20 +397,22 @@ class MML:
         # TODO: change insnum_map structure to account for noise instruments
         # rather than relying on negative sample indices
         # map instrument string
-        self.insnum_map: Dict[Tuple[int, int], int] = {}
+        # Map (instrument_index, sample_index) -> AMK instrument number.
+        # For noise instruments, sample_index will be None.
+        self.insnum_map: Dict[Tuple[int, Optional[int]], int] = {}
         next_num = 30
         name_col = max(len(name) for name, _ in self.event_table.sample_dict.values())
         # get max sample name length for alignment
         name_field_width = name_col + 2  # account for quotes
         # if using sample maps, each sample for an instrument gets its own AMK instrument
-        for ins_idx, samp_idx in self.event_table.ins_list:
-            if samp_idx < 0:
+        for ins_idx, event_ins in self.event_table.ins_list:
+            if event_ins.is_noise:
                 # Noise instrument
-                samp_name = f'n{abs(samp_idx):02X}'
+                samp_name = f'n{(event_ins.noise_freq):02X}'
                 print(f"Info: Emitting noise instrument {samp_name} for instrument {ins_idx}.", file=sys.stderr)
             else:
                 # Resolve sample filename and tuning
-                samp_entry = self.event_table.sample_dict.get(samp_idx)
+                samp_entry = self.event_table.sample_dict.get(event_ins.sample_index)
                 if not samp_entry:
                     # Fallback to first sample
                     samp_entry = next(iter(self.event_table.sample_dict.values()), ("Sample1.brr", "$01 $00"))
@@ -437,24 +425,22 @@ class MML:
             sr = 0x00
             # Default to no GAIN
             ga = 0x00
-            try:
-                if ins.sn_flags is not None and (ins.sn_flags & 0x10):
-                    d = int(ins.sn_decay or 0)
-                    a = int(ins.sn_attack or 0)
-                    ssv = int(ins.sn_sustain or 0)
-                    rv = int(ins.sn_release or 0)
-                    da = ((d & 0x7) | 0x8) << 4 | (a & 0xF)
-                    sr = ((ssv & 0x7) << 5) | (rv & 0x1F)
-                    # When ADSR is on, GA is ignored by AMK; keep placeholder $7F.
-                # else:
-                    # ADSR off: use raw GAIN value if provided (clamped to 7-bit)
-                    # if ins.sn_gain is not None:
-                        # TODO: figure out gain
-                        # ga = max(0, max(0x7F, int(ins.sn_gain)))
-            except Exception:
-                pass
+            if ins.sn_envelope_on:
+                # ADSR on: build ADSR values
+                d = int(ins.sn_decay or 0)
+                a = int(ins.sn_attack or 0)
+                ssv = int(ins.sn_sustain or 0)
+                rv = int(ins.sn_release or 0)
+                da = ((d & 0x7) | 0x8) << 4 | (a & 0xF)
+                sr = ((ssv & 0x7) << 5) | (rv & 0x1F)
+                # When ADSR is on, GA is ignored by AMK; keep placeholder $7F.
+            # else:
+                # ADSR off: use raw GAIN value if provided (clamped to 7-bit)
+                # if ins.sn_gain is not None:
+                    # TODO: figure out gain
+                    # ga = max(0, max(0x7F, int(ins.sn_gain)))
             lines.append(f'    {samp_name:<{name_field_width}} ${da:02X} ${sr:02X} ${ga:02X} {samp_tuning} ;@{next_num}')
-            self.insnum_map[(ins_idx, samp_idx)] = next_num
+            self.insnum_map[(ins_idx, event_ins.sample_index)] = next_num
             next_num += 1
         lines.append('}')
         self.txt += '\n'.join(lines) + '\n\n'
@@ -596,7 +582,7 @@ class MML:
                         if amk_num is not None and amk_num != current_amk_ins:
                             line_tokens.append(f'@{amk_num}')
                             current_amk_ins = amk_num
-                            ins_echo = mod.Instruments[current_ins].get_snes_macro_flags().is_echo
+                            ins_echo = mod.Instruments[current_ins].snes_macro_data.is_echo
                             # if instrument echo setting differs from previous, toggle echo
                             if ins_echo != current_echo:
                                 current_echo = ins_echo
@@ -775,15 +761,15 @@ class MML:
 
         Uses the instrument's sample map (INS2 'SM') when present; else the initial sample.
         """
-        try:
-            mod = self.event_table.module
-            if ins_idx <= 0 or ins_idx > len(mod.Instruments):
-                return None
-            ins = mod.Instruments[ins_idx]
+        mod = self.event_table.module
+        if ins_idx <= 0 or ins_idx > len(mod.Instruments):
+            return None
+        ins = mod.Instruments[ins_idx]
 
-            # Determine sample index to use
-            samp_idx: Optional[int] = None
-            n = int(note_idx)
+        # Determine sample index to use
+        samp_idx: Optional[int] = None
+        n = int(note_idx)
+        if not ins.snes_macro_data.is_noise:
             if ins.use_sample_map and ins.sample_table:
                 # Furnace provides 120 entries; clamp into range
                 n120 = n
@@ -792,30 +778,17 @@ class MML:
                 if n120 >= len(ins.sample_table):
                     n120 = n120 % len(ins.sample_table)
                 _note_to_play, samp_to_play = ins.sample_table[n120]
-                try:
-                    sidx_raw = int(samp_to_play)
-                except Exception:
-                    sidx_raw = -1
+                sidx_raw = int(samp_to_play)
                 if sidx_raw >= 0:
                     samp_idx = sidx_raw + 1
             if samp_idx is None:
-                try:
-                    if ins.get_snes_macro_flags().is_noise:
-                        # use negative index with value -freq to indicate noise instrument
-                        samp_idx = -ins.get_snes_macro_flags().noise_freq
-                    elif ins.initial_sample is not None and int(ins.initial_sample) >= 0:
-                        samp_idx = int(ins.initial_sample)
-                    else:
-                        samp_idx = 0
-                except Exception:
-                    samp_idx = 1
-            # Map to AMK instrument number
-            if hasattr(self, 'insnum_map') and isinstance(self.insnum_map, dict):
-                return self.insnum_map.get((ins_idx, int(samp_idx)))
-            # Fallback: sequential mapping (unlikely to be correct, but avoids crash)
-            return 30 + int(ins_idx)
-        except Exception:
-            return None
+                if ins.initial_sample is not None and int(ins.initial_sample) >= 0:
+                    samp_idx = int(ins.initial_sample)
+                else:
+                    samp_idx = 0
+        # Map to AMK instrument number
+        if hasattr(self, 'insnum_map') and isinstance(self.insnum_map, dict):
+            return self.insnum_map.get((ins_idx, samp_idx))
 
     # Output
     def save(self, filename: str) -> None:
