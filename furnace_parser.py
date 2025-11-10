@@ -164,9 +164,8 @@ class FurnaceModule:
 
 
 class FurnaceParser:
-    """Minimal reader for Furnace .fur (INFO/SMP2/INS2/PATN).
-
-    This keeps the existing behavior; callers can swap in a different backend later.
+    """
+    Reader for Furnace .fur (INFO/SMP2/INS2/PATN).
     """
 
     def parse(self, filename: str) -> FurnaceModule:
@@ -238,7 +237,6 @@ class FurnaceParser:
         # Associate chip type bytes with chip flag pointers; capture SNES (0x87) if present
         for chip_byte, off in chip_flags_ptrs:
             if chip_byte == 0x87 and 0 < off + 8 < len(data):
-                print("Found SNES chip flags; parsing FLAG block.")
                 tag = data[off:off+4] # FLAG tag
                 size = int.from_bytes(data[off+4:off+8], 'little')
                 if tag == b'FLAG' and off+8+size <= len(data):
@@ -561,7 +559,7 @@ class FurnaceParser:
                 note.Ins = self._ru8(s)
             if b & 0x04:
                 vol = self._ru8(s)
-                note.Vol = min(255, vol * 2)  # scale to 0-255
+                note.Vol = min(255, vol * 2)  # scale to 0..7F to 0..255
             # effects in first column
             read_effect(note, bool(b & 0x08), bool(b & 0x10))
             # expanded effects masks in eff1/eff2
@@ -601,6 +599,11 @@ class FurnaceParser:
         mod.SNESFlags.echoVolR = int(flags.get('echoVolR', '0'))
         mod.SNESFlags.volScaleL = int(flags.get('volScaleL', '0'))
         mod.SNESFlags.volScaleR = int(flags.get('volScaleR', '0'))
+
+        # from furnace docs: "scale volumes to prevent clipping/distortion"
+        if mod.SNESFlags.volScaleL != mod.SNESFlags.volScaleR:
+            print(f"Looks like you have different volume scales for left and right channels ({mod.SNESFlags.volScaleL} vs {mod.SNESFlags.volScaleR}).")
+            print("AMK does not support volume scaling so this may not sound right.")
 
     # ------------- helpers -------------
 
