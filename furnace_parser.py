@@ -51,8 +51,8 @@ class FurnaceSNESMacroData:
     invert_right: bool = False # not sure
     invert_left: bool = False  # what these are for
     noise_freq: Optional[int] = None # ranges 0 to 32
-    direct_gain: Optional[int] = None  # direct gain value from gain macro
-    exponential_gain: Optional[int] = None  # exponential gain from gain macro
+    gain_values: Optional[List[int]] = None  # snes gain values
+    gain_speed: Optional[int] = None  # ticks between each gain change
 
 @dataclass
 class FurnaceInstrument:
@@ -74,7 +74,7 @@ class FurnaceInstrument:
 
     # SNES gain fields
     gain_mode: Optional[int] = None  # 0: direct, 4: dec, 5: exp, 6: inc, 7: bent
-    sn_gain: Optional[int] = None    # 0..127 raw gain value
+    sn_gain: Optional[int] = None    # 0..127 for direct, 0..31 for others
 
     # Sample mapping from INS2 'SM'
     initial_sample: Optional[int] = 0  # sample 0 by default
@@ -100,12 +100,13 @@ class FurnaceInstrument:
                 self.snes_macro_data.invert_right = (special_snes_flags & 0x08) != 0
                 self.snes_macro_data.invert_left = (special_snes_flags & 0x10) != 0
             if macro.code == 6:  # code 6 corresponds to gain
-                self.snes_macro_data.direct_gain = macro.values[0]
-                self.snes_macro_data.exponential_gain = macro.values[1]
+                self.snes_macro_data.gain_values = macro.values
+                self.snes_macro_data.gain_speed = macro.speed
 
             if self.snes_macro_data.is_noise and self.snes_macro_data.noise_freq is None:
-                print(f"Info: Instrument {self.index} is noise but has no noise_freq set; defaulting to 29.")
-                self.snes_macro_data.noise_freq = 29
+                default_noise_freq = 29
+                print(f"Info: Instrument {self.index} is noise but has no noise_freq set; defaulting to {default_noise_freq}.")
+                self.snes_macro_data.noise_freq = default_noise_freq
 @dataclass
 class FurnaceMacro:
     # Representation of a single macro as parsed from INS2 'MA'
@@ -560,7 +561,7 @@ class FurnaceParser:
                 note.Ins = self._ru8(s)
             if b & 0x04:
                 vol = self._ru8(s)
-                note.Vol = min(255, vol * 2 + (vol & 1))  # scale to 0-255 like fur2tad
+                note.Vol = min(255, vol * 2)  # scale to 0-255
             # effects in first column
             read_effect(note, bool(b & 0x08), bool(b & 0x10))
             # expanded effects masks in eff1/eff2

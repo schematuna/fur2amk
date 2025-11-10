@@ -11,6 +11,10 @@ There are two ways to do this:
     2. reduce sample sizes by downsampling or trimming
         - need to switch to 8 or 16 bit PCM first, edit, then back to BRR
 
+Gain handling:
+    If the gain macro is used in Furnace, the first gain value is used as the primary gain setting for the instrument. 
+    Any additional gain values are handled via remote commands.
+    If the gain macro is unused then the gain setting in the instrument SNES tab is used.
 """
 
 from __future__ import annotations
@@ -18,6 +22,7 @@ from __future__ import annotations
 import os
 import sys
 from typing import Any, Dict, List, Optional, Tuple
+from enum import Enum
 
 from furnace_parser import (
     FurnaceParser,
@@ -145,9 +150,42 @@ class Event:
         self.value = value
         self.visible = visible
 
+class RemoteCommandTiming(Enum):
+    DISABLE = 0
+    AFTER_START = 1
+    BEFORE_END = 2
+    KEY_OFF = 3
+    RUN_NOW = 4
+    KEY_ON = -1
+
+class RemoteCommandTypes(Enum):
+    GAIN = 0
+
+class EventRemoteCommand:
+    def __init__(
+        self,
+        command_idx: int,
+        event_type: RemoteCommandTiming,
+        amk_command_type: RemoteCommandTypes,
+        remote_command_arg: Optional[Any] = None,
+        amk_command_args: Optional[List[Any]] = None,
+    ) -> None:
+        self.command_idx = command_idx
+        self.event_type = event_type
+        self.amk_command_type = amk_command_type
+        self.remote_command_arg = remote_command_arg # if there is an extra argument for remote command
+        self.amk_command_args = amk_command_args if amk_command_args is not None else []
+
+
 # subclass for different instrument types?
 class EventInstrument:
-    def __init__(self, index: int, sample_index: int = None, is_noise: bool = False, noise_freq: int = 0) -> None:
+    def __init__(
+        self,
+        index: int,
+        sample_index: int = None,
+        is_noise: bool = False,
+        noise_freq: int = 0,
+    ) -> None:
         self.index = index
         self.is_noise = is_noise
         if is_noise:
@@ -156,6 +194,7 @@ class EventInstrument:
         else:
             self.sample_index = sample_index
             self.noise_freq = 0
+        self.remote_commands: List["EventRemoteCommand"] = []
 
     @classmethod
     def noise(cls, index: int, noise_freq: int) -> "EventInstrument":
@@ -233,6 +272,27 @@ class EventTable:
                 self.used_samples.add(inst.sample_index)
                 self.ins_list.append((ins.index, inst))
 
+        # start at 10 for readability, 0 will be reserved for stop remote commands
+        command_num = 10
+        def add_remote_command(inst: EventInstrument, command: EventRemoteCommand) -> None:
+            inst.remote_commands.append(command)
+            nonlocal command_num
+            command_num += 1
+
+        # gather remote commands and associate with an instrument
+        for ins in self.module.Instruments:
+            gmacro = ins.snes_macro_data.gain_values
+            if gmacro and len(gmacro) > 1:
+                # just support one gain change for now.
+                # I think amk would allow no more than 2 remote commands at once anyways
+                # find this instrument in ins_list
+                for (ins_index, inst) in self.ins_list:
+                    if ins_index == ins.index:
+                        add_remote_command(inst, EventRemoteCommand(command_num, 
+                                                                    RemoteCommandTiming.AFTER_START, 
+                                                                    RemoteCommandTypes.GAIN, 
+                                                                    f"={ins.snes_macro_data.gain_speed}",
+                                                                    [gmacro[1]]))
 
 # --------------------------------------------------------------------------------------
 # MML writer (streamlined for now)
@@ -269,12 +329,13 @@ class MML:
         self.add_ins_info()
         self.add_volume_tempo_info()
         self.add_echo_info()
+        self.add_remote_commands()
         self.convert()
 
     # Convert -128->127 ranged values to 2's complement hex
     @staticmethod
     def to_hex(val):
-        return f"${(val & 0xFF):02X}" if val >= 0 else f"${((val + 256) & 0xFF):02X}"
+        return f"{(val & 0xFF):02X}" if val >= 0 else f"{((val + 256) & 0xFF):02X}"
 
     # Sections
     def add_amk_header(self) -> None:
@@ -409,7 +470,7 @@ class MML:
             if event_ins.is_noise:
                 # Noise instrument
                 samp_name = f'n{(event_ins.noise_freq):02X}'
-                print(f"Info: Emitting noise instrument {samp_name} for instrument {ins_idx}.", file=sys.stderr)
+                print(f"Info: Emitting noise instrument {samp_name} for instrument {self.to_hex(ins_idx)}.", file=sys.stderr)
             else:
                 # Resolve sample filename and tuning
                 samp_entry = self.event_table.sample_dict.get(event_ins.sample_index)
@@ -433,12 +494,15 @@ class MML:
                 rv = int(ins.sn_release or 0)
                 da = ((d & 0x7) | 0x8) << 4 | (a & 0xF)
                 sr = ((ssv & 0x7) << 5) | (rv & 0x1F)
-                # When ADSR is on, GA is ignored by AMK; keep placeholder $7F.
-            # else:
-                # ADSR off: use raw GAIN value if provided (clamped to 7-bit)
-                # if ins.sn_gain is not None:
-                    # TODO: figure out gain
-                    # ga = max(0, max(0x7F, int(ins.sn_gain)))
+            else:
+                if ins.snes_macro_data.gain_values:
+                    # set primary GAIN to first gain value, other will be handled by remote commands
+                    ga = ins.snes_macro_data.gain_values[0]
+                elif ins.sn_gain is not None:
+                    ga = ins.sn_gain
+                else:
+                    print(f"Info: Instrument {ins_idx} uses gain mode but has no SNES gain set; defaulting to 0.", file=sys.stderr)
+                    ga = 0x00
             lines.append(f'    {samp_name:<{name_field_width}} ${da:02X} ${sr:02X} ${ga:02X} {samp_tuning} ;@{next_num}')
             self.insnum_map[(ins_idx, event_ins.sample_index)] = next_num
             next_num += 1
@@ -491,10 +555,10 @@ class MML:
         echoOn = sn.echo
         fir_idx = 0x01 if echoOn else 0x00
 
-        self.txt += f'$EF {self.to_hex(mask)} {self.to_hex(evoll)} {self.to_hex(evolr)}\n'
-        self.txt += f'$F1 {self.to_hex(edl)} {self.to_hex(efb)} {self.to_hex(fir_idx)}\n'
+        self.txt += f'$EF ${self.to_hex(mask)} ${self.to_hex(evoll)} ${self.to_hex(evolr)}\n'
+        self.txt += f'$F1 ${self.to_hex(edl)} ${self.to_hex(efb)} ${self.to_hex(fir_idx)}\n'
 
-        coeffs_hex = ' '.join(self.to_hex(c) for c in sn.echoFilterCoeffs)
+        coeffs_hex = ' '.join(f'${self.to_hex(c)}' for c in sn.echoFilterCoeffs)
         self.txt += f'$F5 {coeffs_hex}\n\n'
 
         # from furnace docs: "scale volumes to prevent clipping/distortion"
@@ -503,6 +567,29 @@ class MML:
         if volumeScaleL != volumeScaleR:
             print(f"Looks like you have different volume scales for left and right channels ({volumeScaleL} vs {volumeScaleR}).", file=sys.stderr)
             print("AMK does not support volume scaling so this may not sound right.", file=sys.stderr)
+
+    def add_remote_commands(self) -> None:
+        def make_remote_command(num, command):
+            return f"(!{num})[{command}]"
+        # add remote code definitions
+        # definition for any gain macros
+        for (ins_index, inst) in self.event_table.ins_list:
+            # just support one gain change for now.
+            # I think amk would allow no more than 2 remote commands at once anyways
+            for command in inst.remote_commands:
+                if command.amk_command_type == RemoteCommandTypes.GAIN:
+                    if len(command.amk_command_args) > 0:
+                        amk_command = f"$FA$01${self.to_hex(command.amk_command_args[0])}"
+                    else:
+                        print(f"No gain value present for remote command. Not creating remote command for instrument {ins_index}")
+                        continue
+                else:
+                    print(f"Unrecognized AMK command type {command.amk_command_type}")
+                    continue
+
+                self.txt += make_remote_command(command.command_idx, amk_command) + f" ;for furnace inst {self.to_hex(ins_index)}\n"
+
+        self.txt += "\n\n"
 
     # Conversion
     def convert(self) -> None:
@@ -515,6 +602,7 @@ class MML:
                 current_oct = None
                 current_ins = None  # Furnace instrument index
                 current_echo = True # start with echo enabled by default
+                current_remote_gain: Optional[int] = None 
                 current_amk_ins: Optional[int] = None  # AMK @ number actually in use
                 current_vol: Optional[int] = None  # 0..255
                 line_tokens: List[str] = []
@@ -578,7 +666,8 @@ class MML:
                             current_amk_ins = None
                         # Determine which sample this note should use for this instrument
                         amk_num = self._resolve_amk_instrument_for_note(current_ins, note_idx)
-                            
+
+                        # Begin new instrument and run any instrument-specific commands
                         if amk_num is not None and amk_num != current_amk_ins:
                             line_tokens.append(f'@{amk_num}')
                             current_amk_ins = amk_num
@@ -586,7 +675,31 @@ class MML:
                             # if instrument echo setting differs from previous, toggle echo
                             if ins_echo != current_echo:
                                 current_echo = ins_echo
-                                line_tokens.append('$F4 $03')
+                                line_tokens.append('$F4$03')
+
+                            event_insts = self.event_table.ins_list
+                            for (ins_index, event_inst) in event_insts:
+                                if ins_index == current_ins:
+                                    has_gain = False
+                                    for cmd in event_inst.remote_commands:
+                                        if cmd.remote_command_arg is not None:
+                                            remote_command = f'(!{cmd.command_idx},{int(cmd.event_type.value)},{cmd.remote_command_arg})'
+                                        else:
+                                            remote_command = f'(!{cmd.command_idx},{int(cmd.event_type.value)})'
+
+                                        if cmd.amk_command_type == RemoteCommandTypes.GAIN:
+                                            has_gain = True
+                                            if current_remote_gain != remote_command:
+                                                current_remote_gain = remote_command
+                                                line_tokens.append(remote_command)
+                                    
+                                    # turn off remote gain if it's on but next instrument has no gain macro
+                                    if not has_gain and current_remote_gain is not None:
+                                        current_remote_gain = None
+                                        # kill all remote commands on this channel, ending any gain effects
+                                        # TODO: restart any other remote commands that were active before?
+                                        line_tokens.append('(!99, 0)')
+                                            
                         name, octv = self._note_name_and_octave(note_idx)
                         if current_oct != octv:
                             line_tokens.append(f'o{octv}')
