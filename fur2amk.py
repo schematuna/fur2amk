@@ -530,10 +530,13 @@ class MML:
 
         amk_tempo = bpm * 8192 // 20025
 
-        # get global volume if set
-        gvol = getattr(mod, 'GV', None)
-        # treat w200 as 100%
-        amk_volume = min(int(gvol * 200), 255)
+        # global volume is average of left/right furnace volumes
+        # volumes also stored inversely for some reason.
+        Lvol = 127 - mod.SNESFlags.volScaleL
+        Rvol = 127 - mod.SNESFlags.volScaleR
+        # map 127 -> w255
+        gvol = Lvol + Rvol
+        amk_volume = min(int(gvol), 255)
 
         self.txt += f'w{amk_volume} t{amk_tempo}\n\n'
 
@@ -561,13 +564,6 @@ class MML:
         coeffs_hex = ' '.join(f'${self.to_hex(c)}' for c in sn.echoFilterCoeffs)
         self.txt += f'$F5 {coeffs_hex}\n\n'
 
-        # from furnace docs: "scale volumes to prevent clipping/distortion"
-        volumeScaleL = sn.volScaleL
-        volumeScaleR = sn.volScaleR
-        if volumeScaleL != volumeScaleR:
-            print(f"Looks like you have different volume scales for left and right channels ({volumeScaleL} vs {volumeScaleR}).", file=sys.stderr)
-            print("AMK does not support volume scaling so this may not sound right.", file=sys.stderr)
-
     def add_remote_commands(self) -> None:
         def make_remote_command(num, command):
             return f"(!{num})[{command}]"
@@ -590,6 +586,27 @@ class MML:
                 self.txt += make_remote_command(command.command_idx, amk_command) + f" ;for furnace inst {self.to_hex(ins_index)}\n"
 
         self.txt += "\n\n"
+
+    # wild amk volume mapping function stol from it2amk
+    def find_v(self, level):
+        if level == 0:
+            return 0
+    
+        mindiff = 256
+        minval = -1
+        
+        for v in range(0, 256):
+            vv = (v * 0xFF) >> 8
+            vv = (vv * vv) >> 8
+            vv = (vv * 0x51) >> 8
+            vv = (vv * 0xFC) >> 8
+            l = vv * 0xFF / 0x4D
+            
+            if abs(l - level) <= mindiff:
+                mindiff = abs(l - level)
+                minval = v
+
+        return minval
 
     # Conversion
     def convert(self) -> None:
@@ -706,7 +723,11 @@ class MML:
                             current_oct = octv
                         # Apply volume if present on this row and changed
                         if row.Vol is not None:
-                            v = max(0, min(255, int(row.Vol)))
+                            amk_v = self.find_v(min(int(row.Vol), 255))
+                            # TODO: push any overflow to volume scale
+                            # TODO: incorporate panning in volume calculation?
+                            # so basically figure out if we need to steal more things from it2amk
+                            v = max(0, min(255, int(amk_v)))
                             if current_vol != v:
                                 line_tokens.append(f'v{v}')
                                 current_vol = v
