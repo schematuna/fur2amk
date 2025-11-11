@@ -896,7 +896,7 @@ class MML:
         Uses the instrument's sample map (INS2 'SM') when present; else the initial sample.
         """
         mod = self.event_table.module
-        if ins_idx <= 0 or ins_idx > len(mod.Instruments):
+        if ins_idx < 0 or ins_idx > len(mod.Instruments):
             return None
         ins = mod.Instruments[ins_idx]
 
