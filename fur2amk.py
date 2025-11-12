@@ -15,6 +15,10 @@ Gain handling:
     If the gain macro is used in Furnace, the first gain value is used as the primary gain setting for the instrument. 
     Any additional gain values are handled via remote commands.
     If the gain macro is unused then the gain setting in the instrument SNES tab is used.
+
+Jump commands:
+    You can use one instance of the "Jump to Order" command 0Bxx. 
+    The last instance of the command will be used to place the intro marker in the amk output.
 """
 
 from __future__ import annotations
@@ -34,9 +38,8 @@ from furnace_parser import (
 #       warn if tick rate is not 60Hz (NTSC)... is PAL supported?
 #       get game name from Furnace module metadata if available
 #       support global tuning
-#       support 0B and 0D, special furnace order jumps for advanced looping
+#       support 0D, skip to next order command
 #       preserve furnace channel names
-#       support GAIN, both via SNES instrument data and GAIN SNES macro
 
 # --------------------------------------------------------------------------------------
 
@@ -220,7 +223,8 @@ class EventTable:
         self.ins_dict: Dict[int, Any] = {}
         # List of (instrument_index, sample_index) pairs to emit in #instruments
         self.ins_list: List[Tuple[int, EventInstrument]] = []
-        self.loop_tick: int = 0
+        # which order to place the intro marker at
+        self.intro_order: int = None
         self.convert()
 
     def convert(self) -> None:
@@ -293,6 +297,20 @@ class EventTable:
                                                                     RemoteCommandTypes.GAIN, 
                                                                     f"={ins.snes_macro_data.gain_speed}",
                                                                     [gmacro[1]]))
+                        
+        # iterate all rows for command 0Bxx (jump to order)
+        # This will be interpreted as the intro marker position
+        for c in range(self.module.NumChannels):
+            patmap = self.module.PatternsByChannel[c] if c < len(self.module.PatternsByChannel) else {}
+            orders = self.module.OrdersPerChannel[c] if c < len(self.module.OrdersPerChannel) else []
+            for pat_idx in orders:
+                rows = patmap.get(pat_idx)
+                if rows:
+                    for row in rows:
+                        for effect in (row.Effects or []):
+                            if effect[0] == 0x0B:
+                                self.intro_order = int(effect[1])
+
 
 # --------------------------------------------------------------------------------------
 # MML writer (streamlined for now)
@@ -345,8 +363,8 @@ class MML:
     def _row_kind(self, row: FurnacePatternRow) -> str:
         """Classify a Furnace row for emission.
 
-        Returns: 'note' | 'off' | 'cut' | 'empty'.
-        OFF = 255, CUT = 254 as per parser comment.
+        Returns: 'note' | 'off' | 'release' | 'empty'.
+        OFF = 180, RELEASE = 181, MACRO RELEASE = 182
         """
         n = row.Note
         if n is None:
@@ -355,10 +373,12 @@ class MML:
             v = int(n)
         except Exception:
             return 'empty'
-        if v == 255:
+        if v == 180:
             return 'off'
-        if v == 254:
-            return 'cut'
+        if v == 181:
+            return 'release'
+        if v == 182:
+            return 'macro_release'
         if 0 <= v <= 179:
             return 'note'
         return 'empty'
@@ -607,6 +627,23 @@ class MML:
                 minval = v
 
         return minval
+    
+    def channel_has_remote_commands(self, channel: int) -> bool:
+        mod = self.event_table.module
+        orders = mod.OrdersPerChannel[channel] if channel < len(mod.OrdersPerChannel) else []
+        patmap = mod.PatternsByChannel[channel] if channel < len(mod.PatternsByChannel) else {}
+        for pat in orders:
+            rows = patmap.get(pat)
+            if rows:
+                for row in rows:
+                    kind = self._row_kind(row)
+                    if kind == "note":
+                        event_insts = self.event_table.ins_list
+                        for (ins_index, event_inst) in event_insts:
+                            if ins_index == row.Ins:
+                                if event_inst.remote_commands:
+                                    return True
+        return False
 
     # Conversion
     def convert(self) -> None:
@@ -619,6 +656,7 @@ class MML:
                 current_oct = None
                 current_ins = None  # Furnace instrument index
                 current_echo = True # start with echo enabled by default
+                has_remote_commands = self.channel_has_remote_commands(c)
                 current_remote_gain: Optional[int] = None 
                 current_amk_ins: Optional[int] = None  # AMK @ number actually in use
                 current_vol: Optional[int] = None  # 0..255
@@ -652,14 +690,20 @@ class MML:
                 # 2nd pass is line deduplication with labels
                 # also need to handle inner/outer loops, cause I'll want to take care of stuff like r1^1^1^1^1^1
                 # Somewhere in there too-long lines need to be handled, probably before de-dupe step
+                introJustEnded = False
                 while i < N:
-                    orderNum = i // mod.PatternLength
+                    orderNum, rem = divmod(i, mod.PatternLength)
                     measureNum = (i // base_den)
                     if cur_order_num != orderNum:
                         cur_measure_num = measureNum
                         cur_order_num = orderNum
                         self.txt += ' '.join(line_tokens) + '\n'
                         line_tokens = []
+                        if cur_order_num == self.event_table.intro_order:
+                            self.txt += '/\n'
+                            if has_remote_commands:
+                                self.txt += "(!99, 0) ; reset remote state for loop\n"
+                                current_remote_gain = None
                         self.txt += f'; order {orderNum}\n'
                     if cur_measure_num != measureNum:
                         cur_measure_num = measureNum
@@ -685,7 +729,8 @@ class MML:
                         amk_num = self._resolve_amk_instrument_for_note(current_ins, note_idx)
 
                         # Begin new instrument and run any instrument-specific commands
-                        if amk_num is not None and amk_num != current_amk_ins:
+                        # make sure to reset instrument if intro just ended, so state is correct on loop
+                        if amk_num is not None and (amk_num != current_amk_ins or introJustEnded):
                             line_tokens.append(f'@{amk_num}')
                             current_amk_ins = amk_num
                             ins_echo = mod.Instruments[current_ins].snes_macro_data.is_echo
@@ -711,6 +756,7 @@ class MML:
                                                 line_tokens.append(remote_command)
                                     
                                     # turn off remote gain if it's on but next instrument has no gain macro
+                                    # also proactively turn it off if we're just ending the intro, so state is reset on loop
                                     if not has_gain and current_remote_gain is not None:
                                         current_remote_gain = None
                                         # kill all remote commands on this channel, ending any gain effects
@@ -737,8 +783,13 @@ class MML:
                         while j < N:
                             r2 = flat_rows[j]
                             k2 = self._row_kind(r2)
-                            # stop if next row starts a new note, OFF/CUT, or instrument change
-                            if (k2 in ('note','off','cut')) or (r2.Ins is not None and r2.Ins != current_ins and r2.Ins != 255):
+                            # stop if next row starts a new note, OFF/RELEASE, or instrument change
+                            if (k2 in ('note','off','release')) or (r2.Ins is not None and r2.Ins != current_ins and r2.Ins != 255):
+                                break
+                            # break note if we're at the end of the intro
+                            orderNum, rem = divmod(j, mod.PatternLength)
+                            if rem == 0 and orderNum == self.event_table.intro_order:
+                                print(f'Note tie across intro marker at order {orderNum}, channel {c}. Breaking tie.')
                                 break
                             run += 1
                             j += 1
@@ -753,10 +804,13 @@ class MML:
                         i = j
                         continue
                     else:
-                        # Rest or OFF/CUT run
+                        # Rest or OFF/RELEASE run
                         run = 1
                         j = i + 1
                         while j < N:
+                            # break rests at pattern boundaries for readability (and potential loop points)
+                            if j % mod.PatternLength == 0:
+                                break
                             r2 = flat_rows[j]
                             if self._row_kind(r2) == 'note':
                                 break
