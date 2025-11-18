@@ -397,7 +397,7 @@ class MML:
             i += 1
         return sorted(divs)
 
-    def _run_to_denoms(self, run_rows: int, base_den: int) -> List[int]:
+    def _run_to_denoms(self, run_rows: int, base_den: int, no_whole_notes: bool = False) -> List[int]:
         """Decompose a run of rows into a list of AMK length denominators to tie.
 
         Each row is 1/base_den. We choose chunks that are divisors of base_den
@@ -407,6 +407,9 @@ class MML:
         run = max(1, int(run_rows))
         bd = max(1, int(base_den))
         divs = self._divisors(bd)
+        # remove divisor of 16 if no_whole_notes
+        if no_whole_notes:
+            divs = [d for d in divs if d < 16]
         # allowed chunks are divisors of base_den
         chunks = sorted(divs, reverse=True)
         out: List[int] = []
@@ -645,6 +648,33 @@ class MML:
                                     return True
         return False
 
+    def _convert_effects(self, row: FurnacePatternRow, delay: int, note_idx: int) -> List[str]:
+        amk_delay = self.to_hex(delay * 8) # $08 = 1 eighth note
+        effect_tokens = []
+        # for effect in row.Effects:
+        
+        return effect_tokens
+    
+    # Pitchbend is handled specially since it is placed after the note
+    def _convert_pitchbend(self, row: FurnacePatternRow, delay: int, note_idx: int, current_octave: int) -> str:
+        amk_delay = self.to_hex(delay * 8) # $08 = 1 eighth note
+        for effect in row.Effects:
+            # TODO: support pitch slide down
+            if effect[0] == 0xE1:  # pitch slide up
+                # speed is first value of nibble, note is second
+                # convert max $0F Fruance to quarter note $30 AMK
+                # TODO: figure out precise speed scaling, I just earballed it
+                speed = int(48 * (effect[1] >> 4) / 15)
+                note = note_idx + (effect[1] & 0x0F)
+                name, octave = self._note_name_and_octave(note)  # validate
+                bend_note = name
+                if (octave != current_octave):
+                    bend_note = f'o{octave}{bend_note}'
+                    self.current_octave = octave
+                return f"$DD${amk_delay}${self.to_hex(speed)} {bend_note}"
+        
+        return ""
+
     # Conversion
     def convert(self) -> None:
         # If we have parsed orders/patterns, emit simple note streams with basic durations per channel.
@@ -700,6 +730,8 @@ class MML:
                         self.txt += ' '.join(line_tokens) + '\n'
                         line_tokens = []
                         if cur_order_num == self.event_table.intro_order:
+                            if rem != 0:
+                                print(f"Warning: Expected perfect pattern alignment for intro marker at order {orderNum}, channel {c}.", file=sys.stderr)
                             self.txt += '/\n'
                             if has_remote_commands:
                                 self.txt += "(!99, 0) ; reset remote state for loop\n"
@@ -720,6 +752,7 @@ class MML:
 
                     # Determine if this is a note or rest
                     if kind == 'note':
+                        note_token_ties = ''
                         note_idx = int(row.Note)  # type: ignore[arg-type]
                         # Ensure we have some instrument context
                         if current_ins is None or current_ins == 255:
@@ -767,6 +800,7 @@ class MML:
                         if current_oct != octv:
                             line_tokens.append(f'o{octv}')
                             current_oct = octv
+
                         # Apply volume if present on this row and changed
                         if row.Vol is not None:
                             amk_v = self.find_v(min(int(row.Vol), 255))
@@ -777,6 +811,9 @@ class MML:
                             if current_vol != v:
                                 line_tokens.append(f'v{v}')
                                 current_vol = v
+                        
+                        effect_tokens = self._convert_effects(row or [], 0, note_idx)
+                        bend_token = self._convert_pitchbend(row or [], 0, note_idx, current_oct)
                         # Count run length of same note continuing (no new note starts)
                         run = 1
                         j = i + 1
@@ -786,6 +823,10 @@ class MML:
                             # stop if next row starts a new note, OFF/RELEASE, or instrument change
                             if (k2 in ('note','off','release')) or (r2.Ins is not None and r2.Ins != current_ins and r2.Ins != 255):
                                 break
+                            effect_tokens.extend(self._convert_effects(r2 or [], run, note_idx))
+                            bend = self._convert_pitchbend(r2 or [], run, note_idx, current_oct)
+                            if bend:
+                                bend_token = bend  # use latest bend token in run
                             # break note if we're at the end of the intro
                             orderNum, rem = divmod(j, mod.PatternLength)
                             if rem == 0 and orderNum == self.event_table.intro_order:
@@ -793,14 +834,27 @@ class MML:
                                 break
                             run += 1
                             j += 1
+                            
+                        line_tokens.extend(effect_tokens)
+
                         # Emit note with duration expressed as ties if run>1
                         # Always emit explicit duration numbers and numeric ties
-                        denoms = self._run_to_denoms(run, base_den)
+                        denoms = self._run_to_denoms(run, base_den, bend_token != '')
                         note_token = f'{name}{denoms[0]}'
+
                         for d in denoms[1:]:
-                            note_token += f'^{d}'
+                            note_token_ties += f'^{d}'
+
+                        if not bend_token:
+                            note_token += note_token_ties
+
                         # First segment includes note name
                         line_tokens.append(note_token)
+
+                        # pitch bend goes after the note
+                        if bend_token:
+                            bend_token += note_token_ties
+                            line_tokens.append(bend_token)
                         i = j
                         continue
                     else:
