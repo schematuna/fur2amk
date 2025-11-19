@@ -225,6 +225,7 @@ class EventTable:
         self.ins_list: List[Tuple[int, EventInstrument]] = []
         # which order to place the intro marker at
         self.intro_order: int = None
+        self.label_start: int = 1
         self.convert()
 
     def convert(self) -> None:
@@ -276,8 +277,8 @@ class EventTable:
                 self.used_samples.add(inst.sample_index)
                 self.ins_list.append((ins.index, inst))
 
-        # start at 10 for readability, 0 will be reserved for stop remote commands
-        command_num = 10
+        # start at 1, 0 will be reserved for stop remote commands
+        command_num = 1
         def add_remote_command(inst: EventInstrument, command: EventRemoteCommand) -> None:
             inst.remote_commands.append(command)
             nonlocal command_num
@@ -297,7 +298,10 @@ class EventTable:
                                                                     RemoteCommandTypes.GAIN, 
                                                                     f"={ins.snes_macro_data.gain_speed}",
                                                                     [gmacro[1]]))
-                        
+        # need to indicate where to pick up with labels
+        # loop labels and remote command labels can't overlap
+        self.label_start = command_num
+         
         # iterate all rows for command 0Bxx (jump to order)
         # This will be interpreted as the intro marker position
         for c in range(self.module.NumChannels):
@@ -331,6 +335,21 @@ class MMLState:
             'IV': None, 'SV': None, 'EV': None, 'EX': None, 'EE': None, 'H': 0x00,
             'Z1': None,
         }
+
+class MMLLine:
+    def __init__(self, tokens: List[str]) -> None:
+        self.tokens = tokens
+        self.label: Optional[int] = None
+        self.isRepeat: bool = False
+    
+    def __str__(self) -> str:
+        if self.label is not None:
+            if self.isRepeat:
+                return f"({self.label})"
+            else:
+                return f"({self.label})[" + ' '.join(self.tokens) + "]"
+        
+        return ' '.join(self.tokens)
 
 class MML:
     def __init__(self, event_table: EventTable, module_path: str) -> None:
@@ -675,12 +694,41 @@ class MML:
         
         return ""
 
+    def _optimize_loops(self, channel_lines: Dict[int, MMLLine], label_count: int) -> int:
+        # Identify and label loops in the channel lines
+        labels_assigned: Dict[int, List[str]] = {}
+        unique_lines: Dict[int, List[str]] = {}
+        for order_num, line in channel_lines.items():
+            # Check for repeated patterns
+            if line.tokens not in unique_lines.values():
+                unique_lines[order_num] = line.tokens
+            elif line.tokens not in labels_assigned.values():
+                # Assign a label to this repeated pattern
+                labels_assigned[label_count] = line.tokens
+                line.label = label_count
+                line.isRepeat = True
+                # and mark the first occurrence
+                for order, tokens in unique_lines.items():
+                    if tokens == line.tokens:
+                        channel_lines[order].label = label_count
+                        break
+                label_count += 1
+            else:
+                # Find the existing label for this pattern
+                for lbl, tokens in labels_assigned.items():
+                    if tokens == line.tokens:
+                        line.label = lbl
+                        line.isRepeat = True
+                        break
+        return label_count
+
     # Conversion
     def convert(self) -> None:
         # If we have parsed orders/patterns, emit simple note streams with basic durations per channel.
         mod = self.event_table.module
-
         if getattr(mod, 'OrdersPerChannel', None) and getattr(mod, 'PatternsByChannel', None) and any(mod.OrdersPerChannel):
+            # track global loop labels
+            label_count = self.event_table.label_start
             for c in range(mod.NumChannels):
                 self.txt += f'#%d\n' % c
                 current_oct = None
@@ -690,7 +738,6 @@ class MML:
                 current_remote_gain: Optional[int] = None 
                 current_amk_ins: Optional[int] = None  # AMK @ number actually in use
                 current_vol: Optional[int] = None  # 0..255
-                line_tokens: List[str] = []
                 orders = mod.OrdersPerChannel[c] if c < len(mod.OrdersPerChannel) else []
                 patmap = mod.PatternsByChannel[c] if c < len(mod.PatternsByChannel) else {}
                 # Flatten rows for this channel
@@ -704,8 +751,8 @@ class MML:
 
                 i = 0
                 N = len(flat_rows)
-                cur_order_num = -1
-                cur_measure_num = -1
+                cur_order_num = 0
+                cur_measure_num = 0
                 base_den = mod.HighlightB
                 # TODO: use AMK group labels for identical patterns/measures
                 #       line length-dependent breaks by measure
@@ -721,22 +768,25 @@ class MML:
                 # also need to handle inner/outer loops, cause I'll want to take care of stuff like r1^1^1^1^1^1
                 # Somewhere in there too-long lines need to be handled, probably before de-dupe step
                 introJustEnded = False
+                line_tokens: List[str] = []
+                # map of pattern num -> line tokens
+                channel_lines = dict()
+                # logic to ensure each line always sets the octave explicitly before the first note
+                line_octave_set = False
                 while i < N:
                     orderNum, rem = divmod(i, mod.PatternLength)
                     measureNum = (i // base_den)
-                    if cur_order_num != orderNum:
+                    if cur_order_num != orderNum and orderNum > 0:
+                        channel_lines[cur_order_num] = MMLLine(line_tokens)
                         cur_measure_num = measureNum
                         cur_order_num = orderNum
-                        self.txt += ' '.join(line_tokens) + '\n'
+                        line_octave_set = False
                         line_tokens = []
                         if cur_order_num == self.event_table.intro_order:
                             if rem != 0:
                                 print(f"Warning: Expected perfect pattern alignment for intro marker at order {orderNum}, channel {c}.", file=sys.stderr)
-                            self.txt += '/\n'
                             if has_remote_commands:
-                                self.txt += "(!99, 0) ; reset remote state for loop\n"
                                 current_remote_gain = None
-                        self.txt += f'; order {orderNum}\n'
                     if cur_measure_num != measureNum:
                         cur_measure_num = measureNum
                         # not desirable for shorter measures, comment out for now
@@ -797,8 +847,9 @@ class MML:
                                         line_tokens.append('(!99, 0)')
                                             
                         name, octv = self._note_name_and_octave(note_idx)
-                        if current_oct != octv:
+                        if current_oct != octv or not line_octave_set:
                             line_tokens.append(f'o{octv}')
+                            line_octave_set = True
                             current_oct = octv
 
                         # Apply volume if present on this row and changed
@@ -852,6 +903,7 @@ class MML:
                         line_tokens.append(note_token)
 
                         # pitch bend goes after the note
+                        # TODO: support pitchbends at arbitrary points in a note, not just beginning
                         if bend_token:
                             bend_token += note_token_ties
                             line_tokens.append(bend_token)
@@ -878,7 +930,22 @@ class MML:
                         line_tokens.append(rest_token)
                         i = j
                         continue
-                self.txt += ' '.join(line_tokens) + '\n\n'
+                # get last one we missed when we broke out of the loop
+                channel_lines[orderNum] = MMLLine(line_tokens)
+
+                label_count = self._optimize_loops(channel_lines, label_count)
+
+                # emit channel lines
+                for order_num in sorted(channel_lines.keys()):
+                    if order_num == self.event_table.intro_order:
+                        self.txt += '/\n'
+                        if has_remote_commands:
+                            self.txt += "(!99, 0) ; reset remote state for loop\n"
+                    self.txt += f'; order {order_num}\n'
+                    line = channel_lines[order_num]
+                    self.txt += str(line) + '\n'
+
+                self.txt += '\n\n'
             return
         # Fallback: emit 8 empty channels as before
         for c in range(8):
