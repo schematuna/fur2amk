@@ -19,6 +19,9 @@ Gain handling:
 Jump commands:
     You can use one instance of the "Jump to Order" command 0Bxx. 
     The last instance of the command will be used to place the intro marker in the amk output.
+
+Wavetables are not supported. All instruments must use samples or noise.
+    
 """
 
 from __future__ import annotations
@@ -34,12 +37,21 @@ from furnace_parser import (
     FurnacePatternRow,
 )
 
+from brr_handler import (
+    BRRConverter,
+    BRRSample
+)
+
+
 # TODO: support mid-sample loop points in BRR validation/writing
 #       warn if tick rate is not 60Hz (NTSC)... is PAL supported?
 #       get game name from Furnace module metadata if available
 #       support global tuning
 #       support 0D, skip to next order command
 #       preserve furnace channel names
+#       look into alternative ADSR handling (Furnace has more options than AMK)
+#       test sample maps (Breezy gtr)
+#       "Divider" BPM control
 
 # --------------------------------------------------------------------------------------
 
@@ -319,7 +331,6 @@ class EventTable:
 # --------------------------------------------------------------------------------------
 # MML writer (streamlined for now)
 
-
 class MMLState:
     def __init__(self) -> None:
         self.state_d: Dict[str, Any] = {
@@ -476,7 +487,11 @@ class MML:
         os.makedirs(sample_dir, exist_ok=True)
         # Attempt to dump samples to BRR files (unless disabled)
         if not bool(Config.flag('nosmpl')):
-            self._dump_samples_to_brr(sample_dir)
+            samples = list[BRRSample]()
+            for s in self.event_table.module.Samples:
+                samples.append(BRRSample(name=s.name, index=s.index, brr_data=s.brr_raw, loop_start=s.loop_start, loop_end=s.loop_end))
+            brr_converter = BRRConverter()
+            brr_converter._dump_samples_to_brr(sample_dir, samples)
         sample_lines = [f'#path "{path_name}"', '', '#samples', '{', '    #optimized']
         # Prefer listing only BRRs we actually generated to avoid missing files
         mod = self.event_table.module
@@ -952,113 +967,12 @@ class MML:
             self.txt += f'#%d\n' % c
             self.txt += '\n'
 
-    def validate_and_fix_brr_data(self, data: bytes, loop_end: int) -> bytes:
-        """Validate BRR data and fix invalid nibbles if needed.
-
-        Args:
-            data: Raw BRR data (multiple of 9 bytes).
-            loop_end: Loop sample offset
-        Returns:
-            Validated/fixed BRR data.
-        """
-        # check that last block has end flag set
-        if len(data) % 9 != 0:
-            raise ValueError("BRR data length is not a multiple of 9")
-        fixed_data = bytearray(data)
-
-        loop_end_byte = (loop_end // 16 * 9) - 9
-        # loop over every 9-byte block and set loop and end flags appropriately
-        for i in range(0, len(fixed_data), 9):
-            # check loop flag
-            loop_flag = (fixed_data[i] & 0x02) != 0
-
-            # debug
-            # if loop_flag:
-            #     print(f"byte {i}: loop flag is set, loop_end_byte={loop_end_byte}")
-            # if (i==loop_end_byte):
-            #     print(f"byte {i}: expected loop end byte")
-
-            end_flag = (fixed_data[i] & 0x01) != 0
-            if (i == loop_end_byte) and not loop_flag:
-                print(f"[diag] warning: BRR loop end block missing loop flag; fixing")
-                fixed_data[i] |= 2
-
-            # TODO : furnace seems to set loop flag on EVERY block
-            # not even sure why this works. Removing them breaks things.
-            # elif (i != loop_end_byte) and loop_flag:
-            #     print(f"[diag] warning: BRR block erroneously has loop flag; fixing")
-            #     fixed_data[i] &= 0xFD # 0xFF ^ 0x02
-
-            # debug
-            # elif (i == loop_end_byte) and loop_flag:
-            #     print(f"[diag] info: BRR loop end block has correct loop flag")
-
-            # end block can be missing for some furnace BRR samples
-            # seems to happen for samples that are converted to BRR from PCM
-            if (i + 9 >= len(fixed_data)) and not end_flag:
-                print(f"[diag] warning: BRR last block missing end flag; fixing")
-                fixed_data[i] |= 1
-            
-            # debug
-            # elif (i + 9 >= len(fixed_data)) and end_flag:
-            #     print(f"[diag] info: BRR last block has correct end flag")
-                
-        return fixed_data
-
-    def _dump_samples_to_brr(self, out_dir: str) -> None:
-        mod = self.event_table.module
-        if not getattr(mod, 'Samples', None):
-            return
-        total = 0
-        created = 0
-        for s in mod.Samples:
-            total += 1
-            # Target BRR path
-            # Prefix with index to avoid name collisions and keep ordering stable
-            fname_base = (f"{s.index:02d}_" + (f"{s.name}".strip() or f"Sample{s.index}")).replace(' ', '_')
-            brr_path = os.path.join(out_dir, fname_base + '.brr')
-            s.brr_path = brr_path
-            # Always overwrite existing BRR: remove it first if present
-            try:
-                if os.path.exists(brr_path):
-                    os.remove(brr_path)
-            except OSError:
-                pass
-            # If the sample already contains raw BRR data, wrap it with AMK 2-byte loop header and write
-            if s.brr_raw:
-                try:
-                    data = s.brr_raw
-                    # Ensure len % 9 == 0 by adding header; raw data itself should be multiple of 9
-                    if len(data) % 9 != 0:
-                        # Truncate to the nearest lower whole block to satisfy AMK; log diagnostics
-                        trunc = (len(data) // 9) * 9
-                        if bool(Config.flag('diag')):
-                            print(f"[diag] warning: BRR raw not block-aligned ({len(data)}); truncating to {trunc}")
-                        data = data[:trunc]
-                    
-                    data = self.validate_and_fix_brr_data(data, s.loop_end)
-
-                    loop_off = 0
-                    if s.loop_start is not None and s.loop_start >= 0:
-                        # Convert PCM loop start (samples) to BRR byte offset: floor(loop/16)*9
-                        loop_off = (int(s.loop_start) // 16) * 9
-                    header = bytes((loop_off & 0xFF, (loop_off >> 8) & 0xFF))
-                    with open(brr_path, 'wb') as f:
-                        f.write(header + data)
-                    created += 1
-                    if bool(Config.flag('diag')):
-                        print(f"[diag] wrote BRR (raw+hdr): {os.path.basename(brr_path)} loop_off={loop_off}")
-                    continue
-                except Exception:
-                    if bool(Config.flag('diag')):
-                        print(f"[diag] failed to write raw BRR for {s.index:02d} {s.name}")
-            else:
-                print(f"[diag] info: sample {s.index:02d} {s.name} has no raw BRR data, skipping")
-            
-        if bool(Config.flag('diag')):
-            print(f"[diag] summary: samples={total} brr_created={created}")
-
     def _note_name_and_octave(self, i: int) -> Tuple[str, int]:
+        # highest allowed AMK pitch is o6 a
+        # TODO: use pitch bend or something to fix automatically?
+        while i > 141:
+            i -= 12
+            print(f"Warning: Note index {i} exceeds AMK max pitch, lowering an octave.", file=sys.stderr)
         # Map Furnace note index (0=C-0) to AMK note name and octave using oN
         names = ['c', 'c+', 'd', 'd+', 'e', 'f', 'f+', 'g', 'g+', 'a', 'a+', 'b']
         note = i % 12
