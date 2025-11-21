@@ -30,16 +30,13 @@ class FurnaceSNESFlags:
 class FurnaceSample:
     index: int
     name: str
-    # Minimal fields needed for AMK sample list (expand later):
-    brr_path: Optional[str] = None
     brr_raw: Optional[bytes] = None  # Raw BRR data if sample is stored as BRR
     c4_rate: Optional[int] = None  # Hz
-    vol: int = 64  # 0..64
-    pan: int = 128  # 0..255 center
     # Raw PCM payload and metadata from SMP2
     pcm16: List[int] = field(default_factory=list)  # mono 16-bit samples
     sample_rate: Optional[int] = None
     depth: int = 16
+    # will be None if no loop
     loop_start: Optional[int] = None
     loop_end: Optional[int] = None
 
