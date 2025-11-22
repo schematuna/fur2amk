@@ -42,10 +42,11 @@ class BRRSample:
         num_samps = len(self.brr_data) * 16
         # Furnace will provide out-of-bounds loop points sometimes; clamp them here
         # in particular if the loop end is at the very end of the sample, it will be num_samps instead of num_samps-1
+        # TODO: check if furnace sample indices are just 1-indexed
         if loop_start is not None:
             loop_start = max(0, min(loop_start, num_samps - 1))
             self.loop_start = int(loop_start // 16)
-            
+
         if loop_end is not None:
             loop_end = max(0, min(loop_end, num_samps - 1)) 
             self.loop_end = int(loop_end // 16)
@@ -75,9 +76,9 @@ class BRRConverter:
                     # Convert loop start (samples) to BRR byte offset
                     loop_off = s.loop_start * 9
 
-                header = bytes((loop_off & 0xFF, (loop_off >> 8) & 0xFF))
+                amk_header = bytes((loop_off & 0xFF, (loop_off >> 8) & 0xFF))
                 with open(brr_path, 'wb') as f:
-                    f.write(header + bytes(data))
+                    f.write(amk_header + bytes(data))
                 print(f"[diag] wrote BRR (raw+hdr): {os.path.basename(brr_path)} loop_off={loop_off}, len={len(data.blocks)+2}")
                 continue
 

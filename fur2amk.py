@@ -52,6 +52,7 @@ from brr_handler import (
 #       look into alternative ADSR handling (Furnace has more options than AMK)
 #       test sample maps (Breezy gtr)
 #       "Divider" BPM control
+#       Recommended furnace pre-emphasis settings?
 
 # --------------------------------------------------------------------------------------
 
@@ -371,6 +372,9 @@ class MML:
         self.g_state: Dict[str, Any] = {'evoll': 0, 'evolr': 0}
         self.echo_set = False
 
+        # for aggregated warning
+        self.pitch_warn_count: int = 0       # number of notes that exceeded maximum pitch
+
         self.add_amk_header()
         self.add_spc_info()
         self.add_sample_info()
@@ -379,6 +383,13 @@ class MML:
         self.add_echo_info()
         self.add_remote_commands()
         self.convert()
+
+        # After conversion, emit aggregated pitch warning if needed
+        if self.pitch_warn_count > 0:
+            print(
+                f"Warning: {self.pitch_warn_count} notes exceeded AMK max pitch.",
+                file=sys.stderr,
+            )
 
     # Convert -128->127 ranged values to 2's complement hex
     @staticmethod
@@ -970,9 +981,10 @@ class MML:
     def _note_name_and_octave(self, i: int) -> Tuple[str, int]:
         # highest allowed AMK pitch is o6 a
         # TODO: use pitch bend or something to fix automatically?
+        # TODO: incorporate note changes from sample map
         while i > 141:
             i -= 12
-            print(f"Warning: Note index {i} exceeds AMK max pitch, lowering an octave.", file=sys.stderr)
+            self.pitch_warn_count += 1
         # Map Furnace note index (0=C-0) to AMK note name and octave using oN
         names = ['c', 'c+', 'd', 'd+', 'e', 'f', 'f+', 'g', 'g+', 'a', 'a+', 'b']
         note = i % 12
@@ -995,7 +1007,7 @@ class MML:
         if not ins.snes_macro_data.is_noise:
             if ins.use_sample_map and ins.sample_table:
                 # Furnace provides 120 entries; clamp into range
-                n120 = n
+                n120 = n - 5 * 12  # map from 0:C-(-5) for furnace note to 0:C-0 for sample map
                 if n120 < 0:
                     n120 = 0
                 if n120 >= len(ins.sample_table):
