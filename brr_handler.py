@@ -54,6 +54,7 @@ class BRRSample:
 # reads in native BRR from Furnace sample format and lints it/fixes it as needed for amk
 class BRRConverter:
     def _dump_samples_to_brr(self, out_dir: str, samples: List[BRRSample]) -> None:
+        created = 0
         for s in samples:
             # Target BRR path
             # Prefix with index to avoid name collisions and keep ordering stable
@@ -69,7 +70,7 @@ class BRRConverter:
             if s.brr_data:
                 data = s.brr_data
                 
-                self.validate_and_fix_brr_data(data, s.loop_end)
+                self.validate_and_fix_brr_data(data, s.loop_end, s.name)
 
                 loop_off = 0
                 if s.loop_start is not None and s.loop_start >= 0:
@@ -79,16 +80,16 @@ class BRRConverter:
                 amk_header = bytes((loop_off & 0xFF, (loop_off >> 8) & 0xFF))
                 with open(brr_path, 'wb') as f:
                     f.write(amk_header + bytes(data))
-                print(f"[diag] wrote BRR (raw+hdr): {os.path.basename(brr_path)} loop_off={loop_off}, len={len(data.blocks)+2}")
+                created += 1
                 continue
 
             else:
                 print(f"[diag] info: sample {s.index:02d} {s.name} has no raw BRR data, skipping")
+                pass
             
-    def validate_and_fix_brr_data(self, data: BRRData, loop_end: int):
-        # check that last block has end flag set
-        print(f"[diag] info: validating BRR data, num blocks={len(data.blocks)} loop_end={loop_end}")
-
+        # summary only
+        print(f"[diag] summary: brr_created={created}")
+    def validate_and_fix_brr_data(self, data: BRRData, loop_end: int, name: str) -> None:
         is_looped = loop_end is not None and loop_end > 0
 
         # loop over every 9-byte block and set loop and end flags appropriately
@@ -101,13 +102,13 @@ class BRRConverter:
 
             if is_looped and (i == loop_end):
                 if not loop_flag:
-                    print(f"[diag] warning: BRR loop end block ({i}) missing loop flag; fixing")
+                    print(f"warning: BRR loop end block ({i}) missing loop flag; fixing {name} ")
                     block.header |= 2
                 if not end_flag:
-                    print(f"[diag] warning: BRR loop end block ({i}) missing end flag; fixing")
+                    print(f"warning: BRR loop end block ({i}) missing end flag; fixing {name} ")
                     block.header |= 1
             
             if not is_looped and (i >= len(data.blocks)) and not end_flag:
-                print(f"[diag] warning: BRR last block ({i}) missing end flag; fixing")
+                print(f"warning: {name} BRR last block ({i}) missing end flag; fixing")
                 block.header |= 1
                 
