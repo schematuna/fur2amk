@@ -368,9 +368,22 @@ class MML:
             events = self.amk_data.event_table.events[c]
             current_octave = None
             
+            # Find the first note/rest event to check if we need an initial rest
+            first_note_event = None
+            for event in events:
+                if event.type in (EventType.NOTE, EventType.NOTE_OFF):
+                    first_note_event = event
+                    break
+            
+            # If channel doesn't start with a note, emit a rest until the first note
+            if first_note_event is not None and first_note_event.tick > 0:
+                # Calculate rest duration from tick 0 to first note
+                rest_duration_ticks = first_note_event.tick
+                rest_token = self._format_duration_token('r', rest_duration_ticks, ticks_per_subdivision, base_den)
+                self.txt += f'{rest_token} '
+            
             for i, event in enumerate(events):
                 # Find the next note/rest event for duration calculation
-                # Command events (INS_CHANGE, VOLUME) don't consume time
                 next_note_event = None
                 for j in range(i + 1, len(events)):
                     if events[j].type in (EventType.NOTE, EventType.NOTE_OFF):
@@ -411,7 +424,7 @@ class MML:
                 elif event.type == EventType.INS_CHANGE:
                     # Instrument change - emit immediately, no duration
                     ins_idx = event.value
-                    self.txt += f'@{ins_idx} '
+                    self.txt += f'@{ins_idx + 30} '
                     
                 elif event.type == EventType.VOLUME:
                     # Volume change - emit immediately, no duration
