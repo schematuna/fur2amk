@@ -147,12 +147,16 @@ class FurnaceConverter:
             ticksPerRow = module.Speed1
             for row in flat_rows:
                 # process row into events
-                # Note
-                type = row._kind()
-                if type == FurnaceRow.NoteKind.NOTE:
-                    event_table.events[ch].append(Event(tick, EventType.NOTE, row.Note))
-                elif type == FurnaceRow.NoteKind.OFF:
-                    event_table.events[ch].append(Event(tick, EventType.NOTE_OFF, None))
+                # Order: volume, instrument, effects, then note
+                # This ensures commands are emitted before the note in MML
+                
+                # Volume
+                vol = row.Vol
+                if vol is not None:
+                    if vol != state[EventStateType.VOLUME]:
+                        state[EventStateType.VOLUME] = vol
+                        event_table.events[ch].append(Event(tick, EventType.VOLUME, vol))
+                
                 # Instrument
                 # TODO: handle sample maps here, AMK doesn't need to know about that
                 ins = row.Ins
@@ -160,12 +164,7 @@ class FurnaceConverter:
                     if ins != state[EventStateType.INST]:
                         state[EventStateType.INST] = ins
                         event_table.events[ch].append(Event(tick, EventType.INS_CHANGE, ins))
-                # volume
-                vol = row.Vol
-                if vol is not None:
-                    if vol != state[EventStateType.VOLUME]:
-                        state[EventStateType.VOLUME] = vol
-                        event_table.events[ch].append(Event(tick, EventType.VOLUME, vol))
+                
                 # Effects
                 for effect in (row.Effects or []):
                     effect_num = effect[0]
@@ -179,6 +178,13 @@ class FurnaceConverter:
                         delay_ticks = value
                         # TODO: note delay is not an event, it just modifies a note's tick value
                         # event_table.events[ch].append(Event(tick, EventType.NOTE_DELAY, delay_ticks))
+                
+                # Note (processed last)
+                type = row._kind()
+                if type == FurnaceRow.NoteKind.NOTE:
+                    event_table.events[ch].append(Event(tick, EventType.NOTE, row.Note))
+                elif type == FurnaceRow.NoteKind.OFF:
+                    event_table.events[ch].append(Event(tick, EventType.NOTE_OFF, None))
 
                 tick += ticksPerRow
 
