@@ -2,32 +2,24 @@ from __future__ import annotations
 
 import os
 import sys
-from typing import Any, Dict, List, Optional, Tuple, TYPE_CHECKING
+from typing import Any, Dict, List, Optional, Tuple
 from enum import Enum, auto
+from dataclasses import dataclass
 
 from AMKData import AMKData, AMKInstrument, AMKRemoteCommand, AMKRemoteCommandType, AMKRemoteCommandTiming
 from AMKData import Event, EventTable, EventType
 
-if TYPE_CHECKING:
-    from fur2amk import Config
+from MMLUtil import DurationFormatter, MMLUtil
 
 # --------------------------------------------------------------------------------------
 # MML writer
 
+@dataclass
 class MMLState:
-    class Type(Enum):
-        OCTAVE      = auto()
-        ECHO        = auto()
-        REMOTE_GAIN = auto()
-        VOL         = auto()
-
-    def __init__(self) -> None:
-        self.state_d: Dict[str, Any] = {
-            MMLState.Type.OCTAVE: None,
-            MMLState.Type.ECHO: True,
-            MMLState.Type.REMOTE_GAIN: None,
-            MMLState.Type.VOL: None
-        }
+    octave: Optional[int]       = None
+    echo: bool                  = False
+    remote_gain: Optional[int]  = None
+    vol: Optional[int]          = None
 
 class MMLLine:
     def __init__(self, tokens: List[str]) -> None:
@@ -50,8 +42,9 @@ class MML:
         self.amk_data = amk_data
         self.states = [MMLState() for _ in range(8)]
 
-        # for aggregated warning
-        self.pitch_warn_count: int = 0       # number of notes that exceeded maximum pitch
+        # assume sixteenth notes for now
+        base_den = 16
+        self.durForamtter = DurationFormatter(self.amk_data.ticks_per_subdivision, base_den)
 
         self.add_amk_header()
         self.add_spc_info()
@@ -62,66 +55,9 @@ class MML:
         self.add_remote_commands()
         self.convert()
 
-        # After conversion, emit aggregated pitch warning if needed
-        if self.pitch_warn_count > 0:
-            print(
-                f"Warning: {self.pitch_warn_count} notes exceeded AMK max pitch.",
-                file=sys.stderr,
-            )
-
-    # Convert -128->127 ranged values to 2's complement hex
-    @staticmethod
-    def to_hex(val):
-        return f"{(val & 0xFF):02X}" if val >= 0 else f"{((val + 256) & 0xFF):02X}"
-
     # Sections
     def add_amk_header(self) -> None:
         self.txt += f'#amk {self.amk_data.version}\n\n'
-
-    def _divisors(self, n: int) -> List[int]:
-        n = int(n)
-        if n <= 0:
-            return [1]
-        divs = []
-        i = 1
-        while i * i <= n:
-            if n % i == 0:
-                divs.append(i)
-                if i != n // i:
-                    divs.append(n // i)
-            i += 1
-        return sorted(divs)
-
-    def _run_to_denoms(self, num_subdivisions: int, base_den: int, no_whole_notes: bool = False) -> List[int]:
-        """Decompose a number of base_den subdivisions into a list of AMK length denominators to tie.
-
-        Each subdivision represents 1/base_den of a whole note. We choose chunks that are divisors of base_den
-        and sum to num_subdivisions. For each chunk, the length number is base_den/chunk.
-        Example: base_den=16, num_subdivisions=3 -> chunks [2,1] => denoms [8,16] -> c8^16.
-        """
-        num = max(1, int(num_subdivisions))
-        bd = max(1, int(base_den))
-        divs = self._divisors(bd)
-        # remove divisor of 16 if no_whole_notes
-        if no_whole_notes:
-            divs = [d for d in divs if d < 16]
-        # allowed chunks are divisors of base_den
-        chunks = sorted(divs, reverse=True)
-        out: List[int] = []
-        rem = num
-        while rem > 0:
-            # pick largest chunk <= rem
-            pick = None
-            for c in chunks:
-                if c <= rem:
-                    pick = c
-                    break
-            if pick is None:
-                # fallback to 1-subdivision chunks (shouldn't happen since 1 divides bd)
-                pick = 1
-            out.append(bd // pick)
-            rem -= pick
-        return out
 
     def add_spc_info(self) -> None:
         # Emit AddmusicK readme-style #spc block with #title/#game/#author/#length
@@ -169,7 +105,7 @@ class MML:
             if amk_ins.is_noise:
                 # Noise instrument
                 samp_name = f'n{(amk_ins.noise_freq):02X}'
-                print(f"Info: Emitting noise instrument {samp_name} for instrument {self.to_hex(idx)}.", file=sys.stderr)
+                print(f"Info: Emitting noise instrument {samp_name} for instrument {MMLUtil.to_hex(idx)}.", file=sys.stderr)
             else:
                 # Resolve sample filename and tuning
                 samp_entry = self.amk_data.samples[amk_ins.sample_index]
@@ -212,11 +148,11 @@ class MML:
     def add_echo_info(self) -> None:
         echo_data = self.amk_data.echo_data
         if echo_data:
-            self.txt += f'$EF ${self.to_hex(echo_data.echoMask)} ${self.to_hex(echo_data.echoVolL)} ${self.to_hex(echo_data.echoVolR)}\n'
-            self.txt += f'$F1 ${self.to_hex(echo_data.echoDelay)} ${self.to_hex(echo_data.echoFeedback)} ${self.to_hex(echo_data.firIdx)}\n'
+            self.txt += f'$EF ${MMLUtil.to_hex(echo_data.echoMask)} ${MMLUtil.to_hex(echo_data.echoVolL)} ${MMLUtil.to_hex(echo_data.echoVolR)}\n'
+            self.txt += f'$F1 ${MMLUtil.to_hex(echo_data.echoDelay)} ${MMLUtil.to_hex(echo_data.echoFeedback)} ${MMLUtil.to_hex(echo_data.firIdx)}\n'
 
         if echo_data.echoFilterCoeffs:
-            coeffs_hex = ' '.join(f'${self.to_hex(c)}' for c in echo_data.echoFilterCoeffs)
+            coeffs_hex = ' '.join(f'${MMLUtil.to_hex(c)}' for c in echo_data.echoFilterCoeffs)
             self.txt += f'$F5 {coeffs_hex}\n\n'
 
     def add_remote_commands(self) -> None:
@@ -226,7 +162,7 @@ class MML:
         for command in self.amk_data.remote_commands:
             if command.amk_command_type == AMKRemoteCommandType.GAIN:
                 if len(command.amk_command_args) > 0:
-                    amk_command = f"$FA$01${self.to_hex(command.amk_command_args[0])}"
+                    amk_command = f"$FA$01${MMLUtil.to_hex(command.amk_command_args[0])}"
                 else:
                     print(f"No gain value present for remote command. Not creating remote command for instrument")
                     continue
@@ -237,27 +173,6 @@ class MML:
             self.txt += make_remote_command(command.command_idx, amk_command) + f" ;for furnace inst\n"
 
         self.txt += "\n\n"
-
-    # wild amk volume mapping function stol from it2amk
-    def find_v(self, level):
-        if level == 0:
-            return 0
-    
-        mindiff = 256
-        minval = -1
-        
-        for v in range(0, 256):
-            vv = (v * 0xFF) >> 8
-            vv = (vv * vv) >> 8
-            vv = (vv * 0x51) >> 8
-            vv = (vv * 0xFC) >> 8
-            l = vv * 0xFF / 0x4D
-            
-            if abs(l - level) <= mindiff:
-                mindiff = abs(l - level)
-                minval = v
-
-        return minval
     
     def channel_has_remote_commands(self, channel: int) -> bool:
         for event in self.amk_data.event_table.events[channel]:
@@ -270,7 +185,7 @@ class MML:
     
     # Pitchbend is handled specially since it is placed after the note
     # def _convert_pitchbend(self, event: int, note_idx: int, current_octave: int) -> str:
-    #     amk_delay = self.to_hex(delay * 8) # $08 = 1 eighth note
+    #     amk_delay = MMLUtil.to_hex(delay * 8) # $08 = 1 eighth note
     #     speed = event.value
     #     note = note_idx + event.value2  # semitones
     #     name, octave = self._note_name_and_octave(note)  # validate
@@ -278,9 +193,9 @@ class MML:
     #     if (octave != current_octave):
     #         bend_note = f'o{octave}{bend_note}'
     #         self.current_octave = octave
-    #     return f"$DD${amk_delay}${self.to_hex(speed)} {bend_note}"
+    #     return f"$DD${amk_delay}${MMLUtil.to_hex(speed)} {bend_note}"
 
-    def _optimize_loops(self, channel_lines: Dict[int, MMLLine], label_count: int) -> int:
+    def optimize_loops(self, channel_lines: Dict[int, MMLLine], label_count: int) -> int:
         # Identify and label loops in the channel lines
         labels_assigned: Dict[int, List[str]] = {}
         unique_lines: Dict[int, List[str]] = {}
@@ -308,54 +223,41 @@ class MML:
                         break
         return label_count
 
-    def _format_duration_token(self, base_token: str, duration_ticks: int, ticks_per_subdivision: int, base_den: int) -> str:
-        """Format a note or rest token with duration and ties.
+    def handle_initial_rest(self, events: List[Event]) -> None:
+        first_note_event = None
+        for event in events:
+            if event.type in (EventType.NOTE, EventType.NOTE_OFF):
+                first_note_event = event
+                break
         
-        Args:
-            base_token: Base token (e.g., 'c', 'r', 'c+')
-            duration_ticks: Duration in ticks
-            ticks_per_subdivision: Number of ticks per base_den subdivision (Speed1)
-            base_den: Base denominator (e.g., 16 for 16th note grid, from measure_length)
-        
-        Returns:
-            Formatted token with duration (e.g., 'c16', 'r8^16', 'c1^2^4')
-        """
-        if duration_ticks <= 0:
-            return base_token
-        
-        # Convert ticks to number of base_den subdivisions
-        # Each subdivision = ticks_per_subdivision ticks
-        if ticks_per_subdivision <= 0:
-            ticks_per_subdivision = 1  # fallback to avoid division by zero
-        num_subdivisions = duration_ticks / ticks_per_subdivision
-        
-        # Use _run_to_denoms to convert subdivisions to MML duration denominators
-        denoms = self._run_to_denoms(int(round(num_subdivisions)), base_den)
-        
-        if len(denoms) == 0:
-            return base_token
-        
-        # First duration is attached directly to the note/rest
-        token = f'{base_token}{denoms[0]}'
-        
-        # Additional durations use tie syntax
-        for d in denoms[1:]:
-            token += f'^{d}'
-        
-        return token
+        if first_note_event is not None and first_note_event.tick > 0:
+            rest_duration_ticks = first_note_event.tick
+            rest_token = self.durForamtter.format('r', rest_duration_ticks)
+            self.txt += f'{rest_token} '
+
+    def handle_note_or_rest(self, event: Event, duration_ticks: int, mml_state: MMLState) -> None:
+        if event.type == EventType.NOTE:
+            note_idx = event.value
+            note_name, note_octave = MMLUtil.note_name_and_octave(note_idx)
+            
+            # Emit octave change if needed
+            if mml_state.octave != note_octave:
+                self.txt += f'o{note_octave} '
+                mml_state.octave = note_octave
+            
+            # Format note with duration
+            note_token = self.durForamtter.format(note_name, duration_ticks)
+            self.txt += f'{note_token} '
+            
+        elif event.type == EventType.NOTE_OFF:
+            # Format rest with duration
+            rest_token = self.durForamtter.format('r', duration_ticks)
+            self.txt += f'{rest_token} '
 
     # Conversion
     def convert(self) -> None:
         # track global loop labels
         label_count = self.amk_data.label_start
-        
-        # Determine base denominator from measure_length
-        # This represents the subdivision grid (e.g., 16 = 16th note grid)
-        base_den = self.amk_data.measure_length
-        
-        # Calculate ticks per base_den subdivision (Speed1) from ticks_per_beat
-        # ticks_per_beat = Speed1 * measure_length, so Speed1 = ticks_per_beat / measure_length
-        ticks_per_subdivision = self.amk_data.ticks_per_beat // base_den
         
         for c in range(self.amk_data.num_channels):
             mml_state = self.states[c]
@@ -366,61 +268,35 @@ class MML:
                 continue
 
             events = self.amk_data.event_table.events[c]
-            current_octave = None
             
-            # Find the first note/rest event to check if we need an initial rest
-            first_note_event = None
-            for event in events:
-                if event.type in (EventType.NOTE, EventType.NOTE_OFF):
-                    first_note_event = event
-                    break
+            self.handle_initial_rest(events)
             
-            # If channel doesn't start with a note, emit a rest until the first note
-            if first_note_event is not None and first_note_event.tick > 0:
-                # Calculate rest duration from tick 0 to first note
-                rest_duration_ticks = first_note_event.tick
-                rest_token = self._format_duration_token('r', rest_duration_ticks, ticks_per_subdivision, base_den)
-                self.txt += f'{rest_token} '
-            
+            # TODO: filter events into two structures: one for notes/rests and one for instrument changes, volume changes, etc.
+            # make clear distinciton between rest/note durations and other events. Can this distintion be clearly made?
             for i, event in enumerate(events):
-                # Find the next note/rest event for duration calculation
-                next_note_event = None
-                for j in range(i + 1, len(events)):
-                    if events[j].type in (EventType.NOTE, EventType.NOTE_OFF):
-                        next_note_event = events[j]
-                        break
-                
-                # Calculate duration to next note/rest event
-                if next_note_event is not None:
-                    duration_ticks = next_note_event.tick - event.tick
-                else:
-                    # Last note/rest event - use one subdivision as default duration
-                    duration_ticks = ticks_per_subdivision
-                
-                # Ensure duration is at least 1
-                duration_ticks = max(1, duration_ticks)
-                
-                # print(f"Event: {event.type}, tick={event.tick}, duration={duration_ticks}", file=sys.stderr)
-                
-                if event.type == EventType.NOTE:
-                    note_idx = event.value
-                    note_name, note_octave = self.note_name_and_octave(note_idx)
+                # print(f"Event: {event.type}, tick={event.tick}", file=sys.stderr)
+
+                if (event.type == EventType.NOTE or event.type == EventType.NOTE_OFF):
+                    # Find the next note/rest event for duration calculation
+                    next_note_event = None
+                    for j in range(i + 1, len(events)):
+                        if events[j].type in (EventType.NOTE, EventType.NOTE_OFF):
+                            next_note_event = events[j]
+                            break
                     
-                    # Emit octave change if needed
-                    if current_octave is None or current_octave != note_octave:
-                        self.txt += f'o{note_octave} '
-                        current_octave = note_octave
-                        mml_state.state_d[MMLState.Type.OCTAVE] = note_octave
+                    # Calculate duration to next note/rest event
+                    if next_note_event is not None:
+                        duration_ticks = next_note_event.tick - event.tick
+                    else:
+                        # Last note/rest event - use one subdivision as default duration
+                        # TODO: this should be to end of song
+                        duration_ticks = self.amk_data.ticks_per_subdivision
                     
-                    # Format note with duration
-                    note_token = self._format_duration_token(note_name, duration_ticks, ticks_per_subdivision, base_den)
-                    self.txt += f'{note_token} '
-                    
-                elif event.type == EventType.NOTE_OFF:
-                    # Format rest with duration
-                    rest_token = self._format_duration_token('r', duration_ticks, ticks_per_subdivision, base_den)
-                    self.txt += f'{rest_token} '
-                    
+                    # Ensure duration is at least 1
+                    duration_ticks = max(1, duration_ticks)
+
+                    self.handle_note_or_rest(event, duration_ticks, mml_state)
+
                 elif event.type == EventType.INS_CHANGE:
                     # Instrument change - emit immediately, no duration
                     ins_idx = event.value
@@ -429,8 +305,8 @@ class MML:
                 elif event.type == EventType.VOLUME:
                     # Volume change - emit immediately, no duration
                     vol = event.value
-                    mml_state.state_d[MMLState.Type.VOL] = vol
-                    vol_mml = self.find_v(vol)
+                    mml_state.vol = vol
+                    vol_mml = MMLUtil.find_v(vol)
                     self.txt += f'v{vol_mml} '
                     
                 elif event.type == EventType.PITCH_BEND:
@@ -443,18 +319,6 @@ class MML:
             self.txt += '\n\n'
 
         return
-
-    def note_name_and_octave(self, i: int) -> Tuple[str, int]:
-        # highest allowed AMK pitch is o6 a
-        # TODO: use pitch bend or something to fix automatically?
-        while i > 141:
-            i -= 12
-            self.pitch_warn_count += 1
-        # Map Furnace note index (0=C-0) to AMK note name and octave using oN
-        names = ['c', 'c+', 'd', 'd+', 'e', 'f', 'f+', 'g', 'g+', 'a', 'a+', 'b']
-        note = i % 12
-        octave = i // 12 - 5  # align with fur2tad convention
-        return names[note], octave
 
     # Output
     def save(self, filename: str) -> None:

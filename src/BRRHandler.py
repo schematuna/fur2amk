@@ -53,7 +53,7 @@ class BRRSample:
 
 # reads in native BRR from Furnace sample format and lints it/fixes it as needed for amk
 class BRRConverter:
-    def _dump_samples_to_brr(self, out_dir: str, samples: List[BRRSample]) -> None:
+    def dump_samples_to_brr(self, out_dir: str, samples: List[BRRSample]) -> None:
         created = 0
         for s in samples:
             # Target BRR path
@@ -89,6 +89,7 @@ class BRRConverter:
             
         # summary only
         print(f"[diag] summary: brr_created={created}")
+
     def validate_and_fix_brr_data(self, data: BRRData, loop_end: int, name: str) -> None:
         is_looped = loop_end is not None and loop_end > 0
 
