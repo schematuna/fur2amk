@@ -228,19 +228,22 @@ class FurnaceConverter:
     def convert(self, module: FurnaceModule) -> AMKData:
         amk_data = AMKData()
 
-        amk_data.spc_info    = self.convert_spc_info(module)
-        amk_data.samples     = self.convert_samples(module)
-        amk_data.instruments = self.convert_instruments(module)
-        amk_data.label_start = self.convert_remote_commands(module, amk_data)
-        amk_data.intro_order = self.convert_loop_marker(module)
-        amk_data.tempo       = self.convert_tempo(module)
-        amk_data.volume      = self.convert_volume(module)
-        amk_data.echo_data   = self.convert_echo(module)
+        amk_data.spc_info     = self.convert_spc_info(module)
+        amk_data.samples      = self.convert_samples(module)
+        amk_data.instruments  = self.convert_instruments(module)
+        amk_data.label_start  = self.convert_remote_commands(module, amk_data)
+        amk_data.intro_order  = self.convert_loop_marker(module)
+        amk_data.tempo        = self.convert_tempo(module)
+        amk_data.volume       = self.convert_volume(module)
+        amk_data.echo_data    = self.convert_echo(module)
+        amk_data.event_table  = self.convert_events(module)
+        
         amk_data.num_channels = module.NumChannels
-        amk_data.event_table = self.convert_events(module)
-        amk_data.pattern_length = module.PatternLength
-        amk_data.measure_length = module.HighlightB
-        # Calculate ticks per beat: Speed1 (ticks per row) * HighlightB (rows per beat)
-        amk_data.ticks_per_beat = module.Speed1 * module.HighlightB
+        # for formatting and duration calculations
+        # lengths are in units of furnace rows
+        amk_data.beat_length            = module.HighlightA
+        amk_data.measure_length         = module.HighlightB
+        amk_data.pattern_length         = module.PatternLength
+        amk_data.ticks_per_subdivision  = module.Speed1
 
         return amk_data

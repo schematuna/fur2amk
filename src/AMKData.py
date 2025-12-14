@@ -51,7 +51,7 @@ class AMKInstrument:
 
 @dataclass
 class AMKEchoData:
-    firIdx: Optional[bool] = None
+    firIdx: Optional[int] = None
     echoDelay: Optional[int] = None
     echoFeedback: Optional[int] = None
     echoMask: Optional[int] = None
@@ -104,8 +104,9 @@ class AMKData:
     intro_order: int = None
 
     # song data for formatting
-    pattern_length: int = 0
-    measure_length: int = 0
-    ticks_per_beat: int = 0  # Speed1 * measure_length (ticks per row * rows per beat)
+    beat_length: int = 4
+    measure_length: int = 16
+    pattern_length: int = 64
+    ticks_per_subdivision: int = 0
 
     label_start: int = 1

@@ -174,14 +174,13 @@ def main() -> None:
         for s in module.Samples:
             samples.append(BRRSample(name=s.name, index=s.index, brr_data=s.brr_raw, loop_start=s.loop_start, loop_end=s.loop_end))
         brr_converter = BRRConverter()
-        brr_converter._dump_samples_to_brr(sample_dir, samples)
+        brr_converter.dump_samples_to_brr(sample_dir, samples)
 
     # Output
     song_name = os.path.splitext(os.path.basename(module_path))[0]
     out_path = os.path.join('music', f'{song_name}.txt')
     mml.save(out_path)
     print(f"Wrote {out_path}")
-
 
 if __name__ == "__main__":
     main()
