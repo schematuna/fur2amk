@@ -5,27 +5,19 @@ from __future__ import annotations
 from operator import mod
 import sys
 from typing import Any, Dict, List, Optional, Tuple
-from enum import Enum, auto
+from dataclasses import dataclass, field
 
 from FurnaceData import FurnaceModule, FurnaceRow
 from AMKData import AMKData, SPCInfo, AMKInstrument, AMKEnvelope, AMKRemoteCommand, AMKRemoteCommandType, AMKRemoteCommandTiming, AMKEchoData
-from AMKData import Event, EventTable, EventType
+from AMKData import AMKDuration, MMLDurationType, AMKCommand, MMLData, CommandType
 
-# enum for state types
-class EventStateType(Enum):
-    INST = auto()
-    VOLUME = auto()
-    PAN = auto()
-    EFFECT = auto()
-    
 # persitent channel state, useful for avoiding repeat emission
-class EventState:
-    def __init__(self):
-        self.state_d = { EventStateType.INST: None,
-                         EventStateType.VOLUME: None,
-                         EventStateType.PAN: None,
-                         EventStateType.EFFECT: {} }
-
+@dataclass
+class FurnaceState:
+    inst: Optional[int]     = None
+    volume: Optional[int]   = None
+    pan: Optional[int]      = None
+    effects: Dict[int, int] = field(default_factory=dict)
 
 class FurnaceConverter:
     def convert_spc_info(self, module: FurnaceModule) -> SPCInfo:
@@ -125,10 +117,101 @@ class FurnaceConverter:
                                 intro_order = int(effect[1])
 
         return intro_order
+
+    def convert_durations(self, flat_rows: List[FurnaceRow], ticksPerRow: int) -> List[AMKDuration]:
+        notes: List[AMKDuration] = []
+        tick = 0
+        # process notes/rests
+        cur_dur: Optional[AMKDuration] = None
+        for i, row in enumerate(flat_rows):
+            note_kind = row.kind()
+            if note_kind == FurnaceRow.NoteKind.NOTE:
+                if cur_dur is not None:
+                    cur_dur.duration = tick - cur_dur.tick
+                    notes.append(cur_dur)
+                cur_dur = AMKDuration(MMLDurationType.NOTE, tick, duration=0, note=row.Note)
+            elif note_kind == FurnaceRow.NoteKind.OFF or note_kind == FurnaceRow.NoteKind.RELEASE:
+                if cur_dur is not None:
+                    cur_dur.duration = tick - cur_dur.tick
+                    notes.append(cur_dur)
+                cur_dur = AMKDuration(MMLDurationType.REST, tick)
+            elif i == 0: # register possible initial rest
+                cur_dur = AMKDuration(MMLDurationType.REST, tick)
+            
+            tick += ticksPerRow
+        
+        # Finalize final note or rest
+        if cur_dur is not None:
+            cur_dur.duration = tick - cur_dur.tick
+            notes.append(cur_dur)
+
+        return notes
+
+    def get_note_at_row(self, flat_rows: List[FurnaceRow], row_idx: int) -> Optional[int]:
+        cur_note = None
+        for i, row in enumerate(flat_rows):
+            if row.kind() == FurnaceRow.NoteKind.NOTE:
+                cur_note = row.Note
+            if row_idx == i:
+                return cur_note
+        return None
+
+    def convert_commands(self, flat_rows: List[FurnaceRow], ticksPerRow: int) -> List[AMKCommand]:
+        # process rows into commands
+        commands: List[AMKCommand] = []
+        tick = 0
+        state = FurnaceState()
+        for i, row in enumerate(flat_rows):
+            # Volume
+            vol = row.Vol
+            if vol is not None:
+                if vol != state.volume:
+                    state.volume = vol
+                    commands.append(AMKCommand(tick, CommandType.VOLUME, vol))
+            
+            # Instrument
+            # TODO: handle sample maps here, AMK doesn't need to know about that
+            ins = row.Ins
+            if ins is not None:
+                if ins != state.inst:
+                    state.inst = ins
+                    commands.append(AMKCommand(tick, CommandType.INS_CHANGE, ins))
+            
+            # Effects
+            for effect in (row.Effects or []):
+                effect_num = effect[0]
+                value = effect[1]
+                if effect_num == 0xE1: # Note slide up
+                    # speed is first value of nibble, note is second
+                    # convert max $0F Furnace to quarter note $30 AMK
+                    # TODO: figure out precise speed scaling, I just earballed it
+                    speed = int(48 * (value >> 4) / 15)
+                    semitones = value & 0x0F
+                    note = self.get_note_at_row(flat_rows, i)
+                    if note is not None:
+                        bent_note = note + semitones
+                    else:
+                        print(f"Warning: No note found at tick {tick} for note slide up effect {effect}.", file=sys.stderr)
+                        continue
+                    commands.append(AMKCommand(tick, CommandType.PITCH_BEND, speed, bent_note))
+                elif effect_num == 0xED: # note delay
+                    delay_ticks = value
+                    # TODO: note delay is not an event, it just modifies a note's tick value
+                    # commands.append(AMKCommand(tick, CommandType.NOTE_DELAY, delay_ticks))
+
+            tick += ticksPerRow
+
+        return commands
     
-    def convert_events(self, module: FurnaceModule) -> EventTable:
-        event_table = EventTable()
-        self.states: List[EventState] = [EventState() for _ in range(module.NumChannels)]
+    def convert_mml_data(self, module: FurnaceModule) -> MMLData:
+        mml_data = MMLData()
+        mml_data.num_channels = module.NumChannels
+        # for formatting and duration calculations
+        # lengths are in units of furnace rows
+        mml_data.beat_length            = module.HighlightA
+        mml_data.measure_length         = module.HighlightB
+        mml_data.pattern_length         = module.PatternLength
+        mml_data.ticks_per_subdivision  = module.Speed1
 
         for ch in range(module.NumChannels):
             flat_rows: List[FurnaceRow] = []
@@ -142,53 +225,12 @@ class FurnaceConverter:
                     print(f"Warning: Channel {ch} references missing pattern {pat}. Inserting empty pattern.", file=sys.stderr)
                     flat_rows.extend([FurnaceRow() for _ in range(module.PatternLength)])
 
-            state = self.states[ch].state_d
-            tick = 0
             ticksPerRow = module.Speed1
-            for row in flat_rows:
-                # process row into events
-                # Order: volume, instrument, effects, then note
-                # This ensures commands are emitted before the note in MML
-                
-                # Volume
-                vol = row.Vol
-                if vol is not None:
-                    if vol != state[EventStateType.VOLUME]:
-                        state[EventStateType.VOLUME] = vol
-                        event_table.events[ch].append(Event(tick, EventType.VOLUME, vol))
-                
-                # Instrument
-                # TODO: handle sample maps here, AMK doesn't need to know about that
-                ins = row.Ins
-                if ins is not None:
-                    if ins != state[EventStateType.INST]:
-                        state[EventStateType.INST] = ins
-                        event_table.events[ch].append(Event(tick, EventType.INS_CHANGE, ins))
-                
-                # Effects
-                for effect in (row.Effects or []):
-                    effect_num = effect[0]
-                    value = effect[1]
-                    if effect_num == 0xE1: # Note slide up
-                        # TODO: figure out precise speed scaling, I just earballed it
-                        speed = int(48 * (value >> 4) / 15)
-                        semitones = value & 0x0F
-                        event_table.events[ch].append(Event(tick, EventType.PITCH_BEND, speed, semitones))
-                    elif effect_num == 0xED: # note delay
-                        delay_ticks = value
-                        # TODO: note delay is not an event, it just modifies a note's tick value
-                        # event_table.events[ch].append(Event(tick, EventType.NOTE_DELAY, delay_ticks))
-                
-                # Note (processed last)
-                type = row._kind()
-                if type == FurnaceRow.NoteKind.NOTE:
-                    event_table.events[ch].append(Event(tick, EventType.NOTE, row.Note))
-                elif type == FurnaceRow.NoteKind.OFF:
-                    event_table.events[ch].append(Event(tick, EventType.NOTE_OFF, None))
 
-                tick += ticksPerRow
+            mml_data.durations[ch]  = self.convert_durations(flat_rows, ticksPerRow)
+            mml_data.commands[ch]   = self.convert_commands(flat_rows, ticksPerRow)
 
-        return event_table
+        return mml_data
 
     def convert_tempo(self, module: FurnaceModule) -> int:
         # Global tempo and volume
@@ -232,18 +274,9 @@ class FurnaceConverter:
         amk_data.samples      = self.convert_samples(module)
         amk_data.instruments  = self.convert_instruments(module)
         amk_data.label_start  = self.convert_remote_commands(module, amk_data)
-        amk_data.intro_order  = self.convert_loop_marker(module)
         amk_data.tempo        = self.convert_tempo(module)
         amk_data.volume       = self.convert_volume(module)
         amk_data.echo_data    = self.convert_echo(module)
-        amk_data.event_table  = self.convert_events(module)
-        
-        amk_data.num_channels = module.NumChannels
-        # for formatting and duration calculations
-        # lengths are in units of furnace rows
-        amk_data.beat_length            = module.HighlightA
-        amk_data.measure_length         = module.HighlightB
-        amk_data.pattern_length         = module.PatternLength
-        amk_data.ticks_per_subdivision  = module.Speed1
+        amk_data.mml_data     = self.convert_mml_data(module)
 
         return amk_data

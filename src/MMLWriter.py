@@ -4,10 +4,10 @@ import os
 import sys
 from typing import Any, Dict, List, Optional, Tuple
 from enum import Enum, auto
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from AMKData import AMKData, AMKInstrument, AMKRemoteCommand, AMKRemoteCommandType, AMKRemoteCommandTiming
-from AMKData import Event, EventTable, EventType
+from AMKData import AMKCommand, AMKDuration, MMLDurationType, MMLData, CommandType
 
 from MMLUtil import DurationFormatter, MMLUtil
 
@@ -20,6 +20,12 @@ class MMLState:
     echo: bool                  = False
     remote_gain: Optional[int]  = None
     vol: Optional[int]          = None
+
+# A note or rest with its commands
+@dataclass
+class MMLToken:
+    duration: AMKDuration
+    commands: List[AMKCommand] = field(default_factory=list)
 
 class MMLLine:
     def __init__(self, tokens: List[str]) -> None:
@@ -44,7 +50,7 @@ class MML:
 
         # assume sixteenth notes for now
         base_den = 16
-        self.durForamtter = DurationFormatter(self.amk_data.ticks_per_subdivision, base_den)
+        self.durForamtter = DurationFormatter(self.amk_data.mml_data.ticks_per_subdivision, base_den)
 
         self.add_amk_header()
         self.add_spc_info()
@@ -175,8 +181,8 @@ class MML:
         self.txt += "\n\n"
     
     def channel_has_remote_commands(self, channel: int) -> bool:
-        for event in self.amk_data.event_table.events[channel]:
-            if event.effect == EventType.INS_CHANGE:
+        for event in self.amk_data.event_table.commands[channel]:
+            if event.type == CommandType.INS_CHANGE:
                 for (ins_index, inst) in self.amk_data.instruments:
                     if ins_index == event.value:
                         if inst.remote_commands:
@@ -223,100 +229,130 @@ class MML:
                         break
         return label_count
 
-    def handle_initial_rest(self, events: List[Event]) -> None:
-        first_note_event = None
-        for event in events:
-            if event.type in (EventType.NOTE, EventType.NOTE_OFF):
-                first_note_event = event
-                break
+    def make_tokens(self, durations: List[AMKDuration], commands: List[AMKCommand]) -> List[MMLToken]:
+        tokens: List[MMLToken] = []
+        # sort before iterating
+        durations = sorted(durations, key=lambda dur : dur.tick)
+        commands = sorted(commands, key=lambda cmd : cmd.tick)
         
-        if first_note_event is not None and first_note_event.tick > 0:
-            rest_duration_ticks = first_note_event.tick
-            rest_token = self.durForamtter.format('r', rest_duration_ticks)
-            self.txt += f'{rest_token} '
+        if not durations:
+            print(f"Info: Channel has no notes.", file=sys.stderr)
+            return []
 
-    def handle_note_or_rest(self, event: Event, duration_ticks: int, mml_state: MMLState) -> None:
-        if event.type == EventType.NOTE:
-            note_idx = event.value
-            note_name, note_octave = MMLUtil.note_name_and_octave(note_idx)
+        cmd_idx = 0
+        for dur in durations:
+            token = MMLToken(dur)
+            while cmd_idx < len(commands):
+                cmd_tick = commands[cmd_idx].tick
+                if cmd_tick >= dur.tick and cmd_tick < dur.tick + dur.duration:
+                    token.commands.append(commands[cmd_idx])
+                    cmd_idx += 1
+                else:
+                    break
+            tokens.append(token)
+        return tokens
+
+    def convert_command(self, command: AMKCommand, mml_state: MMLState) -> str:
+        command_txt = ''
+        if command.type == CommandType.INS_CHANGE:
+            # Instrument change - emit immediately, no duration
+            ins_idx = command.value
+            command_txt = f'@{ins_idx + 30} '
+            
+        elif command.type == CommandType.VOLUME:
+            # Volume change - emit immediately, no duration
+            vol = command.value
+            mml_state.vol = vol
+            vol_mml = MMLUtil.find_v(vol)
+            command_txt = f'v{vol_mml} '
+            
+        elif command.type == CommandType.PITCH_BEND:
+            speed = command.value
+            note = command.value2
+            name, octave = MMLUtil.note_name_and_octave(note)
+            bend_note = name
+            if (octave != mml_state.octave):
+                bend_note = f'o{octave}{bend_note}'
+                mml_state.octave = octave
+            # TODO: handling delay correctly here?
+            return f"$DD${MMLUtil.to_hex(0)}${MMLUtil.to_hex(speed)} {bend_note}"
+
+        return command_txt
+
+    def handle_token(self, token: MMLToken, mml_state: MMLState) -> str:
+        token_txt = ''
+        command_idx = 0
+        cur_tick = token.duration.tick
+        
+        # process any pre-note commands (at the same tick as note start)
+        while command_idx < len(token.commands) and token.commands[command_idx].tick == token.duration.tick:
+            token_txt += self.convert_command(token.commands[command_idx], mml_state) + ' '
+            command_idx += 1
+
+        # add note name and octave
+        dur = token.duration
+        if dur.type == MMLDurationType.NOTE:
+            note_name, note_octave = MMLUtil.note_name_and_octave(dur.note)
             
             # Emit octave change if needed
             if mml_state.octave != note_octave:
-                self.txt += f'o{note_octave} '
+                token_txt += f'o{note_octave} '
                 mml_state.octave = note_octave
             
-            # Format note with duration
-            note_token = self.durForamtter.format(note_name, duration_ticks)
-            self.txt += f'{note_token} '
+            token_txt += note_name
+        elif dur.type == MMLDurationType.REST:
+            token_txt += 'r'
+
+        # Add initial duration (before any remaining commands)
+        cont = False
+        if command_idx < len(token.commands):
+            first_cmd_tick = token.commands[command_idx].tick
+            if first_cmd_tick > cur_tick:
+                token_txt += self.durForamtter.format(first_cmd_tick - cur_tick, cont)
+                cur_tick = first_cmd_tick
+                cont = True
+        
+        # Interleave commands with duration
+        while command_idx < len(token.commands):
+            command = token.commands[command_idx]
+            cmd_tick = command.tick
+            token_txt += self.convert_command(command, mml_state)
+            command_idx += 1
             
-        elif event.type == EventType.NOTE_OFF:
-            # Format rest with duration
-            rest_token = self.durForamtter.format('r', duration_ticks)
-            self.txt += f'{rest_token} '
+            # Update cur_tick to this command's tick
+            cur_tick = cmd_tick
+            
+            # Add duration to next command
+            if command_idx < len(token.commands):
+                next_cmd_tick = token.commands[command_idx].tick
+                if next_cmd_tick > cur_tick:
+                    token_txt += self.durForamtter.format(next_cmd_tick - cur_tick, cont) + ' '
+                    cur_tick = next_cmd_tick
+                    cont = True
+
+        # Add remaining duration to end of note
+        end_tick = token.duration.tick + token.duration.duration
+        if cur_tick < end_tick:
+            token_txt += self.durForamtter.format(end_tick - cur_tick, cont) + ' '
+
+        return token_txt
 
     # Conversion
-    def convert(self) -> None:
+    def convert(self) -> None:        
         # track global loop labels
         label_count = self.amk_data.label_start
+        mml_data = self.amk_data.mml_data
         
-        for c in range(self.amk_data.num_channels):
+        for c in range(mml_data.num_channels):
+            token_txt = ''
             mml_state = self.states[c]
             self.txt += f'#%d\n' % c
 
-            if not self.amk_data.event_table.events[c]:
-                print(f"Info: Channel {c} has no events.", file=sys.stderr)
-                continue
+            tokens = self.make_tokens(mml_data.durations[c], mml_data.commands[c])
+            for token in tokens:
+                token_txt += self.handle_token(token, mml_state)
 
-            events = self.amk_data.event_table.events[c]
-            
-            self.handle_initial_rest(events)
-            
-            # TODO: filter events into two structures: one for notes/rests and one for instrument changes, volume changes, etc.
-            # make clear distinciton between rest/note durations and other events. Can this distintion be clearly made?
-            for i, event in enumerate(events):
-                # print(f"Event: {event.type}, tick={event.tick}", file=sys.stderr)
-
-                if (event.type == EventType.NOTE or event.type == EventType.NOTE_OFF):
-                    # Find the next note/rest event for duration calculation
-                    next_note_event = None
-                    for j in range(i + 1, len(events)):
-                        if events[j].type in (EventType.NOTE, EventType.NOTE_OFF):
-                            next_note_event = events[j]
-                            break
-                    
-                    # Calculate duration to next note/rest event
-                    if next_note_event is not None:
-                        duration_ticks = next_note_event.tick - event.tick
-                    else:
-                        # Last note/rest event - use one subdivision as default duration
-                        # TODO: this should be to end of song
-                        duration_ticks = self.amk_data.ticks_per_subdivision
-                    
-                    # Ensure duration is at least 1
-                    duration_ticks = max(1, duration_ticks)
-
-                    self.handle_note_or_rest(event, duration_ticks, mml_state)
-
-                elif event.type == EventType.INS_CHANGE:
-                    # Instrument change - emit immediately, no duration
-                    ins_idx = event.value
-                    self.txt += f'@{ins_idx + 30} '
-                    
-                elif event.type == EventType.VOLUME:
-                    # Volume change - emit immediately, no duration
-                    vol = event.value
-                    mml_state.vol = vol
-                    vol_mml = MMLUtil.find_v(vol)
-                    self.txt += f'v{vol_mml} '
-                    
-                elif event.type == EventType.PITCH_BEND:
-                    # Pitch bend is handled specially - it modifies the previous note
-                    # For now, we'll skip it as the conversion method is commented out
-                    # TODO: Implement pitch bend handling
-                    pass
-            
-            # Add newline at the end of each channel's data
-            self.txt += '\n\n'
+            self.txt += token_txt + '\n\n'
 
         return
 

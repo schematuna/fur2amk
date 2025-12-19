@@ -127,7 +127,7 @@ class FurnaceRow:
         EMPTY = 4
 
     # Classify a Furnace row by note type
-    def _kind(self) -> str:
+    def kind(self) -> NoteKind:
         n = self.Note
         if n is None:
             return self.NoteKind.EMPTY

@@ -13,9 +13,7 @@ class AMKRemoteCommandTiming(Enum):
     RUN_NOW = auto()
     KEY_ON = auto()
 
-class EventType(Enum):
-    NOTE = auto()
-    NOTE_OFF = auto()
+class CommandType(Enum):
     INS_CHANGE = auto()
     VOLUME = auto()
     PITCH_BEND = auto()
@@ -59,17 +57,37 @@ class AMKEchoData:
     echoVolR: Optional[int] = None
     echoFilterCoeffs: Optional[List[int]] = None
 
+class MMLDurationType(Enum):
+    NOTE = auto()
+    REST = auto()
+
 @dataclass
-class Event:
+class AMKDuration:
+    type: MMLDurationType
     tick: int
-    type: EventType
+    duration: int = None
+    note: Optional[int] = None
+
+@dataclass
+class AMKCommand:
+    tick: int
+    type: CommandType
     value: Any
     value2: Any = None
 
 @dataclass
-class EventTable:
-    events: List[List['Event']] = field(default_factory=lambda: [[] for _ in range(8)])
+class MMLData:
+    num_channels: int = 8
+    # list of notes for each channel. Rests are handled automatically by the MMLWriter.
+    durations: List[List['AMKDuration']] = field(default_factory=lambda: [[] for _ in range(8)])
+    commands: List[List['AMKCommand']] = field(default_factory=lambda: [[] for _ in range(8)])
     intro_order: Optional[int] = None
+
+    # song data for formatting
+    beat_length: int = 4
+    measure_length: int = 16
+    pattern_length: int = 64
+    ticks_per_subdivision: int = 0
 
 @dataclass
 class SPCInfo:
@@ -97,16 +115,6 @@ class AMKData:
 
     remote_commands: List[AMKRemoteCommand] = field(default_factory=list)
 
-    num_channels: int = 8
-    # Events for MML emission
-    event_table: EventTable = field(default_factory=EventTable)
-    # which order to place the intro marker before
-    intro_order: int = None
-
-    # song data for formatting
-    beat_length: int = 4
-    measure_length: int = 16
-    pattern_length: int = 64
-    ticks_per_subdivision: int = 0
+    mml_data: MMLData = field(default_factory=MMLData)
 
     label_start: int = 1
