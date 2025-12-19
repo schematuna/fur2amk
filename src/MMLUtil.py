@@ -45,18 +45,17 @@ class DurationFormatter:
         self.ticks_per_subdivision = ticks_per_subdivision
         self.base_den = base_den
 
-    def format(self, base_token: str, duration_ticks: int) -> str:
+    def format(self, duration_ticks: int, continuation: bool = False) -> str:
         """Format a note or rest token with duration and ties.
         
         Args:
-            base_token: Base token (e.g., 'c', 'r', 'c+')
             duration_ticks: Duration in ticks
         
         Returns:
             Formatted token with duration (e.g., 'c16', 'r8^16', 'c1^2^4')
         """
         if duration_ticks <= 0:
-            return base_token
+            return ''
         
         # Convert ticks to number of base_den subdivisions
         # Each subdivision = ticks_per_subdivision ticks
@@ -66,10 +65,13 @@ class DurationFormatter:
         denoms = self.run_to_denoms(int(round(num_subdivisions)), self.base_den)
         
         if len(denoms) == 0:
-            return base_token
+            return ''
         
-        # First duration is attached directly to the note/rest
-        token = f'{base_token}{denoms[0]}'
+        token = ''
+        if continuation:
+            token += '^'
+        
+        token += str(denoms[0])
         
         # Additional durations use tie syntax
         for d in denoms[1:]:
