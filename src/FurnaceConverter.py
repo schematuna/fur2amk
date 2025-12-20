@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 
 from FurnaceData import FurnaceModule, FurnaceRow
 from AMKData import AMKData, SPCInfo, AMKInstrument, AMKEnvelope, AMKRemoteCommand, AMKRemoteCommandType, AMKRemoteCommandTiming, AMKEchoData
-from AMKData import AMKDuration, MMLDurationType, AMKCommand, MMLData, CommandType
+from AMKData import AMKNote, AMKCommand, MMLData, CommandType
 
 # persitent channel state, useful for avoiding repeat emission
 @dataclass
@@ -118,29 +118,27 @@ class FurnaceConverter:
 
         return intro_order
 
-    def convert_durations(self, flat_rows: List[FurnaceRow], ticksPerRow: int) -> List[AMKDuration]:
-        notes: List[AMKDuration] = []
+    def convert_notes(self, flat_rows: List[FurnaceRow], ticksPerRow: int) -> List[AMKNote]:
+        notes: List[AMKNote] = []
         tick = 0
-        # process notes/rests
-        cur_dur: Optional[AMKDuration] = None
+        # process notes
+        cur_dur: Optional[AMKNote] = None
         for i, row in enumerate(flat_rows):
             note_kind = row.kind()
             if note_kind == FurnaceRow.NoteKind.NOTE:
                 if cur_dur is not None:
                     cur_dur.duration = tick - cur_dur.tick
                     notes.append(cur_dur)
-                cur_dur = AMKDuration(MMLDurationType.NOTE, tick, duration=0, note=row.Note)
+                cur_dur = AMKNote(tick=tick, duration=0, note=row.Note)
             elif note_kind == FurnaceRow.NoteKind.OFF or note_kind == FurnaceRow.NoteKind.RELEASE:
                 if cur_dur is not None:
                     cur_dur.duration = tick - cur_dur.tick
                     notes.append(cur_dur)
-                cur_dur = AMKDuration(MMLDurationType.REST, tick)
-            elif i == 0: # register possible initial rest
-                cur_dur = AMKDuration(MMLDurationType.REST, tick)
+                cur_dur = None
             
             tick += ticksPerRow
         
-        # Finalize final note or rest
+        # Finalize possible final note
         if cur_dur is not None:
             cur_dur.duration = tick - cur_dur.tick
             notes.append(cur_dur)
@@ -206,6 +204,7 @@ class FurnaceConverter:
     def convert_mml_data(self, module: FurnaceModule) -> MMLData:
         mml_data = MMLData()
         mml_data.num_channels = module.NumChannels
+        mml_data.song_length = len(module.OrdersPerChannel[0]) * module.PatternLength * module.Speed1
         # for formatting and duration calculations
         # lengths are in units of furnace rows
         mml_data.beat_length            = module.HighlightA
@@ -227,7 +226,7 @@ class FurnaceConverter:
 
             ticksPerRow = module.Speed1
 
-            mml_data.durations[ch]  = self.convert_durations(flat_rows, ticksPerRow)
+            mml_data.notes[ch]      = self.convert_notes(flat_rows, ticksPerRow)
             mml_data.commands[ch]   = self.convert_commands(flat_rows, ticksPerRow)
 
         return mml_data
