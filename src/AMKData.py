@@ -57,16 +57,11 @@ class AMKEchoData:
     echoVolR: Optional[int] = None
     echoFilterCoeffs: Optional[List[int]] = None
 
-class MMLDurationType(Enum):
-    NOTE = auto()
-    REST = auto()
-
 @dataclass
-class AMKDuration:
-    type: MMLDurationType
+class AMKNote:
     tick: int
     duration: int = None
-    note: Optional[int] = None
+    note: int = None
 
 @dataclass
 class AMKCommand:
@@ -78,8 +73,11 @@ class AMKCommand:
 @dataclass
 class MMLData:
     num_channels: int = 8
+    # number of ticks in the song
+    song_length: int = 0
+
     # list of notes for each channel. Rests are handled automatically by the MMLWriter.
-    durations: List[List['AMKDuration']] = field(default_factory=lambda: [[] for _ in range(8)])
+    notes: List[List['AMKNote']] = field(default_factory=lambda: [[] for _ in range(8)])
     commands: List[List['AMKCommand']] = field(default_factory=lambda: [[] for _ in range(8)])
     intro_order: Optional[int] = None
 

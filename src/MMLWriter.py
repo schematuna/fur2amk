@@ -7,7 +7,7 @@ from enum import Enum, auto
 from dataclasses import dataclass, field
 
 from AMKData import AMKData, AMKInstrument, AMKRemoteCommand, AMKRemoteCommandType, AMKRemoteCommandTiming
-from AMKData import AMKCommand, AMKDuration, MMLDurationType, MMLData, CommandType
+from AMKData import AMKCommand, AMKNote, MMLData, CommandType
 
 from MMLUtil import DurationFormatter, MMLUtil
 
@@ -23,9 +23,17 @@ class MMLState:
 
 # A note or rest with its commands
 @dataclass
-class MMLToken:
-    duration: AMKDuration
+class MMLWord:
+    tick: int
+    duration: int
+    note: Optional[int] = None
     commands: List[AMKCommand] = field(default_factory=list)
+
+# internal rest class used during conversion
+@dataclass
+class MMLRest:
+    tick: int
+    duration: int
 
 class MMLLine:
     def __init__(self, tokens: List[str]) -> None:
@@ -188,18 +196,6 @@ class MML:
                         if inst.remote_commands:
                             return True
         return False
-    
-    # Pitchbend is handled specially since it is placed after the note
-    # def _convert_pitchbend(self, event: int, note_idx: int, current_octave: int) -> str:
-    #     amk_delay = MMLUtil.to_hex(delay * 8) # $08 = 1 eighth note
-    #     speed = event.value
-    #     note = note_idx + event.value2  # semitones
-    #     name, octave = self._note_name_and_octave(note)  # validate
-    #     bend_note = name
-    #     if (octave != current_octave):
-    #         bend_note = f'o{octave}{bend_note}'
-    #         self.current_octave = octave
-    #     return f"$DD${amk_delay}${MMLUtil.to_hex(speed)} {bend_note}"
 
     def optimize_loops(self, channel_lines: Dict[int, MMLLine], label_count: int) -> int:
         # Identify and label loops in the channel lines
@@ -229,28 +225,48 @@ class MML:
                         break
         return label_count
 
-    def make_tokens(self, durations: List[AMKDuration], commands: List[AMKCommand]) -> List[MMLToken]:
-        tokens: List[MMLToken] = []
+    # get rests between notes
+    def get_rests(self, notes: List[AMKNote]) -> List[MMLRest]:
+        rests: List[MMLRest] = []
+        if notes[0].tick > 0:
+            rests.append(MMLRest(0, notes[0].tick))
+        for i, note in enumerate(notes):
+            if i + 1 < len(notes) and notes[i+1].tick > note.tick + note.duration:
+                rest_duration = notes[i+1].tick - (note.tick + note.duration)
+                rests.append(MMLRest(note.tick + note.duration, rest_duration))
+        # add final rest if there is one
+        if notes[-1].tick + notes[-1].duration < self.amk_data.mml_data.song_length:
+            rest_duration = self.amk_data.mml_data.song_length - (notes[-1].tick + notes[-1].duration)
+            rests.append(MMLRest(notes[-1].tick + notes[-1].duration, rest_duration))
+        return rests
+
+    def make_words(self, notes: List[AMKNote], commands: List[AMKCommand]) -> List[MMLWord]:
+        words: List[MMLWord] = []
         # sort before iterating
-        durations = sorted(durations, key=lambda dur : dur.tick)
+        notes = sorted(notes, key=lambda note : note.tick)
         commands = sorted(commands, key=lambda cmd : cmd.tick)
         
-        if not durations:
+        if not notes:
             print(f"Info: Channel has no notes.", file=sys.stderr)
             return []
 
         cmd_idx = 0
-        for dur in durations:
-            token = MMLToken(dur)
+        rests = self.get_rests(notes)
+        durations = sorted(notes + rests, key=lambda dur : dur.tick)
+        for duration in durations:
+            if isinstance(duration, MMLRest):
+                word = MMLWord(duration.tick, duration.duration, None)
+            else:
+                word = MMLWord(duration.tick, duration.duration, duration.note)
             while cmd_idx < len(commands):
                 cmd_tick = commands[cmd_idx].tick
-                if cmd_tick >= dur.tick and cmd_tick < dur.tick + dur.duration:
-                    token.commands.append(commands[cmd_idx])
+                if cmd_tick >= duration.tick and cmd_tick < duration.tick + duration.duration:
+                    word.commands.append(commands[cmd_idx])
                     cmd_idx += 1
                 else:
                     break
-            tokens.append(token)
-        return tokens
+            words.append(word)
+        return words
 
     def convert_command(self, command: AMKCommand, mml_state: MMLState) -> str:
         command_txt = ''
@@ -275,67 +291,67 @@ class MML:
                 bend_note = f'o{octave}{bend_note}'
                 mml_state.octave = octave
             # TODO: handling delay correctly here?
+            # amk_delay = MMLUtil.to_hex(delay * 8) # $08 = 1 eighth note
             return f"$DD${MMLUtil.to_hex(0)}${MMLUtil.to_hex(speed)} {bend_note}"
 
         return command_txt
 
-    def handle_token(self, token: MMLToken, mml_state: MMLState) -> str:
-        token_txt = ''
+    def convert_word(self, word: MMLWord, mml_state: MMLState) -> str:
+        word_txt = ''
         command_idx = 0
-        cur_tick = token.duration.tick
+        cur_tick = word.tick
         
         # process any pre-note commands (at the same tick as note start)
-        while command_idx < len(token.commands) and token.commands[command_idx].tick == token.duration.tick:
-            token_txt += self.convert_command(token.commands[command_idx], mml_state) + ' '
+        while command_idx < len(word.commands) and word.commands[command_idx].tick == word.tick:
+            word_txt += self.convert_command(word.commands[command_idx], mml_state)
             command_idx += 1
 
         # add note name and octave
-        dur = token.duration
-        if dur.type == MMLDurationType.NOTE:
-            note_name, note_octave = MMLUtil.note_name_and_octave(dur.note)
+        if word.note is not None:
+            note_name, note_octave = MMLUtil.note_name_and_octave(word.note)
             
             # Emit octave change if needed
             if mml_state.octave != note_octave:
-                token_txt += f'o{note_octave} '
+                word_txt += f'o{note_octave} '
                 mml_state.octave = note_octave
             
-            token_txt += note_name
-        elif dur.type == MMLDurationType.REST:
-            token_txt += 'r'
+            word_txt += note_name
+        else:
+            word_txt += 'r'
 
         # Add initial duration (before any remaining commands)
         cont = False
-        if command_idx < len(token.commands):
-            first_cmd_tick = token.commands[command_idx].tick
+        if command_idx < len(word.commands):
+            first_cmd_tick = word.commands[command_idx].tick
             if first_cmd_tick > cur_tick:
-                token_txt += self.durForamtter.format(first_cmd_tick - cur_tick, cont)
+                word_txt += self.durForamtter.format(first_cmd_tick - cur_tick, cont) + ' '
                 cur_tick = first_cmd_tick
                 cont = True
         
         # Interleave commands with duration
-        while command_idx < len(token.commands):
-            command = token.commands[command_idx]
+        while command_idx < len(word.commands):
+            command = word.commands[command_idx]
             cmd_tick = command.tick
-            token_txt += self.convert_command(command, mml_state)
+            word_txt += self.convert_command(command, mml_state)
             command_idx += 1
             
             # Update cur_tick to this command's tick
             cur_tick = cmd_tick
             
             # Add duration to next command
-            if command_idx < len(token.commands):
-                next_cmd_tick = token.commands[command_idx].tick
+            if command_idx < len(word.commands):
+                next_cmd_tick = word.commands[command_idx].tick
                 if next_cmd_tick > cur_tick:
-                    token_txt += self.durForamtter.format(next_cmd_tick - cur_tick, cont) + ' '
+                    word_txt += self.durForamtter.format(next_cmd_tick - cur_tick, cont) + ' '
                     cur_tick = next_cmd_tick
                     cont = True
 
         # Add remaining duration to end of note
-        end_tick = token.duration.tick + token.duration.duration
+        end_tick = word.tick + word.duration
         if cur_tick < end_tick:
-            token_txt += self.durForamtter.format(end_tick - cur_tick, cont) + ' '
+            word_txt += self.durForamtter.format(end_tick - cur_tick, cont) + ' '
 
-        return token_txt
+        return word_txt
 
     # Conversion
     def convert(self) -> None:        
@@ -344,15 +360,16 @@ class MML:
         mml_data = self.amk_data.mml_data
         
         for c in range(mml_data.num_channels):
-            token_txt = ''
+            word_txt = ''
             mml_state = self.states[c]
             self.txt += f'#%d\n' % c
 
-            tokens = self.make_tokens(mml_data.durations[c], mml_data.commands[c])
-            for token in tokens:
-                token_txt += self.handle_token(token, mml_state)
+            # A "word" is a note or rest with its commands
+            words = self.make_words(mml_data.notes[c], mml_data.commands[c])
+            for word in words:
+                word_txt += self.convert_word(word, mml_state)
 
-            self.txt += token_txt + '\n\n'
+            self.txt += word_txt + '\n\n'
 
         return
 
