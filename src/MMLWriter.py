@@ -1,25 +1,19 @@
-from __future__ import annotations
+from typing import Dict, List, Optional
+from dataclasses import dataclass
 
-import os
-import sys
-from typing import Any, Dict, List, Optional, Tuple
-from enum import Enum, auto
-from dataclasses import dataclass, field
+from .model.MMLData import *
+from .model.MMLCommands import *
 
-from AMKData import AMKData, AMKInstrument, AMKRemoteCommand, AMKRemoteCommandType, AMKRemoteCommandTiming
-from AMKData import AMKCommand, AMKNote, MMLData, CommandType
+from .MMLUtil import *
 
-from MMLUtil import DurationFormatter, MMLUtil
-
-# --------------------------------------------------------------------------------------
-# MML writer
+################################
+# INTERNAL MML WRITER CLASSES  #
+################################
 
 @dataclass
-class MMLState:
-    octave: Optional[int]       = None
-    echo: bool                  = False
-    remote_gain: Optional[int]  = None
-    vol: Optional[int]          = None
+class MMLRest:
+    tick: int
+    duration: int
 
 # A note or rest with its commands
 @dataclass
@@ -27,14 +21,9 @@ class MMLWord:
     tick: int
     duration: int
     note: Optional[int] = None
-    commands: List[AMKCommand] = field(default_factory=list)
+    commands: List[MMLCommand] = field(default_factory=list)
 
-# internal rest class used during conversion
 @dataclass
-class MMLRest:
-    tick: int
-    duration: int
-
 class MMLLine:
     def __init__(self, tokens: List[str]) -> None:
         self.tokens = tokens
@@ -50,151 +39,19 @@ class MMLLine:
         
         return ' '.join(self.tokens)
 
-class MML:
-    def __init__(self, amk_data: AMKData, module_path: str) -> None:
-        self.txt: str = ''
-        self.amk_data = amk_data
-        self.states = [MMLState() for _ in range(8)]
+class MMLWriter:
+    def __init__(self, mml_data: MMLData, label_count: int) -> None:
+        self.mml_data = mml_data
+        self.label_count = label_count
 
         # assume sixteenth notes for now
         base_den = 16
-        self.durForamtter = DurationFormatter(self.amk_data.mml_data.ticks_per_subdivision, base_den)
+        self.durForamtter = DurationFormatter(self.mml_data.ticks_per_subdivision, base_den)
 
-        self.add_amk_header()
-        self.add_spc_info()
-        self.add_sample_info(module_path)
-        self.add_ins_info()
-        self.add_volume_tempo_info()
-        self.add_echo_info()
-        self.add_remote_commands()
-        self.convert()
-
-    # Sections
-    def add_amk_header(self) -> None:
-        self.txt += f'#amk {self.amk_data.version}\n\n'
-
-    def add_spc_info(self) -> None:
-        # Emit AddmusicK readme-style #spc block with #title/#game/#author/#length
-        lines = ['#spc', '{']
-        info_align_width = 8
-        info = self.amk_data.spc_info
-        if info.title:
-            lines.append(f'    {'#title':<{info_align_width}} "{info.title}"')
-        if info.game:
-            lines.append(f'    {'#game':<{info_align_width}} "{info.game}"')
-        if info.author:
-            lines.append(f'    {'#author':<{info_align_width}} "{info.author}"')
-        if info.length:
-            lines.append(f'    {'#length':<{info_align_width}} "{info.length}"')
-        # Optional comment: use first line of Message if present
-        msg = (info.comment or '').strip()
-        if msg:
-            first_line = msg.splitlines()[0]
-            lines.append(f'    {'#comment':<{info_align_width}} "{first_line}"')
-        lines.append('}')
-        self.txt += '\n'.join(lines) + '\n\n'
-
-    def add_sample_info(self, module_path: str) -> None:
-        path_name = os.path.splitext(os.path.basename(module_path.replace('\\', '/')))[0]
-        sample_lines = [f'#path "{path_name}"', '', '#samples', '{', '    #optimized']
-        for _, (samp_name, _) in self.amk_data.samples.items():
-            brr_rel = f'{samp_name}'
-            sample_lines.append(f'    "{brr_rel}"')
-        sample_lines.append('}')
-        self.txt += '\n'.join(sample_lines) + '\n\n'
-
-    def add_ins_info(self) -> None:
-        if not self.amk_data.instruments:
-            return
-        lines = ['#instruments', '{']
-        # Assign AMK instrument numbers starting at 30 in the order we emit
-        # Map of (instrument_index, sample_index) -> AMK instrument number
-        self.insnum_map: Dict[Tuple[int, Optional[int]], int] = {}
-        next_num = 30
-        name_col = max(len(name) for name, _ in self.amk_data.samples.values())
-        # get max sample name length for alignment
-        name_field_width = name_col + 2  # account for quotes
-        # if using sample maps, each sample for an instrument gets its own AMK instrument
-        for idx, amk_ins in enumerate(self.amk_data.instruments):
-            if amk_ins.is_noise:
-                # Noise instrument
-                samp_name = f'n{(amk_ins.noise_freq):02X}'
-                print(f"Info: Emitting noise instrument {samp_name} for instrument {MMLUtil.to_hex(idx)}.", file=sys.stderr)
-            else:
-                # Resolve sample filename and tuning
-                samp_entry = self.amk_data.samples[amk_ins.sample_index]
-                if not samp_entry:
-                    # Fallback to first sample
-                    samp_entry = next(iter(self.amk_data.samples.values()), ("Sample1.brr", "$01 $00"))
-                samp_name, samp_tuning = samp_entry
-                samp_name = f'"{samp_name}"'
-            # ADSR/GAIN
-            # Default: no envelope -> $00 $00
-            da = 0x00
-            sr = 0x00
-            # Default to no GAIN
-            ga = 0x00
-            if amk_ins.uses_envelope:
-                # ADSR on: build ADSR values
-                d = int(amk_ins.envelope.decay or 0)
-                a = int(amk_ins.envelope.attack or 0)
-                ssv = int(amk_ins.envelope.sustain or 0)
-                rv = int(amk_ins.envelope.release or 0)
-                da = ((d & 0x7) | 0x8) << 4 | (a & 0xF)
-                sr = ((ssv & 0x7) << 5) | (rv & 0x1F)
-            else:
-                if amk_ins.gain_values:
-                    # set primary GAIN to first gain value, other will be handled by remote commands
-                    ga = amk_ins.gain_values[0]
-                elif amk_ins.gain is not None:
-                    ga = amk_ins.gain
-                else:
-                    print(f"Info: Instrument {idx} uses gain mode but has no SNES gain set; defaulting to 0.", file=sys.stderr)
-                    ga = 0x00
-            lines.append(f'    {samp_name:<{name_field_width}} ${da:02X} ${sr:02X} ${ga:02X} {samp_tuning} ;@{next_num}')
-            next_num += 1
-        lines.append('}')
-        self.txt += '\n'.join(lines) + '\n\n'
-
-    def add_volume_tempo_info(self) -> None:
-        self.txt += f'w{self.amk_data.volume} t{self.amk_data.tempo}\n\n'
-
-    def add_echo_info(self) -> None:
-        echo_data = self.amk_data.echo_data
-        if echo_data:
-            self.txt += f'$EF ${MMLUtil.to_hex(echo_data.echoMask)} ${MMLUtil.to_hex(echo_data.echoVolL)} ${MMLUtil.to_hex(echo_data.echoVolR)}\n'
-            self.txt += f'$F1 ${MMLUtil.to_hex(echo_data.echoDelay)} ${MMLUtil.to_hex(echo_data.echoFeedback)} ${MMLUtil.to_hex(echo_data.firIdx)}\n'
-
-        if echo_data.echoFilterCoeffs:
-            coeffs_hex = ' '.join(f'${MMLUtil.to_hex(c)}' for c in echo_data.echoFilterCoeffs)
-            self.txt += f'$F5 {coeffs_hex}\n\n'
-
-    def add_remote_commands(self) -> None:
-        def make_remote_command(num, command):
-            return f"(!{num})[{command}]"
-
-        for command in self.amk_data.remote_commands:
-            if command.amk_command_type == AMKRemoteCommandType.GAIN:
-                if len(command.amk_command_args) > 0:
-                    amk_command = f"$FA$01${MMLUtil.to_hex(command.amk_command_args[0])}"
-                else:
-                    print(f"No gain value present for remote command. Not creating remote command for instrument")
-                    continue
-            else:
-                print(f"Unrecognized AMK command type {command.amk_command_type}")
-                continue
-
-            self.txt += make_remote_command(command.command_idx, amk_command) + f" ;for furnace inst\n"
-
-        self.txt += "\n\n"
-    
     def channel_has_remote_commands(self, channel: int) -> bool:
-        for event in self.amk_data.event_table.commands[channel]:
-            if event.type == CommandType.INS_CHANGE:
-                for (ins_index, inst) in self.amk_data.instruments:
-                    if ins_index == event.value:
-                        if inst.remote_commands:
-                            return True
+        for event in self.mml_data.commands[channel]:
+            if isinstance(event, RemoteCommand):
+                return True
         return False
 
     def optimize_loops(self, channel_lines: Dict[int, MMLLine], label_count: int) -> int:
@@ -226,7 +83,7 @@ class MML:
         return label_count
 
     # get rests between notes
-    def get_rests(self, notes: List[AMKNote]) -> List[MMLRest]:
+    def get_rests(self, notes: List[MMLNote]) -> List[MMLRest]:
         rests: List[MMLRest] = []
         if notes[0].tick > 0:
             rests.append(MMLRest(0, notes[0].tick))
@@ -235,19 +92,19 @@ class MML:
                 rest_duration = notes[i+1].tick - (note.tick + note.duration)
                 rests.append(MMLRest(note.tick + note.duration, rest_duration))
         # add final rest if there is one
-        if notes[-1].tick + notes[-1].duration < self.amk_data.mml_data.song_length:
-            rest_duration = self.amk_data.mml_data.song_length - (notes[-1].tick + notes[-1].duration)
+        if notes[-1].tick + notes[-1].duration < self.mml_data.song_length:
+            rest_duration = self.mml_data.song_length - (notes[-1].tick + notes[-1].duration)
             rests.append(MMLRest(notes[-1].tick + notes[-1].duration, rest_duration))
         return rests
 
-    def make_words(self, notes: List[AMKNote], commands: List[AMKCommand]) -> List[MMLWord]:
+    def make_words(self, notes: List[MMLNote], commands: List[MMLCommand]) -> List[MMLWord]:
         words: List[MMLWord] = []
         # sort before iterating
         notes = sorted(notes, key=lambda note : note.tick)
         commands = sorted(commands, key=lambda cmd : cmd.tick)
         
         if not notes:
-            print(f"Info: Channel has no notes.", file=sys.stderr)
+            print(f"Info: Channel has no notes.")
             return []
 
         cmd_idx = 0
@@ -268,34 +125,6 @@ class MML:
             words.append(word)
         return words
 
-    def convert_command(self, command: AMKCommand, mml_state: MMLState) -> str:
-        command_txt = ''
-        if command.type == CommandType.INS_CHANGE:
-            # Instrument change - emit immediately, no duration
-            ins_idx = command.value
-            command_txt = f'@{ins_idx + 30} '
-            
-        elif command.type == CommandType.VOLUME:
-            # Volume change - emit immediately, no duration
-            vol = command.value
-            mml_state.vol = vol
-            vol_mml = MMLUtil.find_v(vol)
-            command_txt = f'v{vol_mml} '
-            
-        elif command.type == CommandType.PITCH_BEND:
-            speed = command.value
-            note = command.value2
-            name, octave = MMLUtil.note_name_and_octave(note)
-            bend_note = name
-            if (octave != mml_state.octave):
-                bend_note = f'o{octave}{bend_note}'
-                mml_state.octave = octave
-            # TODO: handling delay correctly here?
-            # amk_delay = MMLUtil.to_hex(delay * 8) # $08 = 1 eighth note
-            return f"$DD${MMLUtil.to_hex(0)}${MMLUtil.to_hex(speed)} {bend_note}"
-
-        return command_txt
-
     def convert_word(self, word: MMLWord, mml_state: MMLState) -> str:
         word_txt = ''
         command_idx = 0
@@ -303,7 +132,7 @@ class MML:
         
         # process any pre-note commands (at the same tick as note start)
         while command_idx < len(word.commands) and word.commands[command_idx].tick == word.tick:
-            word_txt += self.convert_command(word.commands[command_idx], mml_state)
+            word_txt += word.commands[command_idx].to_mml(mml_state) + ' '
             command_idx += 1
 
         # add note name and octave
@@ -332,7 +161,7 @@ class MML:
         while command_idx < len(word.commands):
             command = word.commands[command_idx]
             cmd_tick = command.tick
-            word_txt += self.convert_command(command, mml_state)
+            word_txt += command.to_mml(mml_state) + ' '
             command_idx += 1
             
             # Update cur_tick to this command's tick
@@ -353,30 +182,18 @@ class MML:
 
         return word_txt
 
-    # Conversion
-    def convert(self) -> None:        
-        # track global loop labels
-        label_count = self.amk_data.label_start
-        mml_data = self.amk_data.mml_data
-        
-        for c in range(mml_data.num_channels):
+    def write(self) -> None:
+        txt = ''
+        for c in range(self.mml_data.num_channels):
             word_txt = ''
-            mml_state = self.states[c]
-            self.txt += f'#%d\n' % c
+            mml_state = MMLState()
+            txt += f'#{c}\n'
 
             # A "word" is a note or rest with its commands
-            words = self.make_words(mml_data.notes[c], mml_data.commands[c])
+            words = self.make_words(self.mml_data.notes[c], self.mml_data.commands[c])
             for word in words:
                 word_txt += self.convert_word(word, mml_state)
 
-            self.txt += word_txt + '\n\n'
+            txt += word_txt + '\n\n'
 
-        return
-
-    # Output
-    def save(self, filename: str) -> None:
-        out_dir = os.path.dirname(filename)
-        if out_dir and not os.path.exists(out_dir):
-            os.makedirs(out_dir, exist_ok=True)
-        with open(filename, 'w', encoding='utf-8') as f:
-            f.write(self.txt)
+        return txt

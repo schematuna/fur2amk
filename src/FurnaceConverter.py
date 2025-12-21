@@ -7,19 +7,23 @@ import sys
 from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 
-from FurnaceData import FurnaceModule, FurnaceRow
-from AMKData import AMKData, SPCInfo, AMKInstrument, AMKEnvelope, AMKRemoteCommand, AMKRemoteCommandType, AMKRemoteCommandTiming, AMKEchoData
-from AMKData import AMKNote, AMKCommand, MMLData, CommandType
+from .model.FurnaceData import FurnaceModule, FurnaceRow
+from .model.AMKData import *
+from .model.MMLCommands import *
 
-# persitent channel state, useful for avoiding repeat emission
+# persistent channel state, useful for avoiding repeat emission
 @dataclass
 class FurnaceState:
-    inst: Optional[int]     = None
-    volume: Optional[int]   = None
-    pan: Optional[int]      = None
-    effects: Dict[int, int] = field(default_factory=dict)
+    gain: bool = False
 
 class FurnaceConverter:
+    def __init__(self) -> None:
+        # keeps track of how an AMK instrument maps to a Furnace instrument
+        self.ins_map: Dict[int, int] = {}
+        # Keeps track of instruments that have an associated remote command
+        # amk_ins_index -> (remote_command_idx, gain_speed_ticks)
+        self.ins_remote_map: Dict[int, Tuple[int, int]] = {}
+
     def convert_spc_info(self, module: FurnaceModule) -> SPCInfo:
         info = SPCInfo()
         info.title = module.SongName
@@ -48,6 +52,7 @@ class FurnaceConverter:
     def convert_instruments(self, module: FurnaceModule) -> List[AMKInstrument]:
         instruments: List[AMKInstrument] = []
 
+        amk_ins_index = 0
         for ins in module.Instruments:
             amk_ins = AMKInstrument()
             # first, check if this is a noise instrument
@@ -73,6 +78,11 @@ class FurnaceConverter:
                 amk_ins.gain = ins.sn_gain
 
             instruments.append(amk_ins)
+            # remember how this AMK instrument maps to a Furnace instrument
+            # needed for samples maps where a Furnace instrument can map to multiple AMK instruments
+            self.ins_map[amk_ins_index] = ins.index
+            amk_ins_index += 1
+
 
         return instruments
     
@@ -80,22 +90,17 @@ class FurnaceConverter:
         # start at 1, 0 will be reserved for stop remote commands
         command_num = 1
 
-        # gather remote commands and associate with an instrument
-        # TODO: remote commands should have their own events, not qualities of amk instruments
-        # for fur_ins in module.Instruments:
-        #     gmacro = fur_ins.snes_macro_data.gain_values
-        #     if gmacro and len(gmacro) > 1:
-        #         # just support one gain change for now.
-        #         # I think amk would allow no more than 2 remote commands at once anyways
-        #         for amk_ins in amk_data.instruments:
-        #             if ins_index == fur_ins.index:
-        #                 cmd = AMKRemoteCommand(command_num, 
-        #                                         AMKRemoteCommandTiming.AFTER_START, 
-        #                                         AMKRemoteCommandType.GAIN, 
-        #                                         f"={fur_ins.snes_macro_data.gain_speed}",
-        #                                         [gmacro[1]])
-        #                 amk_ins.remote_commands.append(cmd)
-        #                 command_num += 1
+        for fur_ins in module.Instruments:
+            gmacro = fur_ins.snes_macro_data.gain_values
+            if gmacro and len(gmacro) > 1:
+                # just support one gain change for now.
+                # I think amk would allow no more than 2 remote commands at once anyways
+                for amk_ins_index in range(len(amk_data.instruments)):
+                    if self.ins_map[amk_ins_index] == fur_ins.index:
+                        cmd = AMKRemoteDef(command_num, EnableGainCommand(None, gmacro[1]), "Gain toggle for Furnace instrument " + str(fur_ins.index)+ ": " + fur_ins.name)
+                        amk_data.remote_defs.append(cmd)
+                        self.ins_remote_map[amk_ins_index] = (command_num, fur_ins.snes_macro_data.gain_speed)
+                        command_num += 1
 
         # need to indicate where to pick up with labels
         # loop labels and remote command labels can't overlap
@@ -118,18 +123,18 @@ class FurnaceConverter:
 
         return intro_order
 
-    def convert_notes(self, flat_rows: List[FurnaceRow], ticksPerRow: int) -> List[AMKNote]:
-        notes: List[AMKNote] = []
+    def convert_notes(self, flat_rows: List[FurnaceRow], ticksPerRow: int) -> List[MMLNote]:
+        notes: List[MMLNote] = []
         tick = 0
         # process notes
-        cur_dur: Optional[AMKNote] = None
+        cur_dur: Optional[MMLNote] = None
         for i, row in enumerate(flat_rows):
             note_kind = row.kind()
             if note_kind == FurnaceRow.NoteKind.NOTE:
                 if cur_dur is not None:
                     cur_dur.duration = tick - cur_dur.tick
                     notes.append(cur_dur)
-                cur_dur = AMKNote(tick=tick, duration=0, note=row.Note)
+                cur_dur = MMLNote(tick=tick, duration=0, note=row.Note)
             elif note_kind == FurnaceRow.NoteKind.OFF or note_kind == FurnaceRow.NoteKind.RELEASE:
                 if cur_dur is not None:
                     cur_dur.duration = tick - cur_dur.tick
@@ -154,26 +159,32 @@ class FurnaceConverter:
                 return cur_note
         return None
 
-    def convert_commands(self, flat_rows: List[FurnaceRow], ticksPerRow: int) -> List[AMKCommand]:
+    def convert_commands(self, flat_rows: List[FurnaceRow], ticksPerRow: int) -> List[MMLCommand]:
         # process rows into commands
-        commands: List[AMKCommand] = []
+        commands: List[MMLCommand] = []
         tick = 0
+        disble_commands_label_idx = 99
         state = FurnaceState()
         for i, row in enumerate(flat_rows):
             # Volume
             vol = row.Vol
             if vol is not None:
-                if vol != state.volume:
-                    state.volume = vol
-                    commands.append(AMKCommand(tick, CommandType.VOLUME, vol))
+                commands.append(VolumeChange(tick, vol))
             
             # Instrument
             # TODO: handle sample maps here, AMK doesn't need to know about that
             ins = row.Ins
             if ins is not None:
-                if ins != state.inst:
-                    state.inst = ins
-                    commands.append(AMKCommand(tick, CommandType.INS_CHANGE, ins))
+                if ins in self.ins_remote_map:
+                    # add gain remote command if instrument has a gain macro after first tick
+                    # TODO: 3rd argument should be gain speed for the instrument from Furnace data
+                    commands.append(RemoteCommand(tick, self.ins_remote_map[ins][0], RemoteCommandTiming.AFTER_START, self.ins_remote_map[ins][1]))
+                    state.gain = True
+                elif state.gain == True: # turn off remote commands if gain is disabled
+                    commands.append(RemoteCommand(tick, disble_commands_label_idx, RemoteCommandTiming.DISABLE))
+                    state.gain = False
+
+                commands.append(InstrumentChange(tick, ins))
             
             # Effects
             for effect in (row.Effects or []):
@@ -191,11 +202,11 @@ class FurnaceConverter:
                     else:
                         print(f"Warning: No note found at tick {tick} for note slide up effect {effect}.", file=sys.stderr)
                         continue
-                    commands.append(AMKCommand(tick, CommandType.PITCH_BEND, speed, bent_note))
+                    commands.append(PitchBend(tick, bent_note, speed))
                 elif effect_num == 0xED: # note delay
                     delay_ticks = value
                     # TODO: note delay is not an event, it just modifies a note's tick value
-                    # commands.append(AMKCommand(tick, CommandType.NOTE_DELAY, delay_ticks))
+                    # commands.append(NoteDelay(tick, delay_ticks))
 
             tick += ticksPerRow
 

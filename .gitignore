@@ -19,3 +19,4 @@ music/**
 # Misc
 *.wav
 *.spc
+modules/**

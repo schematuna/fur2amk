@@ -30,15 +30,10 @@ import os
 import sys
 from typing import Any, Dict, List, Tuple
 
-# Add src folder to path for module imports
-src_path = os.path.join(os.path.dirname(__file__), 'src')
-if src_path not in sys.path:
-    sys.path.insert(0, src_path)
-
-from FurnaceParser import FurnaceParser  # pyright: ignore[reportMissingImports]
-from FurnaceConverter import FurnaceConverter  # pyright: ignore[reportMissingImports]
-from MMLWriter import MML  # pyright: ignore[reportMissingImports]
-from BRRHandler import BRRConverter, BRRSample  # pyright: ignore[reportMissingImports]
+from src.FurnaceParser import FurnaceParser
+from src.FurnaceConverter import FurnaceConverter
+from src.AMKWriter import AMKWriter
+from src.BRRHandler import BRRConverter, BRRSample 
 
 
 # TODO: support mid-sample loop points in BRR validation/writing
@@ -168,7 +163,7 @@ def main() -> None:
 
     # make BRRs
     amk_data = converter.convert(module)
-    mml = MML(amk_data, module_path)
+    mml = AMKWriter(amk_data, module_path)
 
     # Attempt to dump samples to BRR files (unless disabled)
     if not bool(Config.flag('nosmpl')):
