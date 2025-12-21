@@ -7,7 +7,7 @@ import sys
 from typing import Any, Dict, List, Optional, Tuple
 from dataclasses import dataclass, field
 
-from .model.FurnaceData import FurnaceModule, FurnaceRow
+from .model.FurnaceData import FurnaceInstrument, FurnaceModule, FurnaceRow
 from .model.AMKData import *
 from .model.MMLCommands import *
 
@@ -21,8 +21,8 @@ class FurnaceConverter:
         # keeps track of how an AMK instrument maps to a Furnace instrument
         self.ins_map: Dict[int, int] = {}
         # Keeps track of instruments that have an associated remote command
-        # amk_ins_index -> (remote_command_idx, gain_speed_ticks)
-        self.ins_remote_map: Dict[int, Tuple[int, int]] = {}
+        # fur_ins_idx -> remote_command_idx
+        self.ins_remote_map: Dict[int, int] = {}
 
     def convert_spc_info(self, module: FurnaceModule) -> SPCInfo:
         info = SPCInfo()
@@ -76,6 +76,8 @@ class FurnaceConverter:
             else:
                 amk_ins.gain_values = ins.snes_macro_data.gain_values
                 amk_ins.gain = ins.sn_gain
+                if amk_ins.gain_values is None or amk_ins.gain is None:
+                    print(f"Warning: Instrument {ins.index} uses gain mode but does not have gain parameters set.")
 
             instruments.append(amk_ins)
             # remember how this AMK instrument maps to a Furnace instrument
@@ -95,12 +97,11 @@ class FurnaceConverter:
             if gmacro and len(gmacro) > 1:
                 # just support one gain change for now.
                 # I think amk would allow no more than 2 remote commands at once anyways
-                for amk_ins_index in range(len(amk_data.instruments)):
-                    if self.ins_map[amk_ins_index] == fur_ins.index:
-                        cmd = AMKRemoteDef(command_num, EnableGainCommand(None, gmacro[1]), "Gain toggle for Furnace instrument " + str(fur_ins.index)+ ": " + fur_ins.name)
-                        amk_data.remote_defs.append(cmd)
-                        self.ins_remote_map[amk_ins_index] = (command_num, fur_ins.snes_macro_data.gain_speed)
-                        command_num += 1
+                comment = "Gain toggle for Furnace instrument " + str(fur_ins.index)+ ": " + fur_ins.name
+                remote_def = AMKRemoteDef(command_num, EnableGainCommand(None, gmacro[1]), comment)
+                amk_data.remote_defs.append(remote_def)
+                self.ins_remote_map[fur_ins.index] = command_num
+                command_num += 1
 
         # need to indicate where to pick up with labels
         # loop labels and remote command labels can't overlap
@@ -123,7 +124,8 @@ class FurnaceConverter:
 
         return intro_order
 
-    def convert_notes(self, flat_rows: List[FurnaceRow], ticksPerRow: int) -> List[MMLNote]:
+    def convert_notes(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLNote]:
+        ticksPerRow = module.Speed1
         notes: List[MMLNote] = []
         tick = 0
         # process notes
@@ -159,11 +161,14 @@ class FurnaceConverter:
                 return cur_note
         return None
 
-    def convert_commands(self, flat_rows: List[FurnaceRow], ticksPerRow: int) -> List[MMLCommand]:
+    def convert_commands(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLCommand]:
+        instruments = module.Instruments
+        ticksPerRow = module.Speed1
+
         # process rows into commands
         commands: List[MMLCommand] = []
         tick = 0
-        disble_commands_label_idx = 99
+        disable_commands_label_idx = 99
         state = FurnaceState()
         for i, row in enumerate(flat_rows):
             # Volume
@@ -172,19 +177,24 @@ class FurnaceConverter:
                 commands.append(VolumeChange(tick, vol))
             
             # Instrument
-            # TODO: handle sample maps here, AMK doesn't need to know about that
-            ins = row.Ins
-            if ins is not None:
-                if ins in self.ins_remote_map:
-                    # add gain remote command if instrument has a gain macro after first tick
-                    # TODO: 3rd argument should be gain speed for the instrument from Furnace data
-                    commands.append(RemoteCommand(tick, self.ins_remote_map[ins][0], RemoteCommandTiming.AFTER_START, self.ins_remote_map[ins][1]))
+            fur_ins = None
+            for ins in instruments:
+                if ins.index == row.Ins:
+                    fur_ins = ins
+                    break
+            if fur_ins is not None:
+                if fur_ins.index in self.ins_remote_map:
+                    gain_speed = fur_ins.snes_macro_data.gain_speed
+                    remote_comand_idx = self.ins_remote_map[fur_ins.index]
+                    commands.append(RemoteCommand(tick, remote_comand_idx, RemoteCommandTiming.AFTER_START, gain_speed))
                     state.gain = True
                 elif state.gain == True: # turn off remote commands if gain is disabled
-                    commands.append(RemoteCommand(tick, disble_commands_label_idx, RemoteCommandTiming.DISABLE))
+                    commands.append(RemoteCommand(tick, disable_commands_label_idx, RemoteCommandTiming.DISABLE))
                     state.gain = False
 
-                commands.append(InstrumentChange(tick, ins))
+                # TODO: handle sample maps here, AMK doesn't need to know about that
+                amk_ins_idx = fur_ins.index
+                commands.append(InstrumentChange(tick, amk_ins_idx))
             
             # Effects
             for effect in (row.Effects or []):
@@ -235,10 +245,8 @@ class FurnaceConverter:
                     print(f"Warning: Channel {ch} references missing pattern {pat}. Inserting empty pattern.", file=sys.stderr)
                     flat_rows.extend([FurnaceRow() for _ in range(module.PatternLength)])
 
-            ticksPerRow = module.Speed1
-
-            mml_data.notes[ch]      = self.convert_notes(flat_rows, ticksPerRow)
-            mml_data.commands[ch]   = self.convert_commands(flat_rows, ticksPerRow)
+            mml_data.notes[ch]      = self.convert_notes(flat_rows, module)
+            mml_data.commands[ch]   = self.convert_commands(flat_rows, module)
 
         return mml_data
 
