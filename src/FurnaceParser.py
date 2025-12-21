@@ -5,7 +5,7 @@ import struct
 import zlib
 from typing import List, Tuple
 
-from FurnaceData import (
+from .model.FurnaceData import (
     FurnaceModule,
     FurnaceSample,
     FurnaceInstrument,

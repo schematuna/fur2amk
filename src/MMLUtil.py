@@ -1,4 +1,5 @@
-from typing import List, Tuple
+from typing import List, Tuple, Optional
+from dataclasses import dataclass
 
 class MMLUtil:
     # Convert -128->127 ranged values to 2's complement hex
@@ -39,6 +40,14 @@ class MMLUtil:
         note = i % 12
         octave = i // 12 - 5  # align with fur2tad convention
         return names[note], octave
+
+
+@dataclass
+class MMLState:
+    octave: Optional[int]       = None
+    echo: bool                  = False
+    remote_gain: Optional[int]  = None
+    vol: Optional[int]          = None
 
 class DurationFormatter:
     def __init__(self, ticks_per_subdivision, base_den) -> None:
