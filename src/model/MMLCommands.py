@@ -1,6 +1,6 @@
-from typing import Any, Optional, TYPE_CHECKING
-from enum import Enum, auto
-from dataclasses import dataclass
+from typing import Optional
+from enum import Enum
+from dataclasses import dataclass, field
 
 from ..MMLUtil import MMLUtil, MMLState
 
@@ -17,10 +17,10 @@ class RemoteCommandTiming(Enum):
 
 @dataclass
 class MMLCommand:
-    tick: int
+    tick: int = field(compare=False)
 
     def to_mml(self, mml_state: 'MMLState' = None) -> str:
-        raise NotImplementedError("Subclasses must implement get_text")
+        raise NotImplementedError("Subclasses must implement to_mml")
 
 @dataclass
 class InstrumentChange(MMLCommand):
