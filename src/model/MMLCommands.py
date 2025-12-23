@@ -23,6 +23,11 @@ class MMLCommand:
         raise NotImplementedError("Subclasses must implement to_mml")
 
 @dataclass
+class EchoToggle(MMLCommand):
+    def to_mml(self, mml_state: 'MMLState' = None) -> str:
+        return f"$F4$03"
+
+@dataclass
 class InstrumentChange(MMLCommand):
     instrument_index: int
 

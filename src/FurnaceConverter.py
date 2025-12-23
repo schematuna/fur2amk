@@ -11,10 +11,12 @@ from .model.FurnaceData import FurnaceInstrument, FurnaceModule, FurnaceRow
 from .model.AMKData import *
 from .model.MMLCommands import *
 
-# persistent channel state, useful for avoiding repeat emission
+# persistent channel state
 @dataclass
 class FurnaceState:
-    gain: bool = False
+    gain_remote: RemoteCommand = None
+    fur_ins_idx: int = None
+    echo: bool = True
 
 class FurnaceConverter:
     def __init__(self) -> None:
@@ -186,14 +188,23 @@ class FurnaceConverter:
                     fur_ins = ins
                     break
             if fur_ins is not None:
+                # instrument echo
+                if fur_ins.snes_macro_data.is_echo != state.echo:
+                    commands.append(EchoToggle(tick))
+                    state.echo = fur_ins.snes_macro_data.is_echo
+
+
+                # Instrument gain
                 if fur_ins.index in self.ins_remote_map:
                     gain_speed = fur_ins.snes_macro_data.gain_speed
                     remote_comand_idx = self.ins_remote_map[fur_ins.index]
-                    commands.append(RemoteCommand(tick, remote_comand_idx, RemoteCommandTiming.AFTER_START, gain_speed))
-                    state.gain = True
-                elif state.gain == True: # turn off remote commands if gain is disabled
+                    gain_remote = RemoteCommand(tick, remote_comand_idx, RemoteCommandTiming.AFTER_START, gain_speed)
+                    if gain_remote is not state.gain_remote:
+                        commands.append(gain_remote)
+                        state.gain_remote = gain_remote
+                elif state.gain_remote is not None: # turn off remote commands when gain is disabled
                     commands.append(RemoteCommand(tick, disable_commands_label_idx, RemoteCommandTiming.DISABLE))
-                    state.gain = False
+                    state.gain_remote = None
 
                 # TODO: handle sample maps here, AMK doesn't need to know about that
                 amk_ins_idx = fur_ins.index
