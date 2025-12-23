@@ -1,7 +1,19 @@
 from typing import List, Tuple, Optional
 from dataclasses import dataclass
 
+
+
 class MMLUtil:
+    AMK_TICKS_PER_BEAT = 48
+    TICK_TO_DURATION = {
+        int(AMK_TICKS_PER_BEAT / 16): 64,
+        int(AMK_TICKS_PER_BEAT / 8): 32,
+        int(AMK_TICKS_PER_BEAT / 4): 16,
+        int(AMK_TICKS_PER_BEAT / 2): 8,
+        int(AMK_TICKS_PER_BEAT): 4,
+        int(AMK_TICKS_PER_BEAT * 2): 2,
+        int(AMK_TICKS_PER_BEAT * 4): 1
+    }
     # Convert -128->127 ranged values to 2's complement hex
     @staticmethod
     def to_hex(val: int) -> str:
@@ -50,9 +62,9 @@ class MMLState:
     vol: Optional[int]          = None
 
 class DurationFormatter:
-    def __init__(self, ticks_per_subdivision, base_den) -> None:
-        self.ticks_per_subdivision = ticks_per_subdivision
-        self.base_den = base_den
+    # a "beat" is a quarter note, and the song is assumed to be in 4/4
+    # This is how AMK works - a whole note is always 4 quarter notes
+    # TODO: support triplets for relevant time signatures and/or beat subdivisions
 
     def format(self, duration_ticks: int, continuation: bool = False) -> str:
         """Format a note or rest token with duration and ties.
@@ -66,25 +78,26 @@ class DurationFormatter:
         if duration_ticks <= 0:
             return ''
         
-        # Convert ticks to number of base_den subdivisions
-        # Each subdivision = ticks_per_subdivision ticks
-        num_subdivisions = duration_ticks / self.ticks_per_subdivision
-        
-        # Use run_to_denoms to convert subdivisions to MML duration denominators
-        denoms = self.run_to_denoms(int(round(num_subdivisions)), self.base_den)
-        
-        if len(denoms) == 0:
-            return ''
+        # Use run_to_denoms to convert ticks to MML duration denominators
+        denoms, remainder = self.run_to_denoms(duration_ticks)
         
         token = ''
-        if continuation:
-            token += '^'
         
-        token += str(denoms[0])
+        if len(denoms) > 0:
+            if continuation:
+                token += '^'
+            
+            token += str(denoms[0])
+            
+            # Additional durations use tie syntax
+            for d in denoms[1:]:
+                token += f'^{d}'
         
-        # Additional durations use tie syntax
-        for d in denoms[1:]:
-            token += f'^{d}'
+        # Handle remainder using ={ticks} notation
+        if remainder > 0:
+            if len(denoms) > 0:
+                token += '^'
+            token += f'={remainder}'
         
         return token
 
@@ -102,33 +115,29 @@ class DurationFormatter:
             i += 1
         return sorted(divs)
 
-    def run_to_denoms(self, num_subdivisions: int, base_den: int, no_whole_notes: bool = False) -> List[int]:
-        """Decompose a number of base_den subdivisions into a list of AMK length denominators to tie.
+    def run_to_denoms(self, ticks: int) -> Tuple[List[int], int]:
+        """Decompose ticks into a list of AMK duration denominators to tie.
 
-        Each subdivision represents 1/base_den of a whole note. We choose chunks that are divisors of base_den
-        and sum to num_subdivisions. For each chunk, the length number is base_den/chunk.
-        Example: base_den=16, num_subdivisions=3 -> chunks [2,1] => denoms [8,16] -> c8^16.
+        Uses TICK_TO_DURATION to map tick values to duration denominators.
+        Returns (denoms_list, remainder_ticks) where remainder_ticks should be formatted as ={ticks}.
+        Example: 27 ticks -> 24 ticks (8th note) + 3 ticks remainder -> ([8], 3) -> c8^=3.
         """
-        num = max(1, int(num_subdivisions))
-        bd = max(1, int(base_den))
-        divs = self.divisors(bd)
-        # remove divisor of 16 if no_whole_notes
-        if no_whole_notes:
-            divs = [d for d in divs if d < 16]
-        # allowed chunks are divisors of base_den
-        chunks = sorted(divs, reverse=True)
+        if ticks <= 0:
+            return ([], 0)
+        
+        # Get sorted tick values in descending order for greedy decomposition
+        tick_values = sorted([int(k) for k in MMLUtil.TICK_TO_DURATION.keys()], reverse=True)
+        
         out: List[int] = []
-        rem = num
-        while rem > 0:
-            # pick largest chunk <= rem
-            pick = None
-            for c in chunks:
-                if c <= rem:
-                    pick = c
-                    break
-            if pick is None:
-                # fallback to 1-subdivision chunks (shouldn't happen since 1 divides bd)
-                pick = 1
-            out.append(bd // pick)
-            rem -= pick
-        return out
+        remaining = ticks
+        
+        # Greedily decompose: pick largest tick value that fits
+        for tick_value in tick_values:
+            count = remaining // tick_value
+            if count > 0:
+                duration = MMLUtil.TICK_TO_DURATION[tick_value]
+                # Add the duration for each occurrence
+                out.extend([duration] * count)
+                remaining -= tick_value * count
+        
+        return (out, remaining)
