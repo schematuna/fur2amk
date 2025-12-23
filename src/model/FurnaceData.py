@@ -90,7 +90,7 @@ class FurnaceInstrument:
 
             if self.snes_macro_data.is_noise and self.snes_macro_data.noise_freq is None:
                 default_noise_freq = 29
-                print(f"Info: Instrument {self.index} is noise but has no noise_freq set; defaulting to {default_noise_freq}.")
+                print(f"Info: Instrument {self.index:02X} is noise but has no noise_freq set; defaulting to {default_noise_freq}.")
                 self.snes_macro_data.noise_freq = default_noise_freq
 @dataclass
 class FurnaceMacro:
