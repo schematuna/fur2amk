@@ -83,7 +83,8 @@ class MMLWord:
 
 
 class MMLLine:
-    def __init__(self, words: List[MMLWord]) -> None:
+    def __init__(self, words: List[MMLWord], section_num: int) -> None:
+        self.section_num = section_num
         self.words = words
         self.label: Optional[int] = None
         self.isRepeat: bool = False
@@ -212,17 +213,17 @@ class MMLWriter:
             for word in words:
                 sectionNum = word.tick // self.mml_data.section_length
                 if sectionNum != cur_section_num:
+                    lines.append(MMLLine(line_words, cur_section_num))
                     cur_section_num = sectionNum
-                    lines.append(MMLLine(line_words))
                     line_words = []
                 line_words.append(word)
-            lines.append(MMLLine(line_words))
+            lines.append(MMLLine(line_words, cur_section_num))
 
             self.label_count = self.optimize_loops(lines, self.label_count)
 
             mml_state = MMLState()
             for line in lines:
-                word_txt += f"; section {line.words[0].tick // self.mml_data.section_length}\n"
+                word_txt += f"; section {MMLUtil.to_hex(line.section_num)}\n"
                 word_txt += line.to_mml(mml_state, self.durForamtter) + '\n'
 
             txt += word_txt + '\n\n'

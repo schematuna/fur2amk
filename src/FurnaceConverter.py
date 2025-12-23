@@ -82,7 +82,7 @@ class FurnaceConverter:
                 amk_ins.gain_values = ins.snes_macro_data.gain_values
                 amk_ins.gain = ins.sn_gain
                 if amk_ins.gain_values is None or amk_ins.gain is None:
-                    print(f"Warning: Instrument {ins.index} uses gain mode but does not have gain parameters set.")
+                    print(f"Warning: Instrument {ins.index:02X} uses gain mode but does not have gain parameters set.")
 
             instruments.append(amk_ins)
             # remember how this AMK instrument maps to a Furnace instrument

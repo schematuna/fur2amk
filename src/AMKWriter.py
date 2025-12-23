@@ -103,7 +103,7 @@ class AMKWriter:
                 elif amk_ins.gain is not None:
                     ga = amk_ins.gain
                 else:
-                    print(f"Info: Instrument {idx} uses gain mode but has no SNES gain set; defaulting to 0.", file=sys.stderr)
+                    print(f"Info: Instrument {idx:02X} uses gain mode but has no SNES gain set; defaulting to 0.", file=sys.stderr)
                     ga = 0x00
             lines.append(f'    {samp_name:<{name_field_width}} ${da:02X} ${sr:02X} ${ga:02X} {samp_tuning} ;@{next_num}')
             next_num += 1
