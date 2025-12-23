@@ -6,6 +6,7 @@ from .model.MMLCommands import *
 
 from .MMLUtil import *
 
+
 ################################
 # INTERNAL MML WRITER CLASSES  #
 ################################
@@ -25,8 +26,8 @@ class MMLWord:
 
 @dataclass
 class MMLLine:
-    def __init__(self, tokens: List[str]) -> None:
-        self.tokens = tokens
+    def __init__(self, words: List[MMLWord]) -> None:
+        self.words = words
         self.label: Optional[int] = None
         self.isRepeat: bool = False
     
@@ -44,9 +45,7 @@ class MMLWriter:
         self.mml_data = mml_data
         self.label_count = label_count
 
-        # assume sixteenth notes for now
-        base_den = 16
-        self.durForamtter = DurationFormatter(self.mml_data.ticks_per_subdivision, base_den)
+        self.durForamtter = DurationFormatter()
 
     def channel_has_remote_commands(self, channel: int) -> bool:
         for event in self.mml_data.commands[channel]:
@@ -191,7 +190,13 @@ class MMLWriter:
 
             # A "word" is a note or rest with its commands
             words = self.make_words(self.mml_data.notes[c], self.mml_data.commands[c])
+            # sort again for good measure
+            words = sorted(words, key=lambda words : words.tick)
+            lines = List[MMLLine]
+            line_words = List[MMLWord]
             for word in words:
+                # subdivNum = word.tick // self.mml_data.ticks_per_row
+                # orderNum, rem = divmod(i, mod.PatternLength)
                 word_txt += self.convert_word(word, mml_state)
 
             txt += word_txt + '\n\n'

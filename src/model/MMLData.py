@@ -20,8 +20,6 @@ class MMLData:
     commands: List[List['MMLCommand']] = field(default_factory=lambda: [[] for _ in range(8)])
     intro_order: Optional[int] = None
 
-    # song data for formatting
-    beat_length: int = 4
-    measure_length: int = 16
-    pattern_length: int = 64
-    ticks_per_subdivision: int = 0
+    # song data for formatting, in ticks
+    measure_length: int = 192
+    section_length: int = 192 * 4

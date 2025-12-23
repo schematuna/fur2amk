@@ -18,6 +18,11 @@ class FurnaceState:
 
 class FurnaceConverter:
     def __init__(self) -> None:
+        # default to quarter note but this will be choosen based on the tick rate
+        self.amk_ticks_per_row = 12
+        # ratio of amk tick length to furnace tick length
+        self.tick_ratio = 1
+
         # keeps track of how an AMK instrument maps to a Furnace instrument
         self.ins_map: Dict[int, int] = {}
         # Keeps track of instruments that have an associated remote command
@@ -125,7 +130,6 @@ class FurnaceConverter:
         return intro_order
 
     def convert_notes(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLNote]:
-        ticksPerRow = module.Speed1
         notes: List[MMLNote] = []
         tick = 0
         # process notes
@@ -143,7 +147,7 @@ class FurnaceConverter:
                     notes.append(cur_dur)
                 cur_dur = None
             
-            tick += ticksPerRow
+            tick += self.amk_ticks_per_row
         
         # Finalize possible final note
         if cur_dur is not None:
@@ -163,7 +167,6 @@ class FurnaceConverter:
 
     def convert_commands(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLCommand]:
         instruments = module.Instruments
-        ticksPerRow = module.Speed1
 
         # process rows into commands
         commands: List[MMLCommand] = []
@@ -218,20 +221,20 @@ class FurnaceConverter:
                     # TODO: note delay is not an event, it just modifies a note's tick value
                     # commands.append(NoteDelay(tick, delay_ticks))
 
-            tick += ticksPerRow
+            tick += self.amk_ticks_per_row
 
         return commands
     
     def convert_mml_data(self, module: FurnaceModule) -> MMLData:
         mml_data = MMLData()
         mml_data.num_channels = module.NumChannels
-        mml_data.song_length = len(module.OrdersPerChannel[0]) * module.PatternLength * module.Speed1
         # for formatting and duration calculations
-        # lengths are in units of furnace rows
-        mml_data.beat_length            = module.HighlightA
-        mml_data.measure_length         = module.HighlightB
-        mml_data.pattern_length         = module.PatternLength
-        mml_data.ticks_per_subdivision  = module.Speed1
+        # lengths are in ticks
+        # TODO: should be in AMK ticks, not Furnace ticks
+        mml_data.measure_length     = module.HighlightB * self.amk_ticks_per_row
+        mml_data.section_length     = module.PatternLength * self.amk_ticks_per_row
+        mml_data.song_length        = len(module.OrdersPerChannel[0]) * mml_data.section_length
+
 
         for ch in range(module.NumChannels):
             flat_rows: List[FurnaceRow] = []
@@ -251,17 +254,10 @@ class FurnaceConverter:
         return mml_data
 
     def convert_tempo(self, module: FurnaceModule) -> int:
-        # Global tempo and volume
-        base_num = module.HighlightA
-        if (base_num <= 0):
-            base_num = 4
-        base_den = module.HighlightB
-        if base_den <= 0:
-            base_den = 16
-        tps = float(getattr(module, 'TicksPerSecond', 0.0) or 0.0)
-        spd = int(getattr(module, 'Speed1', 0) or 0)
-        bpm = max(1, int(round(240.0 * tps / (base_den * spd))))
-
+        rows_per_beat = MMLUtil.AMK_TICKS_PER_BEAT / self.amk_ticks_per_row
+        fur_ticks_per_beat = rows_per_beat * module.Speed1
+        beats_per_second = module.TicksPerSecond / fur_ticks_per_beat
+        bpm = int(round(60 * beats_per_second))
         return bpm * 8192 // 20025
 
     def convert_volume(self, module: FurnaceModule) -> int:
@@ -286,6 +282,19 @@ class FurnaceConverter:
         return echo_data
 
     def convert(self, module: FurnaceModule) -> AMKData:
+        # determine musical duration to map to a furnace row
+        # find first AMK tick value that is greater than or equal to the furnace tick rate
+        for tick_value in MMLUtil.TICK_TO_DURATION.keys():
+            if tick_value >= module.Speed1:
+                self.amk_ticks_per_row = tick_value
+                break
+
+        self.tick_ratio = self.amk_ticks_per_row / module.Speed1
+        if self.tick_ratio != round(self.tick_ratio):
+            # TODO: For these situations just give up and do everything in ticks
+            print("Warning: Furnace ticks not cleanly convertible to amk ticks.\n")
+        print(f"One Furnace tick is {self.tick_ratio} AMK ticks.")
+
         amk_data = AMKData()
 
         amk_data.spc_info     = self.convert_spc_info(module)
