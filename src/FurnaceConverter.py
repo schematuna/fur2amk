@@ -230,7 +230,6 @@ class FurnaceConverter:
         mml_data.num_channels = module.NumChannels
         # for formatting and duration calculations
         # lengths are in ticks
-        # TODO: should be in AMK ticks, not Furnace ticks
         mml_data.measure_length     = module.HighlightB * self.amk_ticks_per_row
         mml_data.section_length     = module.PatternLength * self.amk_ticks_per_row
         mml_data.song_length        = len(module.OrdersPerChannel[0]) * mml_data.section_length
@@ -292,8 +291,8 @@ class FurnaceConverter:
         self.tick_ratio = self.amk_ticks_per_row / module.Speed1
         if self.tick_ratio != round(self.tick_ratio):
             # TODO: For these situations just give up and do everything in ticks
-            print("Warning: Furnace ticks not cleanly convertible to amk ticks.\n")
-        print(f"One Furnace tick is {self.tick_ratio} AMK ticks.")
+            print("Warning: Furnace ticks not cleanly convertible to amk ticks.")
+        print(f"One Furnace tick is {self.tick_ratio:.2g} AMK ticks.")
 
         amk_data = AMKData()
 

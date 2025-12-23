@@ -19,31 +19,103 @@ class MMLRest:
 # A note or rest with its commands
 @dataclass
 class MMLWord:
-    tick: int
+    tick: int = field(compare=False)
     duration: int
     note: Optional[int] = None
     commands: List[MMLCommand] = field(default_factory=list)
 
-@dataclass
+    def to_mml(self, mml_state: MMLState, durFormatter: DurationFormatter) -> str:
+        word_txt = ''
+        command_idx = 0
+        cur_tick = self.tick
+        
+        # process any pre-note commands (at the same tick as note start)
+        while command_idx < len(self.commands) and self.commands[command_idx].tick == self.tick:
+            word_txt += self.commands[command_idx].to_mml(mml_state) + ' '
+            command_idx += 1
+
+        # add note name and octave
+        if self.note is not None:
+            note_name, note_octave = MMLUtil.note_name_and_octave(self.note)
+            
+            # Emit octave change if needed
+            if mml_state.octave != note_octave:
+                word_txt += f'o{note_octave} '
+                mml_state.octave = note_octave
+            
+            word_txt += note_name
+        else:
+            word_txt += 'r'
+
+        # Add initial duration (before any remaining commands)
+        cont = False
+        if command_idx < len(self.commands):
+            first_cmd_tick = self.commands[command_idx].tick
+            if first_cmd_tick > cur_tick:
+                word_txt += durFormatter.format(first_cmd_tick - cur_tick, cont) + ' '
+                cur_tick = first_cmd_tick
+                cont = True
+        
+        # Interleave commands with duration
+        while command_idx < len(self.commands):
+            command = self.commands[command_idx]
+            cmd_tick = command.tick
+            word_txt += command.to_mml(mml_state) + ' '
+            command_idx += 1
+            
+            # Update cur_tick to this command's tick
+            cur_tick = cmd_tick
+            
+            # Add duration to next command
+            if command_idx < len(self.commands):
+                next_cmd_tick = self.commands[command_idx].tick
+                if next_cmd_tick > cur_tick:
+                    word_txt += durFormatter.format(next_cmd_tick - cur_tick, cont) + ' '
+                    cur_tick = next_cmd_tick
+                    cont = True
+
+        # Add remaining duration to end of note
+        end_tick = self.tick + self.duration
+        if cur_tick < end_tick:
+            word_txt += durFormatter.format(end_tick - cur_tick, cont)
+
+        return word_txt
+
+
 class MMLLine:
     def __init__(self, words: List[MMLWord]) -> None:
         self.words = words
         self.label: Optional[int] = None
         self.isRepeat: bool = False
     
-    def __str__(self) -> str:
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, MMLLine):
+            return False
+        return self.words == other.words
+
+    def convert_words(self, mml_state: MMLState, durFormatter: DurationFormatter) -> List[str]:
+        words_txt = ''
+        for word in self.words:
+            words_txt += word.to_mml(mml_state, durFormatter) + ' '
+        return words_txt.rstrip()
+    
+    def to_mml(self, mml_state: MMLState, durFormatter: DurationFormatter) -> str:
+        line_txt = ''
         if self.label is not None:
             if self.isRepeat:
-                return f"({self.label})"
+                line_txt += f"({self.label})"
             else:
-                return f"({self.label})[" + ' '.join(self.tokens) + "]"
-        
-        return ' '.join(self.tokens)
+                line_txt += f"({self.label})["
+                line_txt += self.convert_words(mml_state, durFormatter)
+                line_txt += "]"
+        else:
+            line_txt += self.convert_words(mml_state, durFormatter)
+        return line_txt
 
 class MMLWriter:
-    def __init__(self, mml_data: MMLData, label_count: int) -> None:
+    def __init__(self, mml_data: MMLData, label_start: int) -> None:
         self.mml_data = mml_data
-        self.label_count = label_count
+        self.label_count = label_start
 
         self.durForamtter = DurationFormatter()
 
@@ -53,29 +125,29 @@ class MMLWriter:
                 return True
         return False
 
-    def optimize_loops(self, channel_lines: Dict[int, MMLLine], label_count: int) -> int:
+    def optimize_loops(self, lines: List[MMLLine], label_count: int) -> int:
         # Identify and label loops in the channel lines
-        labels_assigned: Dict[int, List[str]] = {}
-        unique_lines: Dict[int, List[str]] = {}
-        for order_num, line in channel_lines.items():
+        labels_assigned: Dict[int, MMLLine] = {}
+        unique_lines: Dict[int, MMLLine] = {}
+        for i, line in enumerate(lines):
             # Check for repeated patterns
-            if line.tokens not in unique_lines.values():
-                unique_lines[order_num] = line.tokens
-            elif line.tokens not in labels_assigned.values():
+            if line not in unique_lines.values():
+                unique_lines[i] = line
+            elif line not in labels_assigned.values():
                 # Assign a label to this repeated pattern
-                labels_assigned[label_count] = line.tokens
+                labels_assigned[label_count] = line
                 line.label = label_count
                 line.isRepeat = True
                 # and mark the first occurrence
-                for order, tokens in unique_lines.items():
-                    if tokens == line.tokens:
-                        channel_lines[order].label = label_count
+                for order, line2 in unique_lines.items():
+                    if line2 == line:
+                        lines[order].label = label_count
                         break
                 label_count += 1
             else:
                 # Find the existing label for this pattern
-                for lbl, tokens in labels_assigned.items():
-                    if tokens == line.tokens:
+                for lbl, line2 in labels_assigned.items():
+                    if line2 == line:
                         line.label = lbl
                         line.isRepeat = True
                         break
@@ -124,81 +196,34 @@ class MMLWriter:
             words.append(word)
         return words
 
-    def convert_word(self, word: MMLWord, mml_state: MMLState) -> str:
-        word_txt = ''
-        command_idx = 0
-        cur_tick = word.tick
-        
-        # process any pre-note commands (at the same tick as note start)
-        while command_idx < len(word.commands) and word.commands[command_idx].tick == word.tick:
-            word_txt += word.commands[command_idx].to_mml(mml_state) + ' '
-            command_idx += 1
-
-        # add note name and octave
-        if word.note is not None:
-            note_name, note_octave = MMLUtil.note_name_and_octave(word.note)
-            
-            # Emit octave change if needed
-            if mml_state.octave != note_octave:
-                word_txt += f'o{note_octave} '
-                mml_state.octave = note_octave
-            
-            word_txt += note_name
-        else:
-            word_txt += 'r'
-
-        # Add initial duration (before any remaining commands)
-        cont = False
-        if command_idx < len(word.commands):
-            first_cmd_tick = word.commands[command_idx].tick
-            if first_cmd_tick > cur_tick:
-                word_txt += self.durForamtter.format(first_cmd_tick - cur_tick, cont) + ' '
-                cur_tick = first_cmd_tick
-                cont = True
-        
-        # Interleave commands with duration
-        while command_idx < len(word.commands):
-            command = word.commands[command_idx]
-            cmd_tick = command.tick
-            word_txt += command.to_mml(mml_state) + ' '
-            command_idx += 1
-            
-            # Update cur_tick to this command's tick
-            cur_tick = cmd_tick
-            
-            # Add duration to next command
-            if command_idx < len(word.commands):
-                next_cmd_tick = word.commands[command_idx].tick
-                if next_cmd_tick > cur_tick:
-                    word_txt += self.durForamtter.format(next_cmd_tick - cur_tick, cont) + ' '
-                    cur_tick = next_cmd_tick
-                    cont = True
-
-        # Add remaining duration to end of note
-        end_tick = word.tick + word.duration
-        if cur_tick < end_tick:
-            word_txt += self.durForamtter.format(end_tick - cur_tick, cont) + ' '
-
-        return word_txt
-
     def write(self) -> None:
         txt = ''
         for c in range(self.mml_data.num_channels):
             word_txt = ''
-            mml_state = MMLState()
             txt += f'#{c}\n'
 
             # A "word" is a note or rest with its commands
             words = self.make_words(self.mml_data.notes[c], self.mml_data.commands[c])
             # sort again for good measure
             words = sorted(words, key=lambda words : words.tick)
-            lines = List[MMLLine]
-            line_words = List[MMLWord]
+            lines: List[MMLLine] = []
+            line_words: List[MMLWord] = []
+            cur_section_num = 0
             for word in words:
-                # subdivNum = word.tick // self.mml_data.ticks_per_row
-                # orderNum, rem = divmod(i, mod.PatternLength)
-                word_txt += self.convert_word(word, mml_state)
+                sectionNum = word.tick // self.mml_data.section_length
+                if sectionNum != cur_section_num:
+                    cur_section_num = sectionNum
+                    lines.append(MMLLine(line_words))
+                    line_words = []
+                line_words.append(word)
+            lines.append(MMLLine(line_words))
+
+            self.label_count = self.optimize_loops(lines, self.label_count)
+
+            mml_state = MMLState()
+            for line in lines:
+                word_txt += f"; section {line.words[0].tick // self.mml_data.section_length}\n"
+                word_txt += line.to_mml(mml_state, self.durForamtter) + '\n'
 
             txt += word_txt + '\n\n'
-
         return txt
