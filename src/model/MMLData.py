@@ -8,6 +8,7 @@ class MMLNote:
     tick: int
     duration: int = None
     note: int = None
+    instrument: int = None
 
 @dataclass
 class MMLData:

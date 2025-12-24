@@ -179,6 +179,7 @@ class MMLWriter:
             print(f"Info: Channel has no notes.")
             return []
 
+        mml_state = MMLState()
         cmd_idx = 0
         rests = self.get_rests(notes)
         durations = sorted(notes + rests, key=lambda dur : dur.tick)
@@ -187,6 +188,9 @@ class MMLWriter:
                 word = MMLWord(duration.tick, duration.duration, None)
             else:
                 word = MMLWord(duration.tick, duration.duration, duration.note)
+                if duration.instrument != mml_state.ins:
+                    word.commands.append(InstrumentChange(duration.tick, duration.instrument))
+                    mml_state.ins = duration.instrument
             while cmd_idx < len(commands):
                 cmd_tick = commands[cmd_idx].tick
                 if cmd_tick >= duration.tick and cmd_tick < duration.tick + duration.duration:

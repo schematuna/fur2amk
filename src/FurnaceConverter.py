@@ -131,15 +131,26 @@ class FurnaceConverter:
         # process notes
         cur_dur: Optional[MMLNote] = None
         for i, row in enumerate(flat_rows):
+            # check for note delay (this also affects note offs)
+            note_tick = tick
+            for effect in row.Effects:
+                effect_num = effect[0]
+                value = effect[1]
+                if effect_num == 0xED: # note delay
+                    note_tick += value
+                    break
+                
             note_kind = row.kind()
             if note_kind == FurnaceRow.NoteKind.NOTE:
+                # TODO: handle sample maps here, AMK doesn't need to know about that
+                amk_ins = row.Ins
                 if cur_dur is not None:
-                    cur_dur.duration = tick - cur_dur.tick
+                    cur_dur.duration = note_tick - cur_dur.tick
                     notes.append(cur_dur)
-                cur_dur = MMLNote(tick=tick, duration=0, note=row.Note)
+                cur_dur = MMLNote(tick=note_tick, duration=0, note=row.Note, instrument=amk_ins)
             elif note_kind == FurnaceRow.NoteKind.OFF or note_kind == FurnaceRow.NoteKind.RELEASE:
                 if cur_dur is not None:
-                    cur_dur.duration = tick - cur_dur.tick
+                    cur_dur.duration = note_tick - cur_dur.tick
                     notes.append(cur_dur)
                 cur_dur = None
             
@@ -187,7 +198,6 @@ class FurnaceConverter:
                     commands.append(EchoToggle(tick))
                     state.echo = fur_ins.snes_macro_data.is_echo
 
-
                 # Instrument gain
                 if fur_ins.index in self.ins_remote_map:
                     gain_speed = fur_ins.snes_macro_data.gain_speed
@@ -199,10 +209,6 @@ class FurnaceConverter:
                 elif state.gain_remote is not None: # turn off remote commands when gain is disabled
                     commands.append(RemoteCommand(tick, disable_commands_label_idx, RemoteCommandTiming.DISABLE))
                     state.gain_remote = None
-
-                # TODO: handle sample maps here, AMK doesn't need to know about that
-                amk_ins_idx = fur_ins.index
-                commands.append(InstrumentChange(tick, amk_ins_idx))
             
             # Effects
             for effect in (row.Effects or []):
@@ -233,10 +239,6 @@ class FurnaceConverter:
                         print(f"Warning: No note found at tick {tick} for note slide up effect {effect}.", file=sys.stderr)
                         continue
                     commands.append(PitchBend(tick, bent_note, speed))
-                elif effect_num == 0xED: # note delay
-                    delay_ticks = value
-                    # TODO: note delay is not an event, it just modifies a note's tick value
-                    # commands.append(NoteDelay(tick, delay_ticks))
 
             tick += self.amk_ticks_per_row
 
