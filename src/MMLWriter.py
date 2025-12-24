@@ -1,5 +1,5 @@
 from typing import Dict, List, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from .model.MMLData import *
 from .model.MMLCommands import *
@@ -197,7 +197,51 @@ class MMLWriter:
             words.append(word)
         return words
 
+    def split_at_loop_point(self, words: List[MMLWord]) -> List[MMLWord]:
+        loop_point = self.mml_data.loop_tick
+        if loop_point is None:
+            return words
+        
+        result: List[MMLWord] = []
+        for word in words:
+            word_start = word.tick
+            word_end = word.tick + word.duration
+            
+            # Check if loop point falls in the middle of this word
+            if word_start < loop_point < word_end:
+                # Categorize commands upfront to avoid confusion
+                pre_note_commands = [cmd for cmd in word.commands if cmd.tick == word_start]
+                mid_note_commands = [cmd for cmd in word.commands if word_start < cmd.tick < loop_point]
+                post_loop_commands = [cmd for cmd in word.commands if cmd.tick >= loop_point]
+                
+                # First word: from start to loop point
+                first_commands = pre_note_commands + mid_note_commands
+                first_duration = loop_point - word_start
+                first_word = MMLWord(word_start, first_duration, word.note, first_commands)
+                result.append(first_word)
+                
+                # Second word: from loop point to end
+                second_commands = post_loop_commands
+                second_duration = word_end - loop_point
+                second_word = MMLWord(loop_point, second_duration, None, second_commands)
+                result.append(second_word)
+
+                print(f"split into 2 words: {word.to_mml(MMLState(), self.durForamtter)} -> {first_word.to_mml(MMLState(), self.durForamtter)} and {second_word.to_mml(MMLState(), self.durForamtter)}")
+            else:
+                # Keep the word as-is
+                result.append(word)
+        
+        return result
+
+    def write_loop_point(self, has_remote_commands: bool) -> str:
+        loop_txt = '/\n'
+        if has_remote_commands:
+            loop_txt += "(!99, 0) ; reset remote state for loop\n"
+        return loop_txt
+
     def write(self) -> None:
+        has_loop_point = self.mml_data.loop_tick is not None
+
         txt = ''
         for c in range(self.mml_data.num_channels):
             word_txt = ''
@@ -205,24 +249,33 @@ class MMLWriter:
 
             # A "word" is a note or rest with its commands
             words = self.make_words(self.mml_data.notes[c], self.mml_data.commands[c])
+            # Cannot have the loop point mid-word
+            if has_loop_point:
+                words = self.split_at_loop_point(words)
             # sort again for good measure
             words = sorted(words, key=lambda words : words.tick)
+
             lines: List[MMLLine] = []
             line_words: List[MMLWord] = []
             cur_section_num = 0
             for word in words:
                 sectionNum = word.tick // self.mml_data.section_length
-                if sectionNum != cur_section_num:
+                # split line at loop point
+                is_loop_point = has_loop_point and word.tick == self.mml_data.loop_tick
+                if sectionNum != cur_section_num or is_loop_point:
                     lines.append(MMLLine(line_words, cur_section_num))
                     cur_section_num = sectionNum
                     line_words = []
                 line_words.append(word)
+
             lines.append(MMLLine(line_words, cur_section_num))
 
             self.label_count = self.optimize_loops(lines, self.label_count)
 
             mml_state = MMLState()
             for line in lines:
+                if has_loop_point and line.words[0].tick == self.mml_data.loop_tick:
+                    word_txt += self.write_loop_point(self.channel_has_remote_commands(c))
                 word_txt += f"; section {MMLUtil.to_hex(line.section_num)}\n"
                 word_txt += line.to_mml(mml_state, self.durForamtter) + '\n'
 

@@ -57,9 +57,6 @@ class MMLUtil:
 @dataclass
 class MMLState:
     octave: Optional[int]       = None
-    echo: bool                  = False
-    remote_gain: Optional[int]  = None
-    vol: Optional[int]          = None
 
 class DurationFormatter:
     # a "beat" is a quarter note, and the song is assumed to be in 4/4

@@ -18,7 +18,7 @@ class MMLData:
     # list of notes for each channel. Rests are handled automatically by the MMLWriter.
     notes: List[List['MMLNote']] = field(default_factory=lambda: [[] for _ in range(8)])
     commands: List[List['MMLCommand']] = field(default_factory=lambda: [[] for _ in range(8)])
-    intro_order: Optional[int] = None
+    loop_tick: Optional[int] = None
 
     # song data for formatting, in ticks
     measure_length: int = 192
