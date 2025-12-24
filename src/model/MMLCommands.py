@@ -43,6 +43,13 @@ class VolumeChange(MMLCommand):
         return f'v{vol_mml}'
 
 @dataclass
+class PanChange(MMLCommand):
+    pan: int
+
+    def to_mml(self, mml_state: 'MMLState' = None) -> str:
+        return f"y{self.pan}"
+
+@dataclass
 class PitchBend(MMLCommand):
     note: int
     speed: int

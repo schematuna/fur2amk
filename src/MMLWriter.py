@@ -225,8 +225,6 @@ class MMLWriter:
                 second_duration = word_end - loop_point
                 second_word = MMLWord(loop_point, second_duration, None, second_commands)
                 result.append(second_word)
-
-                print(f"split into 2 words: {word.to_mml(MMLState(), self.durForamtter)} -> {first_word.to_mml(MMLState(), self.durForamtter)} and {second_word.to_mml(MMLState(), self.durForamtter)}")
             else:
                 # Keep the word as-is
                 result.append(word)
