@@ -39,8 +39,7 @@ class VolumeChange(MMLCommand):
     volume: int
 
     def to_mml(self, mml_state: 'MMLState' = None) -> str:
-        vol_mml = MMLUtil.find_v(self.volume)
-        return f'v{vol_mml}'
+        return f'v{self.volume}'
 
 @dataclass
 class PanChange(MMLCommand):
@@ -62,6 +61,14 @@ class PitchBend(MMLCommand):
         # TODO: handling delay correctly here?
         # amk_delay = MMLUtil.to_hex(delay * 8) # $08 = 1 eighth note
         return f"$DD${MMLUtil.to_hex(0)}${MMLUtil.to_hex(self.speed)} {bend_note}"
+
+@dataclass
+class VolumeSlide(MMLCommand):
+    duration: int = 0
+    target_volume: int = 0
+
+    def to_mml(self, mml_state: 'MMLState' = None) -> str:
+        return f"$E8${MMLUtil.to_hex(self.duration)}${MMLUtil.to_hex(self.target_volume)}"
 
 @dataclass
 class EnableGainCommand(MMLCommand):

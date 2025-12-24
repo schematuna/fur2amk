@@ -203,21 +203,77 @@ class FurnaceConverter:
                 return cur_note
         return None
 
-    def convert_commands(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLCommand]:
-        # process rows into commands
+    def convert_volume_slides(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLCommand]:
+        commands: List[MMLCommand] = []
+        tick = 0
+        vol_change_per_tick: Optional[int] = None
+        vol_target: Optional[int] = 0
+        current_slide: Optional[VolumeSlide] = None
+        for i, row in enumerate(flat_rows):
+            for effect in (row.Effects or []):
+                effect_num = effect[0]
+                value = effect[1]
+                if effect_num == 0x0A: # Volume slide
+                    # this could be another slide or a stop slide command. Either way, we wrap up any current slide
+                    if current_slide is not None:
+                        slide_duration = tick - current_slide.tick
+                        LONGEST_DURATION = max(MMLUtil.TICK_TO_DURATION.keys())
+                        if slide_duration > LONGEST_DURATION:
+                            print(f"Warning: Volume slide duration {slide_duration} is greater than the longest tick duration {LONGEST_DURATION}. Things might break.", file=sys.stderr)
+                        current_slide.duration = slide_duration
+                        current_slide.target_volume = MMLUtil.find_v(vol_target)
+                        commands.append(current_slide)
+                    # interpret command
+                    tick_up = value >> 4
+                    tick_down = value & 0x0F
+                    if tick_down == 0 and tick_up == 0:
+                        vol_change_per_tick = None
+                    elif tick_down == 0:
+                        vol_change_per_tick = tick_up
+                    elif tick_up == 0:
+                        vol_change_per_tick = -tick_down
+                    else:
+                        print("Warning: Invalid volume slide effect value.", file=sys.stderr)
+                        continue
+
+                    if vol_change_per_tick is not None:
+                        current_slide = VolumeSlide(tick, None, None)
+                    else:
+                        current_slide = None
+                        
+            if current_slide is not None:
+                # update slide target based on change per furnace tick
+                # TODO: this does not scale as expected. Need to dial conversion in.
+                vol_target += vol_change_per_tick * module.Speed1
+                if vol_target > 0x7F:
+                    vol_target = 0x7F
+                if vol_target < 0:
+                    vol_target = 0
+
+                    
+            tick += self.amk_ticks_per_row
+
+            # track current volume
+            # check after checking for volume slide in case both happen on the same row
+            vol = row.Vol
+            if vol is not None:
+                vol_target = vol
+
+        return commands
+
+    def convert_single_row_commands(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
         tick = 0
         for i, row in enumerate(flat_rows):
             # Volume
             vol = row.Vol
             if vol is not None:
-                commands.append(VolumeChange(tick, vol))
+                commands.append(VolumeChange(tick, MMLUtil.find_v(vol)))
             
             # Effects
             for effect in (row.Effects or []):
                 effect_num = effect[0]
                 value = effect[1]
-
                 if effect_num == 0x80: # Set pan
                     # Convert from Furnace format (00=left, 80=center, FF=right)
                     # to AMK format (0=right, 10=center, 20=left)
@@ -246,6 +302,21 @@ class FurnaceConverter:
             tick += self.amk_ticks_per_row
 
         return commands
+
+    def convert_commands(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLCommand]:
+        # process rows into commands
+        commands: List[MMLCommand] = []
+
+        # convert commands contained within a single row
+        commands.extend(self.convert_single_row_commands(flat_rows, module))
+
+        # convert commands that cover a range of rows
+        commands.extend(self.convert_volume_slides(flat_rows, module))
+
+        # sort commands by tick
+        sorted_commands = sorted(commands, key=lambda x: x.tick)
+
+        return sorted_commands
     
     def convert_mml_data(self, module: FurnaceModule) -> MMLData:
         mml_data = MMLData()
