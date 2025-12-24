@@ -114,22 +114,17 @@ class FurnaceConverter:
         # loop labels and remote command labels can't overlap
         return command_num
 
-    def convert_loop_marker(self, module: FurnaceModule) -> int:
+    def convert_loop_marker(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> Optional[int]:
         # iterate all rows for command 0Bxx (jump to order)
         # This will be interpreted as the intro marker position
         intro_order = None
-        for c in range(module.NumChannels):
-            patmap = module.PatternsByChannel[c] if c < len(module.PatternsByChannel) else {}
-            orders = module.OrdersPerChannel[c] if c < len(module.OrdersPerChannel) else []
-            for pat_idx in orders:
-                rows = patmap.get(pat_idx)
-                if rows:
-                    for row in rows:
-                        for effect in (row.Effects or []):
-                            if effect[0] == 0x0B:
-                                intro_order = int(effect[1])
+        for row in flat_rows:
+            for effect in row.Effects:
+                if effect[0] == 0x0B:
+                    intro_order = int(effect[1])
+                    return intro_order * module.PatternLength * self.amk_ticks_per_row
 
-        return intro_order
+        return None
 
     def convert_notes(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLNote]:
         notes: List[MMLNote] = []
@@ -258,6 +253,9 @@ class FurnaceConverter:
                     print(f"Warning: Channel {ch} references missing pattern {pat}. Inserting empty pattern.", file=sys.stderr)
                     flat_rows.extend([FurnaceRow() for _ in range(module.PatternLength)])
 
+            loop_tick = self.convert_loop_marker(flat_rows, module)
+            if loop_tick is not None:
+                mml_data.loop_tick = loop_tick
             mml_data.notes[ch]      = self.convert_notes(flat_rows, module)
             mml_data.commands[ch]   = self.convert_commands(flat_rows, module)
 
