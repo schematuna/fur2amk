@@ -2,10 +2,9 @@
 
 from __future__ import annotations
 
-from operator import mod
 import sys
-from typing import Any, Dict, List, Optional, Tuple
-from dataclasses import dataclass, field
+from typing import Dict, List, Optional, Tuple
+from dataclasses import dataclass
 
 from .model.FurnaceData import FurnaceInstrument, FurnaceModule, FurnaceRow
 from .model.AMKData import *
@@ -209,8 +208,20 @@ class FurnaceConverter:
             for effect in (row.Effects or []):
                 effect_num = effect[0]
                 value = effect[1]
-                if effect_num == 0xE1: # Note slide up
-                    # speed is first value of nibble, note is second
+
+                if effect_num == 0x80: # Set pan
+                    # Convert from Furnace format (00=left, 80=center, FF=right)
+                    # to AMK format (0=right, 10=center, 20=left)
+                    # Formula: AMK = round((20 * (255 - Furnace)) / 255)
+                    amk_pan = round((20 * (255 - value)) / 255)
+                    commands.append(PanChange(tick, amk_pan))
+                elif effect_num == 0x08: #stereo volume/pan
+                    left_volume = value >> 4  # 0-15 range
+                    right_volume = value & 0x0F  # 0-15 range
+                    amk_pan = int(10 + (left_volume - right_volume) * 2/3)
+                    commands.append(PanChange(tick, amk_pan))
+                elif effect_num == 0xE1: # Note slide up
+                    # speed is first value of nibble, note is second+
                     # convert max $0F Furnace to quarter note $30 AMK
                     # TODO: figure out precise speed scaling, I just earballed it
                     speed = int(48 * (value >> 4) / 15)
