@@ -125,9 +125,32 @@ class FurnaceConverter:
 
         return None
 
+    def get_pre_note_commands(self, row: FurnaceRow, fur_ins: FurnaceInstrument, state: FurnaceState, note_tick: int) -> List[MMLCommand]:
+        # instrument echo
+        pre_note_commands = []
+        if fur_ins.snes_macro_data.is_echo != state.echo:
+            pre_note_commands.append(EchoToggle(note_tick))
+            state.echo = fur_ins.snes_macro_data.is_echo
+
+        # mid-note gain change, handled by remote command
+        if fur_ins.index in self.ins_remote_map:
+            gain_speed = fur_ins.snes_macro_data.gain_speed
+            remote_comand_idx = self.ins_remote_map[fur_ins.index]
+            gain_remote = RemoteCommand(note_tick, remote_comand_idx, RemoteCommandTiming.AFTER_START, gain_speed)
+            if gain_remote is not state.gain_remote:
+                pre_note_commands.append(gain_remote)
+                state.gain_remote = gain_remote
+        elif state.gain_remote is not None: # turn off remote commands when gain is disabled
+            pre_note_commands.append(RemoteCommand(note_tick, 99, RemoteCommandTiming.DISABLE))
+            state.gain_remote = None
+
+        return pre_note_commands
+
+
     def convert_notes(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLNote]:
         notes: List[MMLNote] = []
         tick = 0
+        state = FurnaceState()
         # process notes
         cur_dur: Optional[MMLNote] = None
         for i, row in enumerate(flat_rows):
@@ -139,15 +162,23 @@ class FurnaceConverter:
                 if effect_num == 0xED: # note delay
                     note_tick += value
                     break
-                
+
             note_kind = row.kind()
             if note_kind == FurnaceRow.NoteKind.NOTE:
+                fur_ins = None
+                for ins in module.Instruments:
+                    if ins.index == row.Ins:
+                        fur_ins = ins
+                        break
+                pre_note_commands = self.get_pre_note_commands(row, fur_ins, state, note_tick)
+                    
                 # TODO: handle sample maps here, AMK doesn't need to know about that
                 amk_ins = row.Ins
+
                 if cur_dur is not None:
                     cur_dur.duration = note_tick - cur_dur.tick
                     notes.append(cur_dur)
-                cur_dur = MMLNote(tick=note_tick, duration=0, note=row.Note, instrument=amk_ins)
+                cur_dur = MMLNote(note_tick, 0, row.Note, amk_ins, pre_note_commands)
             elif note_kind == FurnaceRow.NoteKind.OFF or note_kind == FurnaceRow.NoteKind.RELEASE:
                 if cur_dur is not None:
                     cur_dur.duration = note_tick - cur_dur.tick
@@ -163,7 +194,7 @@ class FurnaceConverter:
 
         return notes
 
-    def get_note_at_row(self, flat_rows: List[FurnaceRow], row_idx: int) -> Optional[int]:
+    def get_active_note(self, flat_rows: List[FurnaceRow], row_idx: int) -> Optional[int]:
         cur_note = None
         for i, row in enumerate(flat_rows):
             if row.kind() == FurnaceRow.NoteKind.NOTE:
@@ -173,42 +204,14 @@ class FurnaceConverter:
         return None
 
     def convert_commands(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLCommand]:
-        instruments = module.Instruments
-
         # process rows into commands
         commands: List[MMLCommand] = []
         tick = 0
-        disable_commands_label_idx = 99
-        state = FurnaceState()
         for i, row in enumerate(flat_rows):
             # Volume
             vol = row.Vol
             if vol is not None:
                 commands.append(VolumeChange(tick, vol))
-            
-            # Instrument
-            fur_ins = None
-            for ins in instruments:
-                if ins.index == row.Ins:
-                    fur_ins = ins
-                    break
-            if fur_ins is not None:
-                # instrument echo
-                if fur_ins.snes_macro_data.is_echo != state.echo:
-                    commands.append(EchoToggle(tick))
-                    state.echo = fur_ins.snes_macro_data.is_echo
-
-                # Instrument gain
-                if fur_ins.index in self.ins_remote_map:
-                    gain_speed = fur_ins.snes_macro_data.gain_speed
-                    remote_comand_idx = self.ins_remote_map[fur_ins.index]
-                    gain_remote = RemoteCommand(tick, remote_comand_idx, RemoteCommandTiming.AFTER_START, gain_speed)
-                    if gain_remote is not state.gain_remote:
-                        commands.append(gain_remote)
-                        state.gain_remote = gain_remote
-                elif state.gain_remote is not None: # turn off remote commands when gain is disabled
-                    commands.append(RemoteCommand(tick, disable_commands_label_idx, RemoteCommandTiming.DISABLE))
-                    state.gain_remote = None
             
             # Effects
             for effect in (row.Effects or []):
@@ -232,7 +235,7 @@ class FurnaceConverter:
                     # TODO: figure out precise speed scaling, I just earballed it
                     speed = int(48 * (value >> 4) / 15)
                     semitones = value & 0x0F
-                    note = self.get_note_at_row(flat_rows, i)
+                    note = self.get_active_note(flat_rows, i)
                     if note is not None:
                         bent_note = note + semitones
                     else:
