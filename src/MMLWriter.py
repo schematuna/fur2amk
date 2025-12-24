@@ -121,9 +121,10 @@ class MMLWriter:
         self.durForamtter = DurationFormatter()
 
     def channel_has_remote_commands(self, channel: int) -> bool:
-        for event in self.mml_data.commands[channel]:
-            if isinstance(event, RemoteCommand):
-                return True
+        for note in self.mml_data.notes[channel]:
+            for command in note.pre_note_commands:
+                if isinstance(command, RemoteCommand):
+                    return True
         return False
 
     def optimize_loops(self, lines: List[MMLLine], label_count: int) -> int:
@@ -187,7 +188,7 @@ class MMLWriter:
             if isinstance(duration, MMLRest):
                 word = MMLWord(duration.tick, duration.duration, None)
             else:
-                word = MMLWord(duration.tick, duration.duration, duration.note)
+                word = MMLWord(duration.tick, duration.duration, duration.note, duration.pre_note_commands)
                 if duration.instrument != mml_state.ins:
                     word.commands.append(InstrumentChange(duration.tick, duration.instrument))
                     mml_state.ins = duration.instrument
@@ -218,13 +219,13 @@ class MMLWriter:
                 mid_note_commands = [cmd for cmd in word.commands if word_start < cmd.tick < loop_point]
                 post_loop_commands = [cmd for cmd in word.commands if cmd.tick >= loop_point]
                 
-                # First word: from start to loop point
+                # First word: note or rest from start to loop point
                 first_commands = pre_note_commands + mid_note_commands
                 first_duration = loop_point - word_start
                 first_word = MMLWord(word_start, first_duration, word.note, first_commands)
                 result.append(first_word)
                 
-                # Second word: from loop point to end
+                # Second word: rest from loop point to end
                 second_commands = post_loop_commands
                 second_duration = word_end - loop_point
                 second_word = MMLWord(loop_point, second_duration, None, second_commands)

@@ -10,6 +10,10 @@ class MMLNote:
     note: int = None
     instrument: int = None
 
+    # commands that are qualities of the note
+    # e.g. setting/resetting note state 
+    pre_note_commands: List[MMLCommand] = field(default_factory=lambda: [])
+
 @dataclass
 class MMLData:
     num_channels: int = 8
@@ -18,6 +22,7 @@ class MMLData:
 
     # list of notes for each channel. Rests are handled automatically by the MMLWriter.
     notes: List[List['MMLNote']] = field(default_factory=lambda: [[] for _ in range(8)])
+    # free floating commands that are not necessarily attached to a note
     commands: List[List['MMLCommand']] = field(default_factory=lambda: [[] for _ in range(8)])
     loop_tick: Optional[int] = None
 
