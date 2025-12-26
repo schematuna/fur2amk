@@ -28,6 +28,8 @@ class MMLUtil:
         mindiff = 256
         minval = -1
         
+        # amk -> fur mapping function l ≈ v² * constant_factor
+        # not easily reversible, so we do a brute force reverse lookup
         for v in range(0, 256):
             vv = (v * 0xFF) >> 8
             vv = (vv * vv) >> 8
