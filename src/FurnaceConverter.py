@@ -207,9 +207,14 @@ class FurnaceConverter:
         commands: List[MMLCommand] = []
         tick = 0
         vol_change_per_tick: Optional[int] = None
-        vol_target: Optional[int] = 0
         current_slide: Optional[VolumeSlide] = None
+        vol_target: int = 0
+        cur_vol: int = 0
         for i, row in enumerate(flat_rows):
+            vol = row.Vol
+            if vol is not None:
+                cur_vol = vol
+
             for effect in (row.Effects or []):
                 effect_num = effect[0]
                 value = effect[1]
@@ -221,7 +226,7 @@ class FurnaceConverter:
                         if slide_duration > LONGEST_DURATION:
                             print(f"Warning: Volume slide duration {slide_duration} is greater than the longest tick duration {LONGEST_DURATION}. Things might break.", file=sys.stderr)
                         current_slide.duration = slide_duration
-                        current_slide.target_volume = MMLUtil.find_v(vol_target)
+                        current_slide.target_volume = MMLUtil.find_v(round(vol_target))
                         commands.append(current_slide)
                     # interpret command
                     tick_up = value >> 4
@@ -229,9 +234,10 @@ class FurnaceConverter:
                     if tick_down == 0 and tick_up == 0:
                         vol_change_per_tick = None
                     elif tick_down == 0:
-                        vol_change_per_tick = tick_up
+                        # command value is change per four ticks
+                        vol_change_per_tick = tick_up / 4
                     elif tick_up == 0:
-                        vol_change_per_tick = -tick_down
+                        vol_change_per_tick = -tick_down / 4
                     else:
                         print("Warning: Invalid volume slide effect value.", file=sys.stderr)
                         continue
@@ -243,21 +249,17 @@ class FurnaceConverter:
                         
             if current_slide is not None:
                 # update slide target based on change per furnace tick
-                # TODO: this does not scale as expected. Need to dial conversion in.
-                vol_target += vol_change_per_tick * module.Speed1
+                vol_target = cur_vol + vol_change_per_tick * module.Speed1
                 if vol_target > 0x7F:
                     vol_target = 0x7F
                 if vol_target < 0:
                     vol_target = 0
 
-                    
+                # track current volume separate from target volume
+                # this allows volume changes and volume slides to coexist on the same row
+                cur_vol = vol_target
+   
             tick += self.amk_ticks_per_row
-
-            # track current volume
-            # check after checking for volume slide in case both happen on the same row
-            vol = row.Vol
-            if vol is not None:
-                vol_target = vol
 
         return commands
 
