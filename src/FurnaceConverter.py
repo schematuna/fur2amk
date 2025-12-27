@@ -3,30 +3,20 @@
 from __future__ import annotations
 
 import sys
-from typing import Dict, List, Optional, Tuple
-from dataclasses import dataclass
+from typing import Dict, List, Tuple
 
-from .model.FurnaceData import FurnaceInstrument, FurnaceModule, FurnaceRow
+from .model.FurnaceData import FurnaceModule, FurnaceRow
 from .model.AMKData import *
 from .model.MMLCommands import *
-
-# persistent channel state
-@dataclass
-class FurnaceState:
-    gain_remote: RemoteCommand = None
-    fur_ins_idx: int = None
-    echo: bool = True
+from .RowConverter import RowConverter
 
 class FurnaceConverter:
     def __init__(self) -> None:
-        # default to quarter note but this will be choosen based on the tick rate
-        self.amk_ticks_per_row = 12
-        # ratio of amk tick length to furnace tick length
-        self.tick_ratio = 1
-
+        self.row_converter = None
         # keeps track of how an AMK instrument maps to a Furnace instrument
         self.ins_map: Dict[int, int] = {}
         # Keeps track of instruments that have an associated remote command
+        # TODO: just store remote commands in the AMKInstrument object
         # fur_ins_idx -> remote_command_idx
         self.ins_remote_map: Dict[int, int] = {}
 
@@ -113,245 +103,8 @@ class FurnaceConverter:
         # loop labels and remote command labels can't overlap
         return command_num
 
-    def convert_loop_marker(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> Optional[int]:
-        # iterate all rows for command 0Bxx (jump to order)
-        # This will be interpreted as the intro marker position
-        intro_order = None
-        for row in flat_rows:
-            for effect in row.Effects:
-                if effect[0] == 0x0B:
-                    intro_order = int(effect[1])
-                    return intro_order * module.PatternLength * self.amk_ticks_per_row
-
-        return None
-
-    def get_pre_note_commands(self, row: FurnaceRow, fur_ins: FurnaceInstrument, state: FurnaceState, note_tick: int) -> List[MMLCommand]:
-        # instrument echo
-        pre_note_commands = []
-        if fur_ins.snes_macro_data.is_echo != state.echo:
-            pre_note_commands.append(EchoToggle(note_tick))
-            state.echo = fur_ins.snes_macro_data.is_echo
-
-        # mid-note gain change, handled by remote command
-        if fur_ins.index in self.ins_remote_map:
-            gain_speed = fur_ins.snes_macro_data.gain_speed
-            remote_comand_idx = self.ins_remote_map[fur_ins.index]
-            gain_remote = RemoteCommand(note_tick, remote_comand_idx, RemoteCommandTiming.AFTER_START, gain_speed)
-            if gain_remote is not state.gain_remote:
-                pre_note_commands.append(gain_remote)
-                state.gain_remote = gain_remote
-        elif state.gain_remote is not None: # turn off remote commands when gain is disabled
-            pre_note_commands.append(RemoteCommand(note_tick, 99, RemoteCommandTiming.DISABLE))
-            state.gain_remote = None
-
-        return pre_note_commands
-
-
-    def convert_notes(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLNote]:
-        notes: List[MMLNote] = []
-        tick = 0
-        state = FurnaceState()
-        # process notes
-        cur_dur: Optional[MMLNote] = None
-        for i, row in enumerate(flat_rows):
-            # check for note delay (this also affects note offs)
-            note_tick = tick
-            for effect in row.Effects:
-                effect_num = effect[0]
-                value = effect[1]
-                if effect_num == 0xED: # note delay
-                    note_tick += value
-                    break
-
-            note_kind = row.kind()
-            if note_kind == FurnaceRow.NoteKind.NOTE:
-                fur_ins = None
-                for ins in module.Instruments:
-                    if ins.index == row.Ins:
-                        fur_ins = ins
-                        break
-                pre_note_commands = self.get_pre_note_commands(row, fur_ins, state, note_tick)
-                    
-                # TODO: handle sample maps here, AMK doesn't need to know about that
-                amk_ins = row.Ins
-
-                if cur_dur is not None:
-                    cur_dur.duration = note_tick - cur_dur.tick
-                    notes.append(cur_dur)
-                cur_dur = MMLNote(note_tick, 0, row.Note, amk_ins, pre_note_commands)
-            elif note_kind == FurnaceRow.NoteKind.OFF or note_kind == FurnaceRow.NoteKind.RELEASE:
-                if cur_dur is not None:
-                    cur_dur.duration = note_tick - cur_dur.tick
-                    notes.append(cur_dur)
-                cur_dur = None
-            
-            tick += self.amk_ticks_per_row
-        
-        # Finalize possible final note
-        if cur_dur is not None:
-            cur_dur.duration = tick - cur_dur.tick
-            notes.append(cur_dur)
-
-        return notes
-
-    def get_active_note(self, flat_rows: List[FurnaceRow], row_idx: int) -> Optional[int]:
-        cur_note = None
-        for i, row in enumerate(flat_rows):
-            if row.kind() == FurnaceRow.NoteKind.NOTE:
-                cur_note = row.Note
-            if row_idx == i:
-                return cur_note
-        return None
-
-    def convert_volume_slides(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLCommand]:
-        commands: List[MMLCommand] = []
-        tick = 0
-        vol_change_per_tick: Optional[int] = None
-        current_slide: Optional[VolumeSlide] = None
-        vol_target: int = 0
-        cur_vol: int = 0
-        for i, row in enumerate(flat_rows):
-            vol = row.Vol
-            if vol is not None:
-                cur_vol = vol
-
-            for effect in (row.Effects or []):
-                effect_num = effect[0]
-                value = effect[1]
-                if effect_num == 0x0A: # Volume slide
-                    # this could be another slide or a stop slide command. Either way, we wrap up any current slide
-                    if current_slide is not None:
-                        slide_duration = tick - current_slide.tick
-                        LONGEST_DURATION = max(MMLUtil.TICK_TO_DURATION.keys())
-                        if slide_duration > LONGEST_DURATION:
-                            print(f"Warning: Volume slide duration {slide_duration} is greater than the longest tick duration {LONGEST_DURATION}. Things might break.", file=sys.stderr)
-                        current_slide.duration = slide_duration
-                        current_slide.target_volume = MMLUtil.find_v(round(vol_target))
-                        commands.append(current_slide)
-                    # interpret command
-                    tick_up = value >> 4
-                    tick_down = value & 0x0F
-                    if tick_down == 0 and tick_up == 0:
-                        vol_change_per_tick = None
-                    elif tick_down == 0:
-                        # command value is change per four ticks
-                        vol_change_per_tick = tick_up / 4
-                    elif tick_up == 0:
-                        vol_change_per_tick = -tick_down / 4
-                    else:
-                        print("Warning: Invalid volume slide effect value.", file=sys.stderr)
-                        continue
-
-                    if vol_change_per_tick is not None:
-                        current_slide = VolumeSlide(tick, None, None)
-                    else:
-                        current_slide = None
-                        
-            if current_slide is not None:
-                # update slide target based on change per furnace tick
-                vol_target = cur_vol + vol_change_per_tick * module.Speed1
-                if vol_target > 0x7F:
-                    vol_target = 0x7F
-                if vol_target < 0:
-                    vol_target = 0
-
-                # track current volume separate from target volume
-                # this allows volume changes and volume slides to coexist on the same row
-                cur_vol = vol_target
-   
-            tick += self.amk_ticks_per_row
-
-        return commands
-
-    def convert_single_row_commands(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLCommand]:
-        commands: List[MMLCommand] = []
-        tick = 0
-        for i, row in enumerate(flat_rows):
-            # Volume
-            vol = row.Vol
-            if vol is not None:
-                commands.append(VolumeChange(tick, MMLUtil.find_v(vol)))
-            
-            # Effects
-            for effect in (row.Effects or []):
-                effect_num = effect[0]
-                value = effect[1]
-                if effect_num == 0x80: # Set pan
-                    # Convert from Furnace format (00=left, 80=center, FF=right)
-                    # to AMK format (0=right, 10=center, 20=left)
-                    # Formula: AMK = round((20 * (255 - Furnace)) / 255)
-                    amk_pan = round((20 * (255 - value)) / 255)
-                    commands.append(PanChange(tick, amk_pan))
-                elif effect_num == 0x08: #stereo volume/pan
-                    left_volume = value >> 4  # 0-15 range
-                    right_volume = value & 0x0F  # 0-15 range
-                    amk_pan = int(10 + (left_volume - right_volume) * 2/3)
-                    commands.append(PanChange(tick, amk_pan))
-                elif effect_num == 0xE1: # Note slide up
-                    # speed is first value of nibble, note is second+
-                    # convert max $0F Furnace to quarter note $30 AMK
-                    # TODO: figure out precise speed scaling, I just earballed it
-                    speed = int(48 * (value >> 4) / 15)
-                    semitones = value & 0x0F
-                    note = self.get_active_note(flat_rows, i)
-                    if note is not None:
-                        bent_note = note + semitones
-                    else:
-                        print(f"Warning: No note found at tick {tick} for note slide up effect {effect}.", file=sys.stderr)
-                        continue
-                    commands.append(PitchBend(tick, bent_note, speed))
-
-            tick += self.amk_ticks_per_row
-
-        return commands
-
-    def convert_commands(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLCommand]:
-        # process rows into commands
-        commands: List[MMLCommand] = []
-
-        # convert commands contained within a single row
-        commands.extend(self.convert_single_row_commands(flat_rows, module))
-
-        # convert commands that cover a range of rows
-        commands.extend(self.convert_volume_slides(flat_rows, module))
-
-        # sort commands by tick
-        sorted_commands = sorted(commands, key=lambda x: x.tick)
-
-        return sorted_commands
-    
-    def convert_mml_data(self, module: FurnaceModule) -> MMLData:
-        mml_data = MMLData()
-        mml_data.num_channels = module.NumChannels
-        # for formatting and duration calculations
-        # lengths are in ticks
-        mml_data.measure_length     = module.HighlightB * self.amk_ticks_per_row
-        mml_data.section_length     = module.PatternLength * self.amk_ticks_per_row
-        mml_data.song_length        = len(module.OrdersPerChannel[0]) * mml_data.section_length
-
-
-        for ch in range(module.NumChannels):
-            flat_rows: List[FurnaceRow] = []
-            patmap = module.PatternsByChannel[ch] if ch < len(module.PatternsByChannel) else {}
-            orders = module.OrdersPerChannel[ch] if ch < len(module.OrdersPerChannel) else []
-            for pat in orders:
-                rows = patmap.get(pat)
-                if rows:
-                    flat_rows.extend(rows)
-                else:
-                    print(f"Warning: Channel {ch} references missing pattern {pat}. Inserting empty pattern.", file=sys.stderr)
-                    flat_rows.extend([FurnaceRow() for _ in range(module.PatternLength)])
-
-            loop_tick = self.convert_loop_marker(flat_rows, module)
-            if loop_tick is not None:
-                mml_data.loop_tick = loop_tick
-            mml_data.notes[ch]      = self.convert_notes(flat_rows, module)
-            mml_data.commands[ch]   = self.convert_commands(flat_rows, module)
-
-        return mml_data
-
     def convert_tempo(self, module: FurnaceModule) -> int:
-        rows_per_beat = MMLUtil.AMK_TICKS_PER_BEAT / self.amk_ticks_per_row
+        rows_per_beat = MMLUtil.AMK_TICKS_PER_BEAT / self.row_converter.amk_ticks_per_row
         fur_ticks_per_beat = rows_per_beat * module.Speed1
         beats_per_second = module.TicksPerSecond / fur_ticks_per_beat
         bpm = int(round(60 * beats_per_second))
@@ -378,22 +131,40 @@ class FurnaceConverter:
         echo_data.echoFilterCoeffs = module.SNESFlags.echoFilterCoeffs
         return echo_data
 
-    def convert(self, module: FurnaceModule) -> AMKData:
-        # determine musical duration to map to a furnace row
-        # find first AMK tick value that is greater than or equal to the furnace tick rate
-        for tick_value in MMLUtil.TICK_TO_DURATION.keys():
-            if tick_value >= module.Speed1:
-                self.amk_ticks_per_row = tick_value
-                break
+    def convert_mml_data(self, module: FurnaceModule) -> MMLData:
+        mml_data = MMLData()
+        mml_data.num_channels = module.NumChannels
+        # for formatting and duration calculations
+        # lengths are in ticks
+        mml_data.measure_length     = module.HighlightB * self.row_converter.amk_ticks_per_row
+        mml_data.section_length     = module.PatternLength * self.row_converter.amk_ticks_per_row
+        mml_data.song_length        = len(module.OrdersPerChannel[0]) * mml_data.section_length
 
-        self.tick_ratio = self.amk_ticks_per_row / module.Speed1
-        if self.tick_ratio != round(self.tick_ratio):
-            # TODO: For these situations just give up and do everything in ticks
-            print("Warning: Furnace ticks not cleanly convertible to amk ticks.")
-        print(f"One Furnace tick is {self.tick_ratio:.2g} AMK ticks.")
+
+        for ch in range(module.NumChannels):
+            flat_rows: List[FurnaceRow] = []
+            patmap = module.PatternsByChannel[ch] if ch < len(module.PatternsByChannel) else {}
+            orders = module.OrdersPerChannel[ch] if ch < len(module.OrdersPerChannel) else []
+            for pat in orders:
+                rows = patmap.get(pat)
+                if rows:
+                    flat_rows.extend(rows)
+                else:
+                    print(f"Warning: Channel {ch} references missing pattern {pat}. Inserting empty pattern.", file=sys.stderr)
+                    flat_rows.extend([FurnaceRow() for _ in range(module.PatternLength)])
+
+            loop_tick = self.row_converter.convert_loop_marker(flat_rows, module)
+            if loop_tick is not None:
+                mml_data.loop_tick = loop_tick
+            mml_data.notes[ch]      = self.row_converter.convert_notes(flat_rows, self.ins_remote_map, module.Instruments)
+            mml_data.commands[ch]   = self.row_converter.convert_commands(flat_rows, module)
+
+        return mml_data
+
+    def convert(self, module: FurnaceModule) -> AMKData:
+        self.row_converter = RowConverter(module.Speed1)
 
         amk_data = AMKData()
-
         amk_data.spc_info     = self.convert_spc_info(module)
         amk_data.samples      = self.convert_samples(module)
         amk_data.instruments  = self.convert_instruments(module)

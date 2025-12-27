@@ -21,6 +21,9 @@ Jump commands:
     The last instance of the command will be used to place the intro marker in the amk output.
 
 Wavetables are not supported. All instruments must use samples or noise.
+
+Fades:  
+    Prefer gain and volume slides over interpolate actions. This will save space in the output.
     
 """
 
