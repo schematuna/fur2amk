@@ -63,12 +63,20 @@ class PitchBend(MMLCommand):
         return f"$DD${MMLUtil.to_hex(0)}${MMLUtil.to_hex(self.speed)} {bend_note}"
 
 @dataclass
-class VolumeSlide(MMLCommand):
+class VolumeFade(MMLCommand):
     duration: int = 0
     target_volume: int = 0
 
     def to_mml(self, mml_state: 'MMLState' = None) -> str:
         return f"$E8${MMLUtil.to_hex(self.duration)}${MMLUtil.to_hex(self.target_volume)}"
+
+@dataclass
+class PanFade(MMLCommand):
+    duration: int = 0
+    target_pan: int = 0
+
+    def to_mml(self, mml_state: 'MMLState' = None) -> str:
+        return f"$DC${MMLUtil.to_hex(self.duration)}${MMLUtil.to_hex(self.target_pan)}"
 
 @dataclass
 class EnableGainCommand(MMLCommand):

@@ -197,22 +197,11 @@ class FurnaceParser:
         samp.c4_rate = int(c4_rate) if c4_rate else None
         samp.sample_rate = int(comp_rate) if comp_rate else None
         samp.depth = int(depth or 16)
-        # Interpret raw payload: depth 16/8 are PCM, depth 9 is BRR blocks
-        try:
-            if samp.depth == 16:
-                n = len(raw) // 2
-                samp.pcm16 = list(struct.unpack('<' + 'h' * n, raw[: n * 2]))
-            elif samp.depth == 8:
-                # Signed 8-bit to 16-bit
-                samp.pcm16 = [int(struct.unpack('<b', bytes([b]))[0]) << 8 for b in raw]
-            elif samp.depth == 9:
-                # BRR data (9 bytes per block). Keep raw for direct write.
-                samp.brr_raw = raw
-                samp.pcm16 = []
-            else:
-                samp.pcm16 = []
-        except Exception:
-            samp.pcm16 = []
+        if samp.depth == 9:
+            # BRR data (9 bytes per block). Keep raw for direct write.
+            samp.brr_raw = raw
+        else:
+            raise CompileErrorException(f"Only BBR samples are supported, got depth {samp.depth}")
         # Loop markers
         if loop_start is not None and loop_end is not None and loop_start >= 0 and loop_end > loop_start:
             samp.loop_start = int(loop_start)
