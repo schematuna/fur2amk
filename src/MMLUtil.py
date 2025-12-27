@@ -97,7 +97,8 @@ class DurationFormatter:
     # This is how AMK works - a whole note is always 4 quarter notes
     # TODO: support triplets for relevant time signatures and/or beat subdivisions
 
-    def format(self, duration_ticks: int, continuation: bool = False) -> str:
+    @staticmethod
+    def format(duration_ticks: int, continuation: bool = False) -> str:
         """Format a note or rest token with duration and ties.
         
         Args:
@@ -110,7 +111,7 @@ class DurationFormatter:
             return ''
         
         # Use run_to_denoms to convert ticks to MML duration denominators
-        denoms, remainder = self.run_to_denoms(duration_ticks)
+        denoms, remainder = DurationFormatter.run_to_denoms(duration_ticks)
         
         token = ''
         
@@ -132,21 +133,8 @@ class DurationFormatter:
         
         return token
 
-    def divisors(self, n: int) -> List[int]:
-        n = int(n)
-        if n <= 0:
-            return [1]
-        divs = []
-        i = 1
-        while i * i <= n:
-            if n % i == 0:
-                divs.append(i)
-                if i != n // i:
-                    divs.append(n // i)
-            i += 1
-        return sorted(divs)
-
-    def run_to_denoms(self, ticks: int) -> Tuple[List[int], int]:
+    @staticmethod
+    def run_to_denoms(ticks: int) -> Tuple[List[int], int]:
         """Decompose ticks into a list of AMK duration denominators to tie.
 
         Uses TICK_TO_DURATION to map tick values to duration denominators.

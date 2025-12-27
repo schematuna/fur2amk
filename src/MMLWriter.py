@@ -24,7 +24,7 @@ class MMLWord:
     note: Optional[int] = None
     commands: List[MMLCommand] = field(default_factory=list)
 
-    def to_mml(self, mml_state: MMLState, durFormatter: DurationFormatter) -> str:
+    def to_mml(self, mml_state: MMLState) -> str:
         word_txt = ''
         command_idx = 0
         cur_tick = self.tick
@@ -52,7 +52,7 @@ class MMLWord:
         if command_idx < len(self.commands):
             first_cmd_tick = self.commands[command_idx].tick
             if first_cmd_tick > cur_tick:
-                word_txt += durFormatter.format(first_cmd_tick - cur_tick, cont) + ' '
+                word_txt += DurationFormatter.format(first_cmd_tick - cur_tick, cont) + ' '
                 cur_tick = first_cmd_tick
                 cont = True
         
@@ -70,55 +70,155 @@ class MMLWord:
             if command_idx < len(self.commands):
                 next_cmd_tick = self.commands[command_idx].tick
                 if next_cmd_tick > cur_tick:
-                    word_txt += durFormatter.format(next_cmd_tick - cur_tick, cont) + ' '
+                    word_txt += DurationFormatter.format(next_cmd_tick - cur_tick, cont) + ' '
                     cur_tick = next_cmd_tick
                     cont = True
 
         # Add remaining duration to end of note
         end_tick = self.tick + self.duration
         if cur_tick < end_tick:
-            word_txt += durFormatter.format(end_tick - cur_tick, cont)
+            word_txt += DurationFormatter.format(end_tick - cur_tick, cont)
 
         return word_txt
 
+class MMLSentence:
+    def __init__(self, words: List[MMLWord]) -> None:
+        self.words = words
+    
+    def __eq__(self, other) -> bool:
+        if not isinstance(other, MMLSentence):
+            return False
+        return self.words == other.words
+
+    def to_mml(self, mml_state: MMLState) -> str:
+        sentence_txt = ''
+        for word in self.words:
+            sentence_txt += word.to_mml(mml_state) + ' '
+        return sentence_txt.rstrip()
 
 class MMLLine:
-    def __init__(self, words: List[MMLWord], section_num: int) -> None:
+    def __init__(self, words: List[MMLWord], section_num: int, measure_length: int) -> None:
         self.section_num = section_num
-        self.words = words
         self.label: Optional[int] = None
         self.isRepeat: bool = False
+        self.MAX_CHARS_PER_LINE = 80
+        self.MIN_CHARS_PER_LINE = 10
+        self.sentences: List[MMLSentence] = []
+        self.make_sentences(words, measure_length)
     
     def __eq__(self, other) -> bool:
         if not isinstance(other, MMLLine):
             return False
-        return self.words == other.words
+        return self.sentences == other.sentences
 
-    def convert_words(self, mml_state: MMLState, durFormatter: DurationFormatter) -> List[str]:
-        words_txt = ''
-        for word in self.words:
-            words_txt += word.to_mml(mml_state, durFormatter) + ' '
-        return words_txt.rstrip()
+    def tick(self) -> int:
+        return self.sentences[0].words[0].tick
+
+    def convert_sentences(self, mml_state: MMLState) -> List[str]:
+        line_txt = ''
+        for sentence in self.sentences:
+            line_txt += sentence.to_mml(mml_state) + '\n'
+
+        return line_txt.rstrip()
+
+    # measure-informed sentence splitting to avoid overlong lines
+    def make_sentences(self, words: List[MMLWord], measure_length: int) -> None:
+        self.sentences: List[MMLSentence] = [MMLSentence(words)]
+        mml_state = MMLState()
+        if len(self.convert_sentences(mml_state)) > self.MAX_CHARS_PER_LINE:
+            self.sentences: List[MMLSentence] = []
+            cur_measure_num = words[0].tick // measure_length
+            cur_words: List[MMLWord] = []
+            for word in words:
+                measureNum = word.tick // measure_length
+                if measureNum != cur_measure_num:
+                    next_sentence = MMLSentence(cur_words)
+                    # don't split line if it's too short
+                    if not (len(next_sentence.to_mml(mml_state)) < self.MIN_CHARS_PER_LINE):
+                        self.sentences.append(next_sentence)
+                        cur_words = []
+                    cur_measure_num = measureNum
+                cur_words.append(word)
+            next_sentence = MMLSentence(cur_words)
+            if not (len(next_sentence.to_mml(mml_state)) < self.MIN_CHARS_PER_LINE):
+                self.sentences.append(next_sentence)
+            else:
+                self.sentences[-1].words.extend(cur_words)
+
+        # Break up any sentences that are still too long, splitting along beat boundaries
+        i = 0
+        while i < len(self.sentences):
+            sentence = self.sentences[i]
+            if len(sentence.to_mml(mml_state)) > self.MAX_CHARS_PER_LINE:
+                # Split sentence along beat boundaries
+                new_sentences = self._split_sentence_by_beats(sentence, mml_state)
+                # If we couldn't split (all words in same beat), keep original and move on
+                if len(new_sentences) <= 1:
+                    i += 1
+                else:
+                    # Replace the original sentence with the split ones
+                    self.sentences[i:i+1] = new_sentences
+                    # Continue checking from the same index (don't increment) in case new sentences are also too long
+            else:
+                i += 1
     
-    def to_mml(self, mml_state: MMLState, durFormatter: DurationFormatter) -> str:
+    def _split_sentence_by_beats(self, sentence: MMLSentence, mml_state: MMLState) -> List[MMLSentence]:
+        """Split a sentence into smaller sentences along beat boundaries."""
+        if not sentence.words:
+            return [sentence]
+        
+        new_sentences: List[MMLSentence] = []
+        cur_words: List[MMLWord] = []
+        cur_beat_num = None
+        
+        for word in sentence.words:
+            beat_num = word.tick // MMLUtil.AMK_TICKS_PER_BEAT
+            
+            # If we hit a new beat and have accumulated words, start a new sentence
+            if cur_beat_num is not None and beat_num != cur_beat_num and cur_words:
+                new_sentence = MMLSentence(cur_words)
+                # Only split if the sentence would still be too long
+                # If splitting here would make it too short, continue accumulating
+                if len(new_sentence.to_mml(mml_state)) >= self.MIN_CHARS_PER_LINE:
+                    new_sentences.append(new_sentence)
+                    cur_words = []
+            
+            cur_beat_num = beat_num
+            cur_words.append(word)
+        
+        # Add the final group of words
+        if cur_words:
+            final_sentence = MMLSentence(cur_words)
+            # If final sentence would be too short and we have previous sentences, merge with previous
+            if len(final_sentence.to_mml(mml_state)) < self.MIN_CHARS_PER_LINE and new_sentences:
+                # Merge final sentence with the previous one
+                new_sentences[-1].words.extend(cur_words)
+            else:
+                new_sentences.append(final_sentence)
+        
+        # If we couldn't split (all words in one beat), return original sentence
+        if len(new_sentences) <= 1:
+            return [sentence]
+        
+        return new_sentences
+    
+    def to_mml(self, mml_state: MMLState) -> str:
         line_txt = ''
         if self.label is not None:
             if self.isRepeat:
                 line_txt += f"({self.label})"
             else:
-                line_txt += f"({self.label})["
-                line_txt += self.convert_words(mml_state, durFormatter)
+                line_txt += f"({self.label})[\n"
+                line_txt += self.convert_sentences(mml_state)
                 line_txt += "]"
         else:
-            line_txt += self.convert_words(mml_state, durFormatter)
+            line_txt += self.convert_sentences(mml_state)
         return line_txt
 
 class MMLWriter:
     def __init__(self, mml_data: MMLData, label_start: int) -> None:
         self.mml_data = mml_data
         self.label_count = label_start
-
-        self.durForamtter = DurationFormatter()
 
     def channel_has_remote_commands(self, channel: int) -> bool:
         for note in self.mml_data.notes[channel]:
@@ -266,21 +366,21 @@ class MMLWriter:
                 # split line at loop point
                 is_loop_point = has_loop_point and word.tick == self.mml_data.loop_tick
                 if sectionNum != cur_section_num or is_loop_point:
-                    lines.append(MMLLine(line_words, cur_section_num))
+                    lines.append(MMLLine(line_words, cur_section_num, self.mml_data.measure_length))
                     cur_section_num = sectionNum
                     line_words = []
                 line_words.append(word)
 
-            lines.append(MMLLine(line_words, cur_section_num))
+            lines.append(MMLLine(line_words, cur_section_num, self.mml_data.measure_length))
 
             self.label_count = self.optimize_loops(lines, self.label_count)
 
             mml_state = MMLState()
             for line in lines:
-                if has_loop_point and line.words[0].tick == self.mml_data.loop_tick:
+                if has_loop_point and line.tick() == self.mml_data.loop_tick:
                     word_txt += self.write_loop_point(self.channel_has_remote_commands(c))
                 word_txt += f"; section {MMLUtil.to_hex(line.section_num)}\n"
-                word_txt += line.to_mml(mml_state, self.durForamtter) + '\n'
+                word_txt += line.to_mml(mml_state) + '\n'
 
             txt += word_txt + '\n\n'
         return txt
