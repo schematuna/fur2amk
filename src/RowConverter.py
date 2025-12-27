@@ -314,12 +314,14 @@ class RowConverter:
             for effect in (row.Effects or []):
                 effect_num = effect[0]
                 value = effect[1]
-                if effect_num == FurnaceCommandType.NOTE_SLIDE_UP.value:
+                if effect_num == FurnaceCommandType.NOTE_SLIDE_UP.value or effect_num == FurnaceCommandType.NOTE_SLIDE_DOWN.value:
                     # speed is first value of nibble, note is second+
                     # convert max $0F Furnace to quarter note $30 AMK
                     # TODO: figure out precise speed scaling, I just earballed it
                     speed = int(48 * (value >> 4) / 15)
                     semitones = value & 0x0F
+                    if effect_num == FurnaceCommandType.NOTE_SLIDE_DOWN.value:
+                        semitones = -semitones
                     note = self.get_active_note(flat_rows, i)
                     if note is not None:
                         bent_note = note + semitones
