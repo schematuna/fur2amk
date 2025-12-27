@@ -28,6 +28,11 @@ class EchoToggle(MMLCommand):
         return f"$F4$03"
 
 @dataclass
+class LegatoToggle(MMLCommand):
+    def to_mml(self, mml_state: 'MMLState' = None) -> str:
+        return f"$F4$01"
+
+@dataclass
 class InstrumentChange(MMLCommand):
     instrument_index: int
 
