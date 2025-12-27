@@ -13,6 +13,7 @@ class FurnaceState:
     gain_remote: RemoteCommand = None
     fur_ins_idx: int = None
     echo: bool = True
+    is_legato: bool = False
 
 class FurnaceCommandType(Enum):
     STEREO_PAN = 0x08
@@ -21,6 +22,9 @@ class FurnaceCommandType(Enum):
     PAN_SLIDE = 0x83
     NOTE_SLIDE_UP = 0xE1
     NOTE_SLIDE_DOWN = 0xE2
+    QUICK_LEGATO = 0xE6 # basically another note within a row
+    QUICK_LEGATO_UP = 0xE8
+    QUICK_LEGATO_DOWN = 0xE9
     NOTE_DELAY = 0xED
     FINE_VOLUME_SLIDE_UP = 0xF3
     FINE_VOLUME_SLIDE_DOWN = 0xF4
@@ -86,12 +90,15 @@ class RowConverter:
         for i, row in enumerate(flat_rows):
             # check for note delay (this also affects note offs)
             note_tick = tick
-            for effect in row.Effects:
+            # does this row require legato? Check all effects
+            found_legato = False
+            for effect in (row.Effects or []):
                 effect_num = effect[0]
                 value = effect[1]
                 if effect_num == FurnaceCommandType.NOTE_DELAY.value:
                     note_tick += int(value * self.tick_ratio)
-                    break
+                # Check if this effect is a legato effect
+                found_legato = found_legato or self.is_quick_legato(effect_num)
 
             note_kind = row.kind()
             if note_kind == FurnaceRow.NoteKind.NOTE:
@@ -101,26 +108,54 @@ class RowConverter:
                         fur_ins = ins
                         break
                 pre_note_commands = self.get_pre_note_commands(fur_ins, ins_remote_map, state, note_tick)
+
+                if found_legato != state.is_legato:
+                    pre_note_commands.append(LegatoToggle(note_tick))
+                    state.is_legato = found_legato
                     
                 # TODO: handle sample maps here, AMK doesn't need to know about that
-                amk_ins = row.Ins
+                amk_ins_idx = row.Ins
 
                 if cur_dur is not None:
                     cur_dur.duration = note_tick - cur_dur.tick
                     notes.append(cur_dur)
-                cur_dur = MMLNote(note_tick, 0, row.Note, amk_ins, pre_note_commands)
+                cur_dur = MMLNote(note_tick, 0, row.Note, amk_ins_idx, pre_note_commands)
+
             elif note_kind == FurnaceRow.NoteKind.OFF or note_kind == FurnaceRow.NoteKind.RELEASE:
                 if cur_dur is not None:
+                    if found_legato != state.is_legato:
+                        cur_dur.pre_note_commands.append(LegatoToggle(note_tick))
+                        state.is_legato = found_legato  
                     cur_dur.duration = note_tick - cur_dur.tick
                     notes.append(cur_dur)
                 cur_dur = None
             
+
+            # check for quick legato, make a new note if found
+            for effect in row.Effects:
+                effect_num = effect[0]
+                value = effect[1]
+                if self.is_quick_legato(effect_num):
+                    pre_note_commands = []
+                    note, delay = self.get_quick_legato_note(effect_num, value, cur_dur.note)
+                    new_note_onset = note_tick + int(delay * self.tick_ratio)
+                    if not state.is_legato:
+                        pre_note_commands.append(LegatoToggle(note_tick))
+                        state.is_legato = True
+                    if cur_dur is not None:
+                        cur_dur.duration = new_note_onset - cur_dur.tick
+                        notes.append(cur_dur)
+                    cur_dur = MMLNote(new_note_onset, 0, note, cur_dur.instrument, pre_note_commands)
+
             tick += self.amk_ticks_per_row
         
         # Finalize possible final note
         if cur_dur is not None:
             cur_dur.duration = tick - cur_dur.tick
             notes.append(cur_dur)
+
+        if state.is_legato:
+            notes[-1].pre_note_commands.append(LegatoToggle(tick))
 
         return notes
 
@@ -133,11 +168,35 @@ class RowConverter:
                 return cur_note
         return None
 
+    def is_pitch_slide(self, effect_num: int) -> bool:
+        return effect_num == FurnaceCommandType.NOTE_SLIDE_UP.value \
+            or effect_num == FurnaceCommandType.NOTE_SLIDE_DOWN.value
+
     def is_volume_slide(self, effect_num: int) -> bool:
         return effect_num == FurnaceCommandType.VOLUME_SLIDE.value \
             or effect_num == FurnaceCommandType.FAST_VOLUME_SLIDE.value \
             or effect_num == FurnaceCommandType.FINE_VOLUME_SLIDE_UP.value \
             or effect_num == FurnaceCommandType.FINE_VOLUME_SLIDE_DOWN.value
+
+    def is_quick_legato(self, effect_num: int) -> bool:
+        return effect_num == FurnaceCommandType.QUICK_LEGATO.value
+
+    def get_pitch_slide_info(self, effect_num: int, value: int, note: Optional[int]) -> Tuple[Optional[int], Optional[int]]:
+        if effect_num == FurnaceCommandType.NOTE_SLIDE_DOWN.value or \
+           effect_num == FurnaceCommandType.NOTE_SLIDE_UP.value:
+            # speed is first value of nibble, note is second+
+            # convert max $0F Furnace to quarter note $30 AMK
+            # TODO: figure out precise speed scaling, I just earballed it
+            speed = int(48 * (value >> 4) / 15)
+            semitones = value & 0x0F
+            if effect_num == FurnaceCommandType.NOTE_SLIDE_DOWN.value:
+                semitones = -semitones
+            bent_note = note + semitones
+        else:
+            print(f"Warning: Invalid pitch slide effect number {effect_num}.", file=sys.stderr)
+            return None, None
+
+        return bent_note, speed
 
     def get_volume_slide_change(self, effect_num: int, value: int) -> Optional[int]:
         vol_change_per_tick = None
@@ -166,6 +225,21 @@ class RowConverter:
             print(f"Warning: Invalid volume slide effect number {effect_num}.", file=sys.stderr)
         
         return vol_change_per_tick
+
+    def get_quick_legato_note(self, effect_num: int, value: int, cur_note: Optional[int]) -> Tuple[Optional[int], Optional[int]]:
+        if effect_num == FurnaceCommandType.QUICK_LEGATO.value:
+            x = value >> 4
+            semitones = value & 0x0F
+            delay = 0
+            if x < 8:
+                delay = x
+            else:
+                delay = x - 8
+                semitones = -semitones
+
+            new_note = cur_note + semitones
+
+            return new_note, delay
 
     def convert_volume_commands(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
@@ -314,21 +388,9 @@ class RowConverter:
             for effect in (row.Effects or []):
                 effect_num = effect[0]
                 value = effect[1]
-                if effect_num == FurnaceCommandType.NOTE_SLIDE_UP.value or effect_num == FurnaceCommandType.NOTE_SLIDE_DOWN.value:
-                    # speed is first value of nibble, note is second+
-                    # convert max $0F Furnace to quarter note $30 AMK
-                    # TODO: figure out precise speed scaling, I just earballed it
-                    speed = int(48 * (value >> 4) / 15)
-                    semitones = value & 0x0F
-                    if effect_num == FurnaceCommandType.NOTE_SLIDE_DOWN.value:
-                        semitones = -semitones
-                    note = self.get_active_note(flat_rows, i)
-                    if note is not None:
-                        bent_note = note + semitones
-                    else:
-                        print(f"Warning: No note found at tick {tick} for note slide up effect {effect}.", file=sys.stderr)
-                        continue
-                    commands.append(PitchBend(tick, bent_note, speed))
+                if self.is_pitch_slide(effect_num):
+                    note, speed = self.get_pitch_slide_info(effect_num, value, self.get_active_note(flat_rows, i))
+                    commands.append(PitchBend(tick, note, speed))
 
             tick += self.amk_ticks_per_row
 
