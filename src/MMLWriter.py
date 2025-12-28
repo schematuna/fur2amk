@@ -11,6 +11,16 @@ from .MMLUtil import *
 # INTERNAL MML WRITER CLASSES  #
 ################################
 
+# silent instruction to break a tie
+# useful for pitchbend commands that need to be placed after the duration to be modulated
+@dataclass
+class TieBreakCommand(MMLCommand):
+    def add_spaces(self, text: str) -> str:
+        return text
+
+    def to_mml(self, mml_state: 'MMLState' = None) -> str:
+        return ''
+
 @dataclass
 class MMLRest:
     tick: int
@@ -31,7 +41,7 @@ class MMLWord:
         
         # process any pre-note commands (at the same tick as note start)
         while command_idx < len(self.commands) and self.commands[command_idx].tick == self.tick:
-            word_txt += self.commands[command_idx].to_mml(mml_state) + ' '
+            word_txt += self.commands[command_idx].get_text(mml_state)
             command_idx += 1
 
         # add note name and octave
@@ -50,9 +60,12 @@ class MMLWord:
         # Add initial duration (before any remaining commands)
         cont = False
         if command_idx < len(self.commands):
-            first_cmd_tick = self.commands[command_idx].tick
+            first_cmd = self.commands[command_idx]
+            first_cmd_tick = first_cmd.tick
             if first_cmd_tick > cur_tick:
-                word_txt += DurationFormatter.format(first_cmd_tick - cur_tick, cont) + ' '
+                word_txt += DurationFormatter.format(first_cmd_tick - cur_tick, cont)
+                if not isinstance(first_cmd, TieBreakCommand): # don't add space if first command is a tie break
+                    word_txt += ' '
                 cur_tick = first_cmd_tick
                 cont = True
         
@@ -60,7 +73,7 @@ class MMLWord:
         while command_idx < len(self.commands):
             command = self.commands[command_idx]
             cmd_tick = command.tick
-            word_txt += command.to_mml(mml_state) + ' '
+            word_txt += command.get_text(mml_state)
             command_idx += 1
             
             # Update cur_tick to this command's tick
@@ -68,9 +81,12 @@ class MMLWord:
             
             # Add duration to next command
             if command_idx < len(self.commands):
-                next_cmd_tick = self.commands[command_idx].tick
+                next_cmd = self.commands[command_idx]
+                next_cmd_tick = next_cmd.tick
                 if next_cmd_tick > cur_tick:
-                    word_txt += DurationFormatter.format(next_cmd_tick - cur_tick, cont) + ' '
+                    word_txt += DurationFormatter.format(next_cmd_tick - cur_tick, cont)
+                    if not isinstance(next_cmd, TieBreakCommand): # don't add space if next command is a tie break
+                        word_txt += ' '
                     cur_tick = next_cmd_tick
                     cont = True
 
@@ -295,7 +311,18 @@ class MMLWriter:
             while cmd_idx < len(commands):
                 cmd_tick = commands[cmd_idx].tick
                 if cmd_tick >= duration.tick and cmd_tick < duration.tick + duration.duration:
-                    word.commands.append(commands[cmd_idx])
+                    command = commands[cmd_idx]
+
+                    # special pitchbend handling
+                    if isinstance(commands[cmd_idx], PitchBend):
+                        # Pitchbend commands are placed after the duration to be modulated
+                        word.commands.append(TieBreakCommand(cmd_tick))
+                        new_tick = cmd_tick + command.duration
+                        if new_tick >= duration.tick + duration.duration:
+                            print(f"Warning: Pitchbend duration {command.duration} exceeds the duration of the note. The command will be ignored.")
+                        command.tick = new_tick
+                        
+                    word.commands.append(command)
                     cmd_idx += 1
                 else:
                     break

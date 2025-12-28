@@ -181,22 +181,21 @@ class RowConverter:
     def is_quick_legato(self, effect_num: int) -> bool:
         return effect_num == FurnaceCommandType.QUICK_LEGATO.value
 
-    def get_pitch_slide_info(self, effect_num: int, value: int, note: Optional[int]) -> Tuple[Optional[int], Optional[int]]:
+    def get_pitch_slide_info(self, effect_num: int, value: int) -> Tuple[Optional[int], Optional[int]]:
         if effect_num == FurnaceCommandType.NOTE_SLIDE_DOWN.value or \
            effect_num == FurnaceCommandType.NOTE_SLIDE_UP.value:
             # speed is first value of nibble, note is second+
             # convert max $0F Furnace to quarter note $30 AMK
             # TODO: figure out precise speed scaling, I just earballed it
-            speed = int(48 * (value >> 4) / 15)
+            speed = value >> 4
             semitones = value & 0x0F
             if effect_num == FurnaceCommandType.NOTE_SLIDE_DOWN.value:
                 semitones = -semitones
-            bent_note = note + semitones
         else:
             print(f"Warning: Invalid pitch slide effect number {effect_num}.", file=sys.stderr)
             return None, None
 
-        return bent_note, speed
+        return semitones, speed
 
     def get_volume_slide_change(self, effect_num: int, value: int) -> Optional[int]:
         vol_change_per_tick = None
@@ -380,7 +379,7 @@ class RowConverter:
 
         return commands
 
-    def convert_other_commands(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLCommand]:
+    def convert_pitch_commands(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
         tick = 0
         for i, row in enumerate(flat_rows):            
@@ -389,8 +388,18 @@ class RowConverter:
                 effect_num = effect[0]
                 value = effect[1]
                 if self.is_pitch_slide(effect_num):
-                    note, speed = self.get_pitch_slide_info(effect_num, value, self.get_active_note(flat_rows, i))
-                    commands.append(PitchBend(tick, note, speed))
+                    semitones, speed = self.get_pitch_slide_info(effect_num, value)
+                    target_note = self.get_active_note(flat_rows, i) + semitones
+                    # Empirical formula to convert speed to pitch change rate
+                    ticks_per_octave = 96 / speed
+                    octaves_to_slide = abs(semitones) / 12
+                    ticks_to_slide = ticks_per_octave * octaves_to_slide
+                    duration = int(ticks_to_slide * self.tick_ratio)
+                    LONGEST_DURATION = max(MMLUtil.TICK_TO_DURATION.keys())
+                    if duration > LONGEST_DURATION:
+                        print(f"Warning: Pitch slide duration {duration} is greater than the longest tick duration {MMLUtil.TICK_TO_DURATION.keys()[-1]}. Things might break.", file=sys.stderr)
+
+                    commands.append(PitchBend(tick, duration, target_note))
 
             tick += self.amk_ticks_per_row
 
@@ -402,7 +411,7 @@ class RowConverter:
 
         commands.extend(self.convert_volume_commands(flat_rows, module))
         commands.extend(self.convert_pan_commands(flat_rows, module))
-        commands.extend(self.convert_other_commands(flat_rows, module))
+        commands.extend(self.convert_pitch_commands(flat_rows, module))
 
         # sort commands by tick
         sorted_commands = sorted(commands, key=lambda x: x.tick)
