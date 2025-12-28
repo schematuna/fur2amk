@@ -19,8 +19,16 @@ class RemoteCommandTiming(Enum):
 class MMLCommand:
     tick: int = field(compare=False)
 
+    # override to remove spaces from the command text
+    def add_spaces(self, text: str) -> str:
+        return text + ' '
+
     def to_mml(self, mml_state: 'MMLState' = None) -> str:
         raise NotImplementedError("Subclasses must implement to_mml")
+
+    def get_text(self, mml_state: 'MMLState' = None) -> str:
+        return self.add_spaces(self.to_mml(mml_state))
+
 
 @dataclass
 class EchoToggle(MMLCommand):
@@ -55,17 +63,20 @@ class PanChange(MMLCommand):
 
 @dataclass
 class PitchBend(MMLCommand):
+    # AMK Pitchbend command has a delay field but we never use that here
+    # instead MMLWriter will figure out the correct placement of the command automatically
+    duration: int
     note: int
-    speed: int
+
+    def add_spaces(self, text: str) -> str:
+        return text
 
     def to_mml(self, mml_state: 'MMLState' = None) -> str:
         bend_note, octave = MMLUtil.note_name_and_octave(self.note)
         if octave != mml_state.octave:
             bend_note = f'o{octave}{bend_note}'
             mml_state.octave = octave
-        # TODO: handling delay correctly here?
-        # amk_delay = MMLUtil.to_hex(delay * 8) # $08 = 1 eighth note
-        return f"$DD${MMLUtil.to_hex(0)}${MMLUtil.to_hex(self.speed)} {bend_note}"
+        return f"$DD$00${MMLUtil.to_hex(self.duration)} {bend_note}"
 
 @dataclass
 class VolumeFade(MMLCommand):
