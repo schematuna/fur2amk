@@ -86,6 +86,11 @@ class MMLUtil:
         octave = i // 12 - 5  # align with fur2tad convention
         return names[note], octave
 
+    @staticmethod
+    def fur_pitch_change_to_semitones(change: int) -> int:
+        PITCH_STEPS_PER_OCTAVE = 384
+        semitones = round(change * 12 / PITCH_STEPS_PER_OCTAVE)
+        return int(semitones)
 
 @dataclass
 class MMLState:

@@ -16,6 +16,9 @@ class FurnaceState:
     is_legato: bool = False
 
 class FurnaceCommandType(Enum):
+    PITCH_SLIDE_UP = 0x01
+    PITCH_SLIDE_DOWN = 0x02
+    PORTAMENTO = 0x03
     STEREO_PAN = 0x08
     VOLUME_SLIDE = 0x0A
     PAN = 0x80
@@ -168,10 +171,6 @@ class RowConverter:
                 return cur_note
         return None
 
-    def is_pitch_slide(self, effect_num: int) -> bool:
-        return effect_num == FurnaceCommandType.NOTE_SLIDE_UP.value \
-            or effect_num == FurnaceCommandType.NOTE_SLIDE_DOWN.value
-
     def is_volume_slide(self, effect_num: int) -> bool:
         return effect_num == FurnaceCommandType.VOLUME_SLIDE.value \
             or effect_num == FurnaceCommandType.FAST_VOLUME_SLIDE.value \
@@ -262,9 +261,6 @@ class RowConverter:
                     # this could be another slide or a stop slide command. Either way, we wrap up any current slide
                     if current_slide is not None:
                         slide_duration = tick - current_slide.tick
-                        LONGEST_DURATION = max(MMLUtil.TICK_TO_DURATION.keys())
-                        if slide_duration > LONGEST_DURATION:
-                            print(f"Warning: Volume slide duration {slide_duration} is greater than the longest tick duration {LONGEST_DURATION}. Things might break.", file=sys.stderr)
                         current_slide.duration = slide_duration
                         current_slide.target_volume = MMLUtil.find_v(round(vol_target))
                         commands.append(current_slide)
@@ -331,9 +327,6 @@ class RowConverter:
                     # this could be another slide or a stop slide command. Either way, we wrap up any current slide
                     if current_slide is not None:
                         slide_duration = tick - current_slide.tick
-                        LONGEST_DURATION = max(MMLUtil.TICK_TO_DURATION.keys())
-                        if slide_duration > LONGEST_DURATION:
-                            print(f"Warning: Pan slide duration {slide_duration} is greater than the longest tick duration {LONGEST_DURATION}. Things might break.", file=sys.stderr)
                         current_slide.duration = slide_duration
                         current_slide.target_pan = MMLUtil.fur_pan_to_amk(round(pan_target))
                         commands.append(current_slide)
@@ -349,6 +342,7 @@ class RowConverter:
                         pan_change_per_tick = right / 2
                     else:
                         print(f"Warning: Invalid pan slide effect value {value}.", file=sys.stderr)
+
                     if pan_change_per_tick is not None:
                         current_slide = PanFade(tick, None, None)
                     else:
@@ -382,14 +376,23 @@ class RowConverter:
     def convert_pitch_commands(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
         tick = 0
+
+        pitch_change_per_tick: Optional[int] = None
+        current_slide: Optional[PitchBend] = None
+        change_target: int = 0
+        cur_change: int = 0
         for i, row in enumerate(flat_rows):            
             # Effects
             for effect in (row.Effects or []):
                 effect_num = effect[0]
                 value = effect[1]
-                if self.is_pitch_slide(effect_num):
+                if effect_num == FurnaceCommandType.NOTE_SLIDE_UP.value or effect_num == FurnaceCommandType.NOTE_SLIDE_DOWN.value:
                     semitones, speed = self.get_pitch_slide_info(effect_num, value)
                     target_note = self.get_active_note(flat_rows, i) + semitones
+                    if target_note > 141:
+                        target_note = 141
+                    if target_note < 0:
+                        target_note = 0
                     # Empirical formula to convert speed to pitch change rate
                     ticks_per_octave = 96 / speed
                     octaves_to_slide = abs(semitones) / 12
@@ -398,8 +401,53 @@ class RowConverter:
                     LONGEST_DURATION = max(MMLUtil.TICK_TO_DURATION.keys())
                     if duration > LONGEST_DURATION:
                         print(f"Warning: Pitch slide duration {duration} is greater than the longest tick duration {MMLUtil.TICK_TO_DURATION.keys()[-1]}. Things might break.", file=sys.stderr)
-
                     commands.append(PitchBend(tick, duration, target_note))
+                elif effect_num == FurnaceCommandType.PITCH_SLIDE_UP.value or effect_num == FurnaceCommandType.PITCH_SLIDE_DOWN.value:
+                    # this could be another slide or a stop slide command. Either way, we wrap up any current slide
+                    if current_slide is not None:
+                        slide_duration = tick - current_slide.tick
+                        current_slide.duration = slide_duration
+                        semitones = MMLUtil.fur_pitch_change_to_semitones(change_target)
+                        current_slide.note = self.get_active_note(flat_rows, i) + semitones
+                        commands.append(current_slide)
+
+                    if value == 0:
+                        pitch_change_per_tick = None
+                    else:
+                        if effect_num == FurnaceCommandType.PITCH_SLIDE_UP.value:
+                            pitch_change_per_tick = value
+                        elif effect_num == FurnaceCommandType.PITCH_SLIDE_DOWN.value:
+                            pitch_change_per_tick = -value
+
+                    if pitch_change_per_tick is not None:
+                        current_slide = PitchBend(tick, None, None)
+                    else:
+                        current_slide = None
+                        
+            if current_slide is not None:
+                # if slide is too long, split it into multiple slides
+                cur_duration = tick - current_slide.tick
+                # pitchbend can't operate on a whole note, since 1 = 2^2 under the hood
+                LONGEST_DURATION = int(max(MMLUtil.TICK_TO_DURATION.keys()) / 2)
+                if cur_duration >= LONGEST_DURATION:
+                    current_slide.duration = LONGEST_DURATION
+                    semitones = MMLUtil.fur_pitch_change_to_semitones(change_target)
+                    target_note = self.get_active_note(flat_rows, i) + semitones
+                    if target_note > 141:
+                        target_note = 141
+                    if target_note < 0:
+                        target_note = 0
+                    current_slide.note = target_note
+                    commands.append(current_slide)
+                    current_slide = PitchBend(tick, None, None)
+
+                # increment target pitch
+                change_target = cur_change + pitch_change_per_tick * module.Speed1
+
+                # track current pitch separate from target pitch
+                # this allows volume changes and volume slides to coexist on the same row
+                cur_change = change_target
+
 
             tick += self.amk_ticks_per_row
 
