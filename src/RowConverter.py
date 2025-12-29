@@ -272,8 +272,8 @@ class RowConverter:
                 if effect_num == FurnaceCommandType.NOTE_SLIDE_UP.value or effect_num == FurnaceCommandType.NOTE_SLIDE_DOWN.value:
                     semitones, speed = self.get_pitch_slide_info(effect_num, value)
                     target_note = active_note + semitones
-                    if target_note > 141:
-                        target_note = 141
+                    if target_note > MMLUtil.AMK_MAX_PITCH:
+                        target_note = MMLUtil.AMK_MAX_PITCH
                     if target_note < 0:
                         target_note = 0
                     # Empirical formula to convert speed to pitch change rate
