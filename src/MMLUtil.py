@@ -1,8 +1,6 @@
 from typing import List, Tuple, Optional
 from dataclasses import dataclass
 
-
-
 class MMLUtil:
     AMK_TICKS_PER_BEAT = 48
     TICK_TO_DURATION = {
@@ -45,36 +43,33 @@ class MMLUtil:
 
         return minval
 
-    # Convert from Furnace format (00=left, 80=center, FF=right)
-    # to AMK format (0=right, 10=center, 20=left)
+    # also stol from it2amk
     @staticmethod
-    def fur_pan_to_amk(pan: int) -> int:
-        pan = max(0, min(255, pan))
-        return round((20 * (255 - pan)) / 255)
+    def find_y(fur_pan: int) -> int:
+        smw_pan_tbl = [0x00, 0x01, 0x03, 0x07, 0x0D, 0x15, 0x1E, 0x29, 0x34, 0x42,
+                        0x51, 0x5E, 0x67, 0x6E, 0x73, 0x77, 0x7A, 0x7C, 0x7D, 0x7E, 0x7F]
+        rvol = max(fur_pan, 1) - 0x01
+        lvol = 0xFF - max(fur_pan, 1)
+        
+        diff, base_pan, rnorm = 1000000, 1.0, None
+        for p in range(len(smw_pan_tbl)):
+            plvol = smw_pan_tbl[p]
+            prvol = smw_pan_tbl[20 - p]
+            sum = plvol + prvol
+            norm = 254.0 / sum
+            
+            plvol *= norm
+            prvol *= norm
+            
+            tdiff = abs(plvol - lvol) + abs(prvol - rvol)
+            
+            if tdiff < diff:
+                base_pan = p
+                diff = tdiff
+                # for normalizing volume, not used for now
+                rnorm = norm
 
-    # Convert from Furnace stereo pan format (left and right, 0->15)
-    # to AMK format (0=right, 10=center, 20=left)
-    @staticmethod
-    def stereo_to_unity_pan(left: int, right: int) -> int:
-        return int(10 + (left - right) * 2/3)
-
-    # Convert from Furnace stereo pan format (left and right, both 0->15)
-    # to Furnace linear pan format (00=left, 80=center, FF=right)
-    @staticmethod
-    def fur_stereo_pan_to_amk(left: int, right: int) -> int:
-        # Clamp to valid range
-        left = max(0, min(15, left))
-        right = max(0, min(15, right))
-        
-        # Handle edge cases
-        if left == 0 and right == 0:
-            return 0x80
-        
-        # Calculate linear pan based on relative balance
-        total = left + right
-        level = round(255 * right / total)
-        
-        return max(0, min(255, level))
+        return base_pan
 
     @staticmethod
     def note_name_and_octave(i: int) -> Tuple[str, int]:

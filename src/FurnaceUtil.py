@@ -1,9 +1,9 @@
 from typing import Optional
 from enum import Enum
 import sys
-from .model.MMLCommands import MMLCommand
-from .MMLUtil import MMLUtil
+
 from .model.MMLCommands import *
+from .MMLUtil import MMLUtil
 
 class FurnaceCommandType(Enum):
     PITCH_SLIDE_UP = 0x01
@@ -31,6 +31,44 @@ class FurnaceUtil:
         semitones = round(change * 12 / FurnaceUtil.PITCH_STEPS_PER_OCTAVE)
         return int(semitones)
 
+    @staticmethod
+    def ticks_from_speed(speed: int, semitones: int) -> float:
+        ticks_per_octave = FurnaceUtil.PITCH_STEPS_PER_OCTAVE / speed
+        octaves_to_slide = abs(semitones) / 12
+        return ticks_per_octave * octaves_to_slide
+
+    # Convert from Furnace unity pan format (00=left, 80=center, FF=right)
+    # to AMK format (0=right, 10=center, 20=left)
+    @staticmethod
+    def unity_to_amk_pan(pan: int) -> int:
+        pan = max(0, min(255, pan))
+        return MMLUtil.find_y(pan)
+
+    # Convert from Furnace stereo pan format (left and right, 0->15)
+    # to AMK format (0=right, 10=center, 20=left)
+    @staticmethod
+    def stereo_to_amk_pan(left: int, right: int) -> int:
+        unity_pan = FurnaceUtil.stereo_to_unity_pan(left, right)
+        return FurnaceUtil.unity_to_amk_pan(unity_pan)
+
+    # Convert from Furnace stereo pan format (left and right, both 0->15)
+    # to Furnace unity pan format (00=left, 80=center, FF=right)
+    @staticmethod
+    def stereo_to_unity_pan(left: int, right: int) -> int:
+        # Clamp to valid range
+        left = max(0, min(15, left))
+        right = max(0, min(15, right))
+        
+        # Handle edge cases
+        if left == 0 and right == 0:
+            return 0x80
+        
+        # Calculate linear pan based on relative balance
+        total = left + right
+        level = round(255 * right / total)
+        
+        return max(0, min(255, level))
+
 
 # Create this before iterating through rows, and call tick() for each row
 # call handle_new_command whenever a relevant slide command is encountered
@@ -57,12 +95,11 @@ class SlideHelper:
     def _get_command(self, tick: int) -> MMLCommand:
         return None
 
-    def _get_max_duration(self) -> int:
-        return max(MMLUtil.TICK_TO_DURATION.keys())
-
     def _is_target_relative(self) -> bool:
         return False
 
+    def get_max_duration(self) -> int:
+        return max(MMLUtil.TICK_TO_DURATION.keys())
 
     def handle_new_command(self, effect_num: int, value: int) -> Optional[MMLCommand]:
         # this could be another slide or a stop slide command. Either way, we wrap up any current slide
@@ -87,11 +124,11 @@ class SlideHelper:
     def tick(self, ticks: int) -> None:
         new_command = None
         if self.slide_start is not None:
-            LONGEST_DURATION = self._get_max_duration()
+            LONGEST_DURATION = self.get_max_duration()
             cur_duration = self.cur_tick - self.slide_start
             if cur_duration >= LONGEST_DURATION:
                 new_command = self._get_command(self.slide_start, LONGEST_DURATION, self._get_target_amk())
-                self.slide_start = None
+                self.slide_start = self.cur_tick
                 if self._is_target_relative():
                     self.target_val = 0
 
@@ -111,14 +148,14 @@ class PitchSlider(SlideHelper):
     def set_active_note(self, note: int) -> None:
         self.active_note = note
 
+    # pitchbend can't operate on a whole note, since 1 = 2^2 under the hood
+    def get_max_duration(self) -> int:
+        return int(super().get_max_duration() / 2)
+
     def _get_target_amk(self) -> int:
         semitones = FurnaceUtil.fur_pitch_change_to_semitones(self.target_val)
         target_note = self.active_note + semitones
-        if target_note > MMLUtil.AMK_MAX_PITCH:
-            target_note = MMLUtil.AMK_MAX_PITCH
-        if target_note < 0:
-            target_note = 0
-
+        target_note = max(0, min(target_note, MMLUtil.AMK_MAX_PITCH))
         return target_note
 
     @staticmethod
@@ -137,17 +174,13 @@ class PitchSlider(SlideHelper):
     def _get_command(self, tick: int, duration: int, target_note: int) -> MMLCommand:
         return PitchBend(tick, duration, target_note)
 
-    # pitchbend can't operate on a whole note, since 1 = 2^2 under the hood
-    def _get_max_duration(self) -> int:
-        return int(max(MMLUtil.TICK_TO_DURATION.keys()) / 2)
-
     def _is_target_relative(self) -> bool:
         return True
         
 
 class PanSlider(SlideHelper):
     def _get_target_amk(self) -> int:
-        return MMLUtil.fur_pan_to_amk(round(self.target_val))
+        return FurnaceUtil.unity_to_amk_pan(round(self.target_val))
 
     def _limit_target_val(self, target_val: int) -> int:
         return max(0, min(target_val, 0xFF))
@@ -198,9 +231,15 @@ class VolumeSlider(SlideHelper):
                 print("Warning: Invalid volume slide effect value.", file=sys.stderr)
         # fine volume slides are 64 times slower than normal volume slides
         elif effect_num == FurnaceCommandType.FINE_VOLUME_SLIDE_UP.value:
-            vol_change_per_tick = value / 64
+            if value == 0:
+                vol_change_per_tick = None
+            else:
+                vol_change_per_tick = value / 64
         elif effect_num == FurnaceCommandType.FINE_VOLUME_SLIDE_DOWN.value:
-            vol_change_per_tick = -value / 64
+            if value == 0:
+                vol_change_per_tick = None
+            else:
+                vol_change_per_tick = -value / 64
         else:
             print(f"Warning: Invalid volume slide effect number {effect_num}.", file=sys.stderr)
         
