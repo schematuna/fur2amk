@@ -29,7 +29,6 @@ class RowConverter:
         # ratio of amk ticks to furnace ticks
         self.tick_ratio = self.amk_ticks_per_row / fur_ticks_per_row
         if self.tick_ratio != round(self.tick_ratio):
-            # TODO: For these situations just give up and do everything in ticks
             print("Warning: Furnace ticks not cleanly convertible to amk ticks.")
         print(f"One Furnace tick is {self.tick_ratio:.2g} AMK ticks.")
 
@@ -231,15 +230,14 @@ class RowConverter:
 
                 if effect_num == FurnaceCommandType.PAN.value:
                     slide_helper.set_target(value)
-                    amk_pan = MMLUtil.fur_pan_to_amk(value)
+                    amk_pan = FurnaceUtil.unity_to_amk_pan(value)
                     commands.append(PanChange(tick, amk_pan))
                 elif effect_num == FurnaceCommandType.STEREO_PAN.value:
                     left_volume = value >> 4
                     right_volume = value & 0x0F
-                    # normalize pan state to linear pan
-                    cur_pan = MMLUtil.fur_stereo_pan_to_amk(left_volume, right_volume)
+                    cur_pan = FurnaceUtil.stereo_to_unity_pan(left_volume, right_volume)
                     slide_helper.set_target(cur_pan)
-                    amk_pan = MMLUtil.stereo_to_unity_pan(left_volume, right_volume)
+                    amk_pan = FurnaceUtil.stereo_to_amk_pan(left_volume, right_volume)
                     commands.append(PanChange(tick, amk_pan))
 
                 if effect_num == FurnaceCommandType.PAN_SLIDE.value:
@@ -272,19 +270,14 @@ class RowConverter:
                 if effect_num == FurnaceCommandType.NOTE_SLIDE_UP.value or effect_num == FurnaceCommandType.NOTE_SLIDE_DOWN.value:
                     semitones, speed = self.get_pitch_slide_info(effect_num, value)
                     target_note = active_note + semitones
-                    if target_note > MMLUtil.AMK_MAX_PITCH:
-                        target_note = MMLUtil.AMK_MAX_PITCH
-                    if target_note < 0:
-                        target_note = 0
-                    # Empirical formula to convert speed to pitch change rate
-                    ticks_per_octave = 96 / speed
-                    octaves_to_slide = abs(semitones) / 12
-                    ticks_to_slide = ticks_per_octave * octaves_to_slide
-                    duration = int(ticks_to_slide * self.tick_ratio)
-                    LONGEST_DURATION = int(max(MMLUtil.TICK_TO_DURATION.keys()) / 2)
-                    if duration > LONGEST_DURATION:
-                        print(f"Warning: Pitch slide duration {duration} is greater than the longest tick duration {MMLUtil.TICK_TO_DURATION.keys()[-1]}. Things might break.", file=sys.stderr)
-                    commands.append(PitchBend(tick, duration, target_note))
+                    target_note = max(0,min(target_note, MMLUtil.AMK_MAX_PITCH))
+                    # for note slides, each speed unit is 4 pitch steps per tick
+                    ticks_to_slide = FurnaceUtil.ticks_from_speed(speed * 4, semitones)
+                    amk_duration = int(ticks_to_slide * self.tick_ratio)
+                    max_duration = slide_helper.get_max_duration()
+                    if amk_duration > max_duration:
+                        print(f"Warning: Pitch slide duration {amk_duration} is greater than the longest tick duration {max_duration}. Things might break.", file=sys.stderr)
+                    commands.append(PitchBend(tick, amk_duration, target_note))
                 elif effect_num == FurnaceCommandType.PITCH_SLIDE_UP.value or effect_num == FurnaceCommandType.PITCH_SLIDE_DOWN.value:
                     new_command = slide_helper.handle_new_command(effect_num, value)
                     if new_command is not None:
