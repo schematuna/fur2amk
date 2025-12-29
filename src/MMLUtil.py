@@ -14,6 +14,8 @@ class MMLUtil:
         int(AMK_TICKS_PER_BEAT * 2): 2,
         int(AMK_TICKS_PER_BEAT * 4): 1
     }
+
+    AMK_MAX_PITCH = 141
     # Convert -128->127 ranged values to 2's complement hex
     @staticmethod
     def to_hex(val: int) -> str:
@@ -78,19 +80,13 @@ class MMLUtil:
     def note_name_and_octave(i: int) -> Tuple[str, int]:
         # highest allowed AMK pitch is o6 a
         # TODO: use pitch bend or something to fix automatically?
-        while i > 141:
+        while i > MMLUtil.AMK_MAX_PITCH:
             i -= 12
         # Map Furnace note index (0=C-0) to AMK note name and octave using oN
         names = ['c', 'c+', 'd', 'd+', 'e', 'f', 'f+', 'g', 'g+', 'a', 'a+', 'b']
         note = i % 12
         octave = i // 12 - 5  # align with fur2tad convention
         return names[note], octave
-
-    @staticmethod
-    def fur_pitch_change_to_semitones(change: int) -> int:
-        PITCH_STEPS_PER_OCTAVE = 384
-        semitones = round(change * 12 / PITCH_STEPS_PER_OCTAVE)
-        return int(semitones)
 
 @dataclass
 class MMLState:
