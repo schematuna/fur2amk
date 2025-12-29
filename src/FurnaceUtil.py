@@ -45,6 +45,8 @@ class SlideHelper:
         self.target_val = target
 
 class PitchSlider(SlideHelper):
+    # Set the currently active note
+    # Needed to figure out what note to slide to
     def set_active_note(self, note: int) -> None:
         self.active_note = note
 
