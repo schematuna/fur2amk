@@ -6,6 +6,7 @@ from .model.FurnaceData import FurnaceInstrument, FurnaceModule, FurnaceRow
 from .model.AMKData import *
 from .model.MMLCommands import *
 from .MMLUtil import *
+from .FurnaceUtil import *
 
 # persistent channel state
 @dataclass
@@ -14,24 +15,6 @@ class FurnaceState:
     fur_ins_idx: int = None
     echo: bool = True
     is_legato: bool = False
-
-class FurnaceCommandType(Enum):
-    PITCH_SLIDE_UP = 0x01
-    PITCH_SLIDE_DOWN = 0x02
-    PORTAMENTO = 0x03
-    STEREO_PAN = 0x08
-    VOLUME_SLIDE = 0x0A
-    PAN = 0x80
-    PAN_SLIDE = 0x83
-    NOTE_SLIDE_UP = 0xE1
-    NOTE_SLIDE_DOWN = 0xE2
-    QUICK_LEGATO = 0xE6 # basically another note within a row
-    QUICK_LEGATO_UP = 0xE8
-    QUICK_LEGATO_DOWN = 0xE9
-    NOTE_DELAY = 0xED
-    FINE_VOLUME_SLIDE_UP = 0xF3
-    FINE_VOLUME_SLIDE_DOWN = 0xF4
-    FAST_VOLUME_SLIDE = 0xFA
 
 class RowConverter:
     def __init__(self, fur_ticks_per_row: int) -> None:
@@ -196,34 +179,6 @@ class RowConverter:
 
         return semitones, speed
 
-    def get_volume_slide_change(self, effect_num: int, value: int) -> Optional[int]:
-        vol_change_per_tick = None
-        if effect_num == FurnaceCommandType.VOLUME_SLIDE.value or effect_num == FurnaceCommandType.FAST_VOLUME_SLIDE.value:
-            rate_divisor = 4
-            if effect_num == FurnaceCommandType.FAST_VOLUME_SLIDE.value:
-                # fast volume slides are 4 times faster than normal volume slides
-                rate_divisor = 1
-
-            up = value >> 4
-            down = value & 0x0F
-            if down == 0 and up == 0:
-                vol_change_per_tick = None
-            elif down == 0:
-                vol_change_per_tick = up / rate_divisor
-            elif up == 0:
-                vol_change_per_tick = -down / rate_divisor
-            else:
-                print("Warning: Invalid volume slide effect value.", file=sys.stderr)
-        # fine volume slides are 64 times slower than normal volume slides
-        elif effect_num == FurnaceCommandType.FINE_VOLUME_SLIDE_UP.value:
-            vol_change_per_tick = value / 64
-        elif effect_num == FurnaceCommandType.FINE_VOLUME_SLIDE_DOWN.value:
-            vol_change_per_tick = -value / 64
-        else:
-            print(f"Warning: Invalid volume slide effect number {effect_num}.", file=sys.stderr)
-        
-        return vol_change_per_tick
-
     def get_quick_legato_note(self, effect_num: int, value: int, cur_note: Optional[int]) -> Tuple[Optional[int], Optional[int]]:
         if effect_num == FurnaceCommandType.QUICK_LEGATO.value:
             x = value >> 4
@@ -243,54 +198,32 @@ class RowConverter:
         commands: List[MMLCommand] = []
         # amk ticks
         tick = 0
+        new_vol = None
         # furnace volume units per furnace tick
-        vol_change_per_tick: Optional[int] = None
-        current_slide: Optional[VolumeFade] = None
-        vol_target: int = 0
-        cur_vol: int = 0
-        for i, row in enumerate(flat_rows):
+        slide_helper = VolumeSlider(tick)
+        for row in flat_rows:
             vol = row.Vol
             if vol is not None:
-                cur_vol = vol
+                new_vol = vol
                 commands.append(VolumeChange(tick, MMLUtil.find_v(vol)))
+            else:
+                new_vol = None
 
             for effect in (row.Effects or []):
                 effect_num = effect[0]
                 value = effect[1]
                 if self.is_volume_slide(effect_num):
-                    # this could be another slide or a stop slide command. Either way, we wrap up any current slide
-                    if current_slide is not None:
-                        slide_duration = tick - current_slide.tick
-                        current_slide.duration = slide_duration
-                        current_slide.target_volume = MMLUtil.find_v(round(vol_target))
-                        commands.append(current_slide)
-
-                    vol_change_per_tick = self.get_volume_slide_change(effect_num, value)
-
-                    if vol_change_per_tick is not None:
-                        current_slide = VolumeFade(tick, None, None)
-                    else:
-                        current_slide = None
+                    new_command = slide_helper.handle_new_command(effect_num, value)
+                    if new_command is not None:
+                        print(f"Adding volume slide command at tick {new_command.tick} with duration {new_command.duration} and target volume {new_command.target_volume}")
+                        commands.append(new_command)
                         
-            if current_slide is not None:
-                # if slide is too long, split it into multiple slides
-                cur_duration = tick - current_slide.tick
-                LONGEST_DURATION = max(MMLUtil.TICK_TO_DURATION.keys())
-                if cur_duration >= LONGEST_DURATION:
-                    current_slide.duration = LONGEST_DURATION
-                    current_slide.target_volume = MMLUtil.find_v(round(vol_target))
-                    commands.append(current_slide)
-                    current_slide = VolumeFade(tick, None, None)
-
-                vol_target = cur_vol + vol_change_per_tick * module.Speed1
-                if vol_target > 0x7F:
-                    vol_target = 0x7F
-                if vol_target < 0:
-                    vol_target = 0
-
-                # track current volume separate from target volume
-                # this allows volume changes and volume slides to coexist on the same row
-                cur_vol = vol_target
+            # set row volume after ending previous command but before ticking new one
+            if new_vol is not None:
+                slide_helper.set_target(new_vol)
+            new_command = slide_helper.tick(self.amk_ticks_per_row)
+            if new_command is not None:
+                commands.append(new_command)
    
             tick += self.amk_ticks_per_row
 
@@ -300,18 +233,14 @@ class RowConverter:
         commands: List[MMLCommand] = []
         # amk ticks
         tick = 0
-        # furnace pan units per furnace tick
-        pan_change_per_tick: Optional[int] = None
-        current_slide: Optional[PanFade] = None
-        pan_target: int = 0
-        cur_pan: int = 0
-        for i, row in enumerate(flat_rows):
+        slide_helper = PanSlider(tick)
+        for row in flat_rows:
             for effect in (row.Effects or []):
                 effect_num = effect[0]
                 value = effect[1]
 
                 if effect_num == FurnaceCommandType.PAN.value:
-                    cur_pan = value
+                    slide_helper.set_target(value)
                     amk_pan = MMLUtil.fur_pan_to_amk(value)
                     commands.append(PanChange(tick, amk_pan))
                 elif effect_num == FurnaceCommandType.STEREO_PAN.value:
@@ -319,55 +248,18 @@ class RowConverter:
                     right_volume = value & 0x0F
                     # normalize pan state to linear pan
                     cur_pan = MMLUtil.fur_stereo_pan_to_amk(left_volume, right_volume)
-
+                    slide_helper.set_target(cur_pan)
                     amk_pan = MMLUtil.stereo_to_unity_pan(left_volume, right_volume)
                     commands.append(PanChange(tick, amk_pan))
 
                 if effect_num == FurnaceCommandType.PAN_SLIDE.value:
-                    # this could be another slide or a stop slide command. Either way, we wrap up any current slide
-                    if current_slide is not None:
-                        slide_duration = tick - current_slide.tick
-                        current_slide.duration = slide_duration
-                        current_slide.target_pan = MMLUtil.fur_pan_to_amk(round(pan_target))
-                        commands.append(current_slide)
-
-                    left = value >> 4
-                    right = value & 0x0F
-                    if right == 0 and left == 0:
-                        pan_change_per_tick = None
-                    elif right == 0:
-                        # halved because pan is spread across both channels in Furnace
-                        pan_change_per_tick = -left / 2
-                    elif left == 0:
-                        pan_change_per_tick = right / 2
-                    else:
-                        print(f"Warning: Invalid pan slide effect value {value}.", file=sys.stderr)
-
-                    if pan_change_per_tick is not None:
-                        current_slide = PanFade(tick, None, None)
-                    else:
-                        current_slide = None
+                    new_command = slide_helper.handle_new_command(effect_num, value)
+                    if new_command is not None:
+                        commands.append(new_command)
                         
-            if current_slide is not None:
-                # if slide is too long, split it into multiple slides
-                cur_duration = tick - current_slide.tick
-                LONGEST_DURATION = max(MMLUtil.TICK_TO_DURATION.keys())
-                if cur_duration >= LONGEST_DURATION:
-                    current_slide.duration = LONGEST_DURATION
-                    current_slide.target_pan = MMLUtil.fur_pan_to_amk(round(pan_target))
-                    commands.append(current_slide)
-                    current_slide = PanFade(tick, None, None)
-
-                # increment target pan
-                pan_target = cur_pan + pan_change_per_tick * module.Speed1
-                if pan_target > 0xFF:
-                    pan_target = 0xFF
-                if pan_target < 0:
-                    pan_target = 0
-
-                # track current pan separate from target pan
-                # this allows volume changes and volume slides to coexist on the same row
-                cur_pan = pan_target
+            new_command = slide_helper.tick(self.amk_ticks_per_row)
+            if new_command is not None:
+                commands.append(new_command)
    
             tick += self.amk_ticks_per_row
 
@@ -376,11 +268,7 @@ class RowConverter:
     def convert_pitch_commands(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
         tick = 0
-
-        pitch_change_per_tick: Optional[int] = None
-        current_slide: Optional[PitchBend] = None
-        change_target: int = 0
-        cur_change: int = 0
+        slide_helper = PitchSlider(tick)
         for i, row in enumerate(flat_rows):            
             # Effects
             for effect in (row.Effects or []):
@@ -398,56 +286,20 @@ class RowConverter:
                     octaves_to_slide = abs(semitones) / 12
                     ticks_to_slide = ticks_per_octave * octaves_to_slide
                     duration = int(ticks_to_slide * self.tick_ratio)
-                    LONGEST_DURATION = max(MMLUtil.TICK_TO_DURATION.keys())
+                    LONGEST_DURATION = int(max(MMLUtil.TICK_TO_DURATION.keys()) / 2)
                     if duration > LONGEST_DURATION:
                         print(f"Warning: Pitch slide duration {duration} is greater than the longest tick duration {MMLUtil.TICK_TO_DURATION.keys()[-1]}. Things might break.", file=sys.stderr)
                     commands.append(PitchBend(tick, duration, target_note))
                 elif effect_num == FurnaceCommandType.PITCH_SLIDE_UP.value or effect_num == FurnaceCommandType.PITCH_SLIDE_DOWN.value:
-                    # this could be another slide or a stop slide command. Either way, we wrap up any current slide
-                    if current_slide is not None:
-                        slide_duration = tick - current_slide.tick
-                        current_slide.duration = slide_duration
-                        semitones = MMLUtil.fur_pitch_change_to_semitones(change_target)
-                        current_slide.note = self.get_active_note(flat_rows, i) + semitones
-                        commands.append(current_slide)
-
-                    if value == 0:
-                        pitch_change_per_tick = None
-                    else:
-                        if effect_num == FurnaceCommandType.PITCH_SLIDE_UP.value:
-                            pitch_change_per_tick = value
-                        elif effect_num == FurnaceCommandType.PITCH_SLIDE_DOWN.value:
-                            pitch_change_per_tick = -value
-
-                    if pitch_change_per_tick is not None:
-                        current_slide = PitchBend(tick, None, None)
-                    else:
-                        current_slide = None
+                    slide_helper.set_active_note(self.get_active_note(flat_rows, i))
+                    new_command = slide_helper.handle_new_command(effect_num, value)
+                    if new_command is not None:
+                        commands.append(new_command)
                         
-            if current_slide is not None:
-                # if slide is too long, split it into multiple slides
-                cur_duration = tick - current_slide.tick
-                # pitchbend can't operate on a whole note, since 1 = 2^2 under the hood
-                LONGEST_DURATION = int(max(MMLUtil.TICK_TO_DURATION.keys()) / 2)
-                if cur_duration >= LONGEST_DURATION:
-                    current_slide.duration = LONGEST_DURATION
-                    semitones = MMLUtil.fur_pitch_change_to_semitones(change_target)
-                    target_note = self.get_active_note(flat_rows, i) + semitones
-                    if target_note > 141:
-                        target_note = 141
-                    if target_note < 0:
-                        target_note = 0
-                    current_slide.note = target_note
-                    commands.append(current_slide)
-                    current_slide = PitchBend(tick, None, None)
-
-                # increment target pitch
-                change_target = cur_change + pitch_change_per_tick * module.Speed1
-
-                # track current pitch separate from target pitch
-                # this allows volume changes and volume slides to coexist on the same row
-                cur_change = change_target
-
+            slide_helper.set_active_note(self.get_active_note(flat_rows, i))
+            new_command = slide_helper.tick(self.amk_ticks_per_row)
+            if new_command is not None:
+                commands.append(new_command)
 
             tick += self.amk_ticks_per_row
 
