@@ -145,15 +145,6 @@ class RowConverter:
 
         return notes
 
-    def get_active_note(self, flat_rows: List[FurnaceRow], row_idx: int) -> Optional[int]:
-        cur_note = None
-        for i, row in enumerate(flat_rows):
-            if row.kind() == FurnaceRow.NoteKind.NOTE:
-                cur_note = row.Note
-            if row_idx == i:
-                return cur_note
-        return None
-
     def is_volume_slide(self, effect_num: int) -> bool:
         return effect_num == FurnaceCommandType.VOLUME_SLIDE.value \
             or effect_num == FurnaceCommandType.FAST_VOLUME_SLIDE.value \
@@ -215,7 +206,6 @@ class RowConverter:
                 if self.is_volume_slide(effect_num):
                     new_command = slide_helper.handle_new_command(effect_num, value)
                     if new_command is not None:
-                        print(f"Adding volume slide command at tick {new_command.tick} with duration {new_command.duration} and target volume {new_command.target_volume}")
                         commands.append(new_command)
                         
             # set row volume after ending previous command but before ticking new one
@@ -269,14 +259,19 @@ class RowConverter:
         commands: List[MMLCommand] = []
         tick = 0
         slide_helper = PitchSlider(tick)
-        for i, row in enumerate(flat_rows):            
+        for row in flat_rows:           
+            if row.kind() == FurnaceRow.NoteKind.NOTE:
+                if row.Note is not None:
+                    slide_helper.set_active_note(row.Note)
+                    active_note = row.Note
+                
             # Effects
             for effect in (row.Effects or []):
                 effect_num = effect[0]
                 value = effect[1]
                 if effect_num == FurnaceCommandType.NOTE_SLIDE_UP.value or effect_num == FurnaceCommandType.NOTE_SLIDE_DOWN.value:
                     semitones, speed = self.get_pitch_slide_info(effect_num, value)
-                    target_note = self.get_active_note(flat_rows, i) + semitones
+                    target_note = active_note + semitones
                     if target_note > 141:
                         target_note = 141
                     if target_note < 0:
@@ -291,12 +286,10 @@ class RowConverter:
                         print(f"Warning: Pitch slide duration {duration} is greater than the longest tick duration {MMLUtil.TICK_TO_DURATION.keys()[-1]}. Things might break.", file=sys.stderr)
                     commands.append(PitchBend(tick, duration, target_note))
                 elif effect_num == FurnaceCommandType.PITCH_SLIDE_UP.value or effect_num == FurnaceCommandType.PITCH_SLIDE_DOWN.value:
-                    slide_helper.set_active_note(self.get_active_note(flat_rows, i))
                     new_command = slide_helper.handle_new_command(effect_num, value)
                     if new_command is not None:
                         commands.append(new_command)
                         
-            slide_helper.set_active_note(self.get_active_note(flat_rows, i))
             new_command = slide_helper.tick(self.amk_ticks_per_row)
             if new_command is not None:
                 commands.append(new_command)

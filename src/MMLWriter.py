@@ -318,7 +318,7 @@ class MMLWriter:
                         # Pitchbend commands are placed after the duration to be modulated
                         word.commands.append(TieBreakCommand(cmd_tick))
                         new_tick = cmd_tick + command.duration
-                        if new_tick >= duration.tick + duration.duration:
+                        if new_tick > duration.tick + duration.duration:
                             print(f"Warning: Pitchbend duration {command.duration} exceeds the duration of the note. The command will be ignored.")
                         command.tick = new_tick
                         
