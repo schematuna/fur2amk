@@ -156,8 +156,9 @@ class FurnaceConverter:
             loop_tick = self.row_converter.convert_loop_marker(flat_rows, module)
             if loop_tick is not None:
                 mml_data.loop_tick = loop_tick
-            mml_data.notes[ch]      = self.row_converter.convert_notes(flat_rows, self.ins_remote_map, module.Instruments)
-            mml_data.commands[ch]   = self.row_converter.convert_commands(flat_rows, module)
+            mml_data.notes[ch], pitch_commands = self.row_converter.convert_notes(flat_rows, self.ins_remote_map, module.Instruments)
+            mml_data.commands[ch] = pitch_commands
+            mml_data.commands[ch].extend(self.row_converter.convert_commands(flat_rows, module))
 
         return mml_data
 

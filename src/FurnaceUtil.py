@@ -4,24 +4,7 @@ import sys
 
 from .model.MMLCommands import *
 from .MMLUtil import MMLUtil
-
-class FurnaceCommandType(Enum):
-    PITCH_SLIDE_UP = 0x01
-    PITCH_SLIDE_DOWN = 0x02
-    PORTAMENTO = 0x03
-    STEREO_PAN = 0x08
-    VOLUME_SLIDE = 0x0A
-    PAN = 0x80
-    PAN_SLIDE = 0x83
-    NOTE_SLIDE_UP = 0xE1
-    NOTE_SLIDE_DOWN = 0xE2
-    QUICK_LEGATO = 0xE6 # basically another note within a row
-    QUICK_LEGATO_UP = 0xE8
-    QUICK_LEGATO_DOWN = 0xE9
-    NOTE_DELAY = 0xED
-    FINE_VOLUME_SLIDE_UP = 0xF3
-    FINE_VOLUME_SLIDE_DOWN = 0xF4
-    FAST_VOLUME_SLIDE = 0xFA
+from .model.FurnaceData import FurnaceCommandType
 
 class FurnaceUtil:
     PITCH_STEPS_PER_OCTAVE = 384
@@ -98,7 +81,8 @@ class SlideHelper:
     def _is_target_relative(self) -> bool:
         return False
 
-    def get_max_duration(self) -> int:
+    @staticmethod
+    def get_max_duration() -> int:
         return max(MMLUtil.TICK_TO_DURATION.keys())
 
     def handle_new_command(self, effect_num: int, value: int) -> Optional[MMLCommand]:
@@ -124,7 +108,7 @@ class SlideHelper:
     def tick(self, ticks: int) -> None:
         new_command = None
         if self.slide_start is not None:
-            LONGEST_DURATION = self.get_max_duration()
+            LONGEST_DURATION = SlideHelper.get_max_duration()
             cur_duration = self.cur_tick - self.slide_start
             if cur_duration >= LONGEST_DURATION:
                 new_command = self._get_command(self.slide_start, LONGEST_DURATION, self._get_target_amk())
@@ -149,8 +133,9 @@ class PitchSlider(SlideHelper):
         self.active_note = note
 
     # pitchbend can't operate on a whole note, since 1 = 2^2 under the hood
-    def get_max_duration(self) -> int:
-        return int(super().get_max_duration() / 2)
+    @staticmethod
+    def get_max_duration() -> int:
+        return int(SlideHelper.get_max_duration() / 2)
 
     def _get_target_amk(self) -> int:
         semitones = FurnaceUtil.fur_pitch_change_to_semitones(self.target_val)

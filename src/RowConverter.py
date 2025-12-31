@@ -65,28 +65,88 @@ class RowConverter:
 
         return pre_note_commands
 
+    def convert_portamento(self, tick: int, active_note: int, target_note: int, portamento_speed: int) -> Tuple[int, MMLCommand]:
+        semitones = target_note - active_note
+        ticks_to_slide = FurnaceUtil.ticks_from_speed(portamento_speed, semitones)
+        amk_duration = max(2, int(ticks_to_slide * self.tick_ratio))
+        max_duration = PitchSlider.get_max_duration()
+        if amk_duration > max_duration:
+            print(f"Warning: Portamento duration {amk_duration} is greater than the longest tick duration {max_duration}.", file=sys.stderr)
+        command = PitchBend(tick, amk_duration, target_note)
+
+        return target_note, command
+
+    def convert_slides(self, tick: int, row: FurnaceRow, slide_helper: PitchSlider, active_note: Optional[int]) -> Tuple[Optional[int], List[MMLCommand]]:
+        commands: List[MMLCommand] = []
+        new_active_note = active_note
+        for effect in (row.Effects or []):
+            effect_num = effect[0]
+            value = effect[1]
+            if effect_num == FurnaceCommandType.NOTE_SLIDE_UP.value or effect_num == FurnaceCommandType.NOTE_SLIDE_DOWN.value:
+                semitones, speed = self.get_pitch_slide_info(effect_num, value)
+                if active_note is None:
+                    print(f"Warning: Pitch slide effect found on non-note row, ignoring.", file=sys.stderr)
+                    continue
+                target_note = active_note + semitones
+                target_note = max(0,min(target_note, MMLUtil.AMK_MAX_PITCH))
+                # for note slides, each speed unit is 4 pitch steps per tick
+                ticks_to_slide = FurnaceUtil.ticks_from_speed(speed * 4, semitones)
+                amk_duration = max(2, int(ticks_to_slide * self.tick_ratio))
+                max_duration = slide_helper.get_max_duration()
+                if amk_duration > max_duration:
+                    print(f"Warning: Pitch slide duration {amk_duration} is greater than the longest tick duration {max_duration}.", file=sys.stderr)
+                commands.append(PitchBend(tick, amk_duration, target_note))
+                new_active_note = target_note
+            elif effect_num == FurnaceCommandType.PITCH_SLIDE_UP.value or effect_num == FurnaceCommandType.PITCH_SLIDE_DOWN.value:
+                new_command = slide_helper.handle_new_command(effect_num, value)
+                if new_command is not None:
+                    new_active_note = new_command.note
+                    commands.append(new_command)
+                        
+        new_command = slide_helper.tick(self.amk_ticks_per_row)
+        if new_command is not None:
+            new_active_note = new_command.note
+            commands.append(new_command)
+
+        return new_active_note, commands
 
     def convert_notes(self, flat_rows: List[FurnaceRow], ins_remote_map: Dict[int, int], instruments: List[FurnaceInstrument]) -> List[MMLNote]:
         notes: List[MMLNote] = []
+        commands: List[MMLCommand] = []
         tick = 0
         state = FurnaceState()
-        # process notes
+        slide_helper = PitchSlider(tick)
+
+        # the current note duration
         cur_dur: Optional[MMLNote] = None
+        # the current active pitch, considering both pitch commands and explicit notes
+        active_note = None
+        # process notes and pitch commands
         for i, row in enumerate(flat_rows):
+            portamento_speed = row.get_effect(FurnaceCommandType.PORTAMENTO)
+            if portamento_speed is not None:
+                # handle portamento specially
+                if row.kind() == FurnaceRow.NoteKind.NOTE:
+                    active_note, portamento_command = self.convert_portamento(tick, active_note, row.Note, portamento_speed)
+                    if portamento_command is not None:
+                        commands.append(portamento_command)
+                else:
+                    print(f"Warning: Portamento effect found on non-note row, ignoring.", file=sys.stderr)
+
+
             # check for note delay (this also affects note offs)
             note_tick = tick
-            # does this row require legato? Check all effects
-            found_legato = False
             for effect in (row.Effects or []):
                 effect_num = effect[0]
                 value = effect[1]
                 if effect_num == FurnaceCommandType.NOTE_DELAY.value:
                     note_tick += int(value * self.tick_ratio)
-                # Check if this effect is a legato effect
-                found_legato = found_legato or self.is_quick_legato(effect_num)
 
+            found_legato = row.get_effect(FurnaceCommandType.QUICK_LEGATO) is not None
+                
             note_kind = row.kind()
-            if note_kind == FurnaceRow.NoteKind.NOTE:
+            # don't make a new note for portamento rows, pitchbend will handle that
+            if note_kind == FurnaceRow.NoteKind.NOTE and portamento_speed is None:
                 fur_ins = None
                 for ins in instruments:
                     if ins.index == row.Ins:
@@ -105,6 +165,7 @@ class RowConverter:
                     cur_dur.duration = note_tick - cur_dur.tick
                     notes.append(cur_dur)
                 cur_dur = MMLNote(note_tick, 0, row.Note, amk_ins_idx, pre_note_commands)
+                active_note = row.Note
 
             elif note_kind == FurnaceRow.NoteKind.OFF or note_kind == FurnaceRow.NoteKind.RELEASE:
                 if cur_dur is not None:
@@ -114,6 +175,7 @@ class RowConverter:
                     cur_dur.duration = note_tick - cur_dur.tick
                     notes.append(cur_dur)
                 cur_dur = None
+                active_note = None
             
 
             # check for quick legato, make a new note if found
@@ -122,7 +184,7 @@ class RowConverter:
                 value = effect[1]
                 if self.is_quick_legato(effect_num):
                     pre_note_commands = []
-                    note, delay = self.get_quick_legato_note(effect_num, value, cur_dur.note)
+                    semitones, delay = self.parse_quick_legato(effect_num, value)
                     new_note_onset = note_tick + int(delay * self.tick_ratio)
                     if not state.is_legato:
                         pre_note_commands.append(LegatoToggle(note_tick))
@@ -130,7 +192,14 @@ class RowConverter:
                     if cur_dur is not None:
                         cur_dur.duration = new_note_onset - cur_dur.tick
                         notes.append(cur_dur)
-                    cur_dur = MMLNote(new_note_onset, 0, note, cur_dur.instrument, pre_note_commands)
+                    new_note = active_note + semitones
+                    new_note = max(0,min(new_note, MMLUtil.AMK_MAX_PITCH))
+                    cur_dur = MMLNote(new_note_onset, 0, new_note, cur_dur.instrument, pre_note_commands)
+                    active_note = new_note
+
+            slide_helper.set_active_note(active_note)
+            active_note, pitch_commands = self.convert_slides(tick, row, slide_helper, active_note)
+            commands.extend(pitch_commands)
 
             tick += self.amk_ticks_per_row
         
@@ -142,7 +211,7 @@ class RowConverter:
         if state.is_legato:
             notes[-1].pre_note_commands.append(LegatoToggle(tick))
 
-        return notes
+        return notes, commands
 
     def is_volume_slide(self, effect_num: int) -> bool:
         return effect_num == FurnaceCommandType.VOLUME_SLIDE.value \
@@ -169,7 +238,7 @@ class RowConverter:
 
         return semitones, speed
 
-    def get_quick_legato_note(self, effect_num: int, value: int, cur_note: Optional[int]) -> Tuple[Optional[int], Optional[int]]:
+    def parse_quick_legato(self, effect_num: int, value: int) -> Tuple[Optional[int], Optional[int]]:
         if effect_num == FurnaceCommandType.QUICK_LEGATO.value:
             x = value >> 4
             semitones = value & 0x0F
@@ -180,9 +249,7 @@ class RowConverter:
                 delay = x - 8
                 semitones = -semitones
 
-            new_note = cur_note + semitones
-
-            return new_note, delay
+            return semitones, delay
 
     def convert_volume_commands(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
@@ -253,51 +320,12 @@ class RowConverter:
 
         return commands
 
-    def convert_pitch_commands(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLCommand]:
-        commands: List[MMLCommand] = []
-        tick = 0
-        slide_helper = PitchSlider(tick)
-        for row in flat_rows:           
-            if row.kind() == FurnaceRow.NoteKind.NOTE:
-                if row.Note is not None:
-                    slide_helper.set_active_note(row.Note)
-                    active_note = row.Note
-                
-            # Effects
-            for effect in (row.Effects or []):
-                effect_num = effect[0]
-                value = effect[1]
-                if effect_num == FurnaceCommandType.NOTE_SLIDE_UP.value or effect_num == FurnaceCommandType.NOTE_SLIDE_DOWN.value:
-                    semitones, speed = self.get_pitch_slide_info(effect_num, value)
-                    target_note = active_note + semitones
-                    target_note = max(0,min(target_note, MMLUtil.AMK_MAX_PITCH))
-                    # for note slides, each speed unit is 4 pitch steps per tick
-                    ticks_to_slide = FurnaceUtil.ticks_from_speed(speed * 4, semitones)
-                    amk_duration = int(ticks_to_slide * self.tick_ratio)
-                    max_duration = slide_helper.get_max_duration()
-                    if amk_duration > max_duration:
-                        print(f"Warning: Pitch slide duration {amk_duration} is greater than the longest tick duration {max_duration}. Things might break.", file=sys.stderr)
-                    commands.append(PitchBend(tick, amk_duration, target_note))
-                elif effect_num == FurnaceCommandType.PITCH_SLIDE_UP.value or effect_num == FurnaceCommandType.PITCH_SLIDE_DOWN.value:
-                    new_command = slide_helper.handle_new_command(effect_num, value)
-                    if new_command is not None:
-                        commands.append(new_command)
-                        
-            new_command = slide_helper.tick(self.amk_ticks_per_row)
-            if new_command is not None:
-                commands.append(new_command)
-
-            tick += self.amk_ticks_per_row
-
-        return commands
-
     def convert_commands(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLCommand]:
         # process rows into commands
         commands: List[MMLCommand] = []
 
         commands.extend(self.convert_volume_commands(flat_rows, module))
         commands.extend(self.convert_pan_commands(flat_rows, module))
-        commands.extend(self.convert_pitch_commands(flat_rows, module))
 
         # sort commands by tick
         sorted_commands = sorted(commands, key=lambda x: x.tick)
