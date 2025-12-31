@@ -2,6 +2,24 @@ from dataclasses import dataclass, field
 from typing import Optional, List, Tuple, Dict
 from enum import Enum
 
+class FurnaceCommandType(Enum):
+    PITCH_SLIDE_UP = 0x01
+    PITCH_SLIDE_DOWN = 0x02
+    PORTAMENTO = 0x03
+    STEREO_PAN = 0x08
+    VOLUME_SLIDE = 0x0A
+    PAN = 0x80
+    PAN_SLIDE = 0x83
+    NOTE_SLIDE_UP = 0xE1
+    NOTE_SLIDE_DOWN = 0xE2
+    QUICK_LEGATO = 0xE6 # basically another note within a row
+    QUICK_LEGATO_UP = 0xE8
+    QUICK_LEGATO_DOWN = 0xE9
+    NOTE_DELAY = 0xED
+    FINE_VOLUME_SLIDE_UP = 0xF3
+    FINE_VOLUME_SLIDE_DOWN = 0xF4
+    FAST_VOLUME_SLIDE = 0xFA
+
 @dataclass
 class FurnaceSNESFlags:
     antiClick: Optional[bool] = None
@@ -147,6 +165,12 @@ class FurnaceRow:
             return self.NoteKind.NOTE
         
         return self.NoteKind.EMPTY
+
+    def get_effect(self, command_type: FurnaceCommandType) -> Optional[int]:
+        for effect in self.Effects:
+            if effect[0] == command_type.value:
+                return effect[1]
+        return None
 
 
 @dataclass

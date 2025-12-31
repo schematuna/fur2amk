@@ -110,11 +110,11 @@ class DurationFormatter:
         denoms, remainder = DurationFormatter.run_to_denoms(duration_ticks)
         
         token = ''
-        
+    
+        if continuation:
+            token += '^'
+
         if len(denoms) > 0:
-            if continuation:
-                token += '^'
-            
             token += str(denoms[0])
             
             # Additional durations use tie syntax
@@ -126,7 +126,7 @@ class DurationFormatter:
             if len(denoms) > 0:
                 token += '^'
             token += f'={remainder}'
-        
+
         return token
 
     @staticmethod

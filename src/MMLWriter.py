@@ -15,9 +15,6 @@ from .MMLUtil import *
 # useful for pitchbend commands that need to be placed after the duration to be modulated
 @dataclass
 class TieBreakCommand(MMLCommand):
-    def add_spaces(self, text: str) -> str:
-        return text
-
     def to_mml(self, mml_state: 'MMLState' = None) -> str:
         return ''
 
@@ -76,6 +73,8 @@ class MMLWord:
             word_txt += command.get_text(mml_state)
             command_idx += 1
             
+            if cmd_tick < cur_tick:
+                print(f"Warning: Commands are being processed out of order. Command tick {cmd_tick} is before current tick {cur_tick}.")
             # Update cur_tick to this command's tick
             cur_tick = cmd_tick
             
@@ -326,6 +325,11 @@ class MMLWriter:
                     cmd_idx += 1
                 else:
                     break
+
+            # sort commands by tick
+            # necessary because tiebreak can end up being handled after the corresponding pitchbend command
+            word.commands = sorted(word.commands, key=lambda cmd : cmd.tick)
+
             words.append(word)
         return words
 
