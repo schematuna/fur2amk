@@ -20,6 +20,9 @@ Jump commands:
     You can use one instance of the "Jump to Order" command 0Bxx. 
     The last instance of the command will be used to place the intro marker in the amk output.
 
+Volume/pan slide commands:
+    To avoid volume/pan spam, you should use the volume/pan slide commands built in to Furnace rather than the interpolate option.
+
 Wavetables are not supported. All instruments must use samples or noise.
 
 Fades:  

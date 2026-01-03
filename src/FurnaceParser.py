@@ -5,13 +5,8 @@ import struct
 import zlib
 from typing import List, Tuple
 
-from .model.FurnaceData import (
-    FurnaceModule,
-    FurnaceSample,
-    FurnaceInstrument,
-    FurnaceRow,
-    FurnaceMacro,
-)
+from .model.FurnaceData import *
+from .model.FurnaceEffects import FurnaceEffectFactory
 
 
 class CompileErrorException(Exception):
@@ -380,7 +375,10 @@ class FurnaceParser:
                     t = 0
                 if v is None:
                     v = 0
-                note.Effects.append((t, v))
+                if t not in FurnaceEffectFactory.effect_map:
+                    # print(f"Unknown effect type: {t:02X}")
+                    return
+                note.Effects.append(FurnaceEffectFactory.create_effect(t, v))
 
         while idx < len(rows):
             b = self._ru8(s)
