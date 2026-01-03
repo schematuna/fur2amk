@@ -118,7 +118,7 @@ class RowConverter:
         # the current active pitch, considering both pitch commands and explicit notes
         active_note = None
         # process notes and pitch commands
-        for i, row in enumerate(flat_rows):
+        for row in flat_rows:
             has_portamento = False
             if effect := row.get_effect(PortamentoEffect):
                 has_portamento = True
@@ -212,12 +212,9 @@ class RowConverter:
         # furnace volume units per furnace tick
         slide_helper = VolumeSlider(self.tick_ratio, tick)
         for row in flat_rows:
-            vol = row.Vol
-            if vol is not None:
-                new_vol = vol
-                commands.append(VolumeChange(tick, MMLUtil.find_v(vol)))
-            else:
-                new_vol = None
+            new_vol = row.Vol
+            if new_vol is not None:
+                commands.append(VolumeChange(tick, MMLUtil.find_v(new_vol)))
 
             if effect := row.get_effect(VolumeSlideEffect) or row.get_effect(FineVolumeSlideEffect):
                 if new_command := slide_helper.handle_new_effect(effect):

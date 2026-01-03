@@ -1,10 +1,10 @@
 from typing import Optional
-from enum import Enum
-import sys
 
-from .model.MMLCommands import *
 from .MMLUtil import MMLUtil
+
 from .model.FurnaceEffects import *
+from .model.MMLCommands import *
+
 
 class FurnaceUtil:
     PITCH_STEPS_PER_OCTAVE = 384
