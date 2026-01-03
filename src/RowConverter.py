@@ -38,10 +38,9 @@ class RowConverter:
         # This will be interpreted as the intro marker position
         intro_order = None
         for row in flat_rows:
-            for effect in row.Effects:
-                if isinstance(effect, JumpToOrderEffect):
-                    intro_order = effect.order_number
-                    return intro_order * module.PatternLength * self.amk_ticks_per_row
+            if effect := row.get_effect(JumpToOrderEffect):
+                intro_order = effect.order_number
+                return intro_order * module.PatternLength * self.amk_ticks_per_row
 
         return None
 
@@ -80,28 +79,26 @@ class RowConverter:
     def convert_slides(self, tick: int, row: FurnaceRow, slide_helper: PitchSlider, active_note: Optional[int]) -> Tuple[Optional[int], List[MMLCommand]]:
         commands: List[MMLCommand] = []
         new_active_note = active_note
-        for effect in (row.Effects or []):
-            if isinstance(effect, NoteSlideEffect):
-                semitones = effect.semitones
-                speed = effect.speed
-                if active_note is None:
-                    print(f"Warning: Pitch slide effect found on non-note row, ignoring.", file=sys.stderr)
-                    continue
-                target_note = active_note + semitones
+        if effect := row.get_effect(NoteSlideEffect):
+            if active_note is None:
+                print(f"Warning: Pitch slide effect found on non-note row, ignoring.", file=sys.stderr)
+            else:
+                target_note = active_note + effect.semitones
                 target_note = max(0,min(target_note, MMLUtil.AMK_MAX_PITCH))
                 # for note slides, each speed unit is 4 pitch steps per tick
-                ticks_to_slide = FurnaceUtil.ticks_from_speed(speed * 4, abs(semitones))
+                ticks_to_slide = FurnaceUtil.ticks_from_speed(effect.speed * 4, abs(effect.semitones))
                 amk_duration = max(2, int(ticks_to_slide * self.tick_ratio))
                 max_duration = slide_helper.get_max_duration()
                 if amk_duration > max_duration:
                     print(f"Warning: Pitch slide duration {amk_duration} is greater than the longest tick duration {max_duration}.", file=sys.stderr)
                 commands.append(PitchBend(tick, amk_duration, target_note))
                 new_active_note = target_note
-            elif isinstance(effect, PitchSlideEffect):
-                new_command = slide_helper.handle_new_command(effect.change_per_tick)
-                if new_command is not None:
-                    new_active_note = new_command.note
-                    commands.append(new_command)
+
+        if effect := row.get_effect(PitchSlideEffect):
+            new_command = slide_helper.handle_new_command(effect.change_per_tick)
+            if new_command is not None:
+                new_active_note = new_command.note
+                commands.append(new_command)
                         
         new_command = slide_helper.tick(self.amk_ticks_per_row)
         if new_command is not None:
@@ -124,10 +121,8 @@ class RowConverter:
         # process notes and pitch commands
         for i, row in enumerate(flat_rows):
             portamento_speed = None
-            for effect in (row.Effects or []):
-                if isinstance(effect, PortamentoEffect):
-                    portamento_speed = effect.speed
-                    break
+            if effect := row.get_effect(PortamentoEffect):
+                portamento_speed = effect.speed
             
             if portamento_speed is not None:
                 # handle portamento specially
@@ -141,15 +136,12 @@ class RowConverter:
 
             # check for note delay (this also affects note offs)
             note_tick = tick
-            for effect in (row.Effects or []):
-                if isinstance(effect, NoteDelayEffect):
-                    note_tick += int(effect.delay_ticks * self.tick_ratio)
+            if effect := row.get_effect(NoteDelayEffect):
+                note_tick += int(effect.delay_ticks * self.tick_ratio)
 
             found_legato = False
-            for effect in (row.Effects or []):
-                if isinstance(effect, QuickLegatoEffect):
-                    found_legato = True
-                    break
+            if effect := row.get_effect(QuickLegatoEffect):
+                found_legato = True
                 
             note_kind = row.kind()
             # don't make a new note for portamento rows, pitchbend will handle that
@@ -186,22 +178,19 @@ class RowConverter:
             
 
             # check for quick legato, make a new note if found
-            for effect in row.Effects:
-                if isinstance(effect, QuickLegatoEffect):
-                    pre_note_commands = []
-                    semitones = effect.semitones
-                    delay = effect.delay
-                    new_note_onset = note_tick + int(delay * self.tick_ratio)
-                    if not state.is_legato:
-                        pre_note_commands.append(LegatoToggle(note_tick))
-                        state.is_legato = True
-                    if cur_dur is not None:
-                        cur_dur.duration = new_note_onset - cur_dur.tick
-                        notes.append(cur_dur)
-                    new_note = active_note + semitones
-                    new_note = max(0,min(new_note, MMLUtil.AMK_MAX_PITCH))
-                    cur_dur = MMLNote(new_note_onset, 0, new_note, cur_dur.instrument, pre_note_commands)
-                    active_note = new_note
+            if effect := row.get_effect(QuickLegatoEffect):
+                pre_note_commands = []
+                new_note_onset = note_tick + int(effect.delay * self.tick_ratio)
+                if not state.is_legato:
+                    pre_note_commands.append(LegatoToggle(note_tick))
+                    state.is_legato = True
+                if cur_dur is not None:
+                    cur_dur.duration = new_note_onset - cur_dur.tick
+                    notes.append(cur_dur)
+                new_note = active_note + effect.semitones
+                new_note = max(0,min(new_note, MMLUtil.AMK_MAX_PITCH))
+                cur_dur = MMLNote(new_note_onset, 0, new_note, cur_dur.instrument, pre_note_commands)
+                active_note = new_note
 
             slide_helper.set_active_note(active_note)
             active_note, pitch_commands = self.convert_slides(tick, row, slide_helper, active_note)
@@ -235,15 +224,15 @@ class RowConverter:
             else:
                 new_vol = None
 
-            for effect in (row.Effects or []):
-                if isinstance(effect, VolumeSlideEffect):
-                    new_command = slide_helper.handle_new_command(effect.change_per_tick)
-                    if new_command is not None:
-                        commands.append(new_command)
-                elif isinstance(effect, FineVolumeSlideEffect):
-                    new_command = slide_helper.handle_new_command(effect.change_per_tick)
-                    if new_command is not None:
-                        commands.append(new_command)
+            if effect := row.get_effect(VolumeSlideEffect):
+                new_command = slide_helper.handle_new_command(effect.change_per_tick)
+                if new_command is not None:
+                    commands.append(new_command)
+                    
+            if effect := row.get_effect(FineVolumeSlideEffect):
+                new_command = slide_helper.handle_new_command(effect.change_per_tick)
+                if new_command is not None:
+                    commands.append(new_command)
                         
             # set row volume after ending previous command but before ticking new one
             if new_vol is not None:
@@ -262,20 +251,21 @@ class RowConverter:
         tick = 0
         slide_helper = PanSlider(tick)
         for row in flat_rows:
-            for effect in (row.Effects or []):
-                if isinstance(effect, PanEffect):
-                    slide_helper.set_target(effect.pan_position)
-                    amk_pan = FurnaceUtil.unity_to_amk_pan(effect.pan_position)
-                    commands.append(PanChange(tick, amk_pan))
-                elif isinstance(effect, StereoPanEffect):
-                    cur_pan = FurnaceUtil.stereo_to_unity_pan(effect.left_volume, effect.right_volume)
-                    slide_helper.set_target(cur_pan)
-                    amk_pan = FurnaceUtil.stereo_to_amk_pan(effect.left_volume, effect.right_volume)
-                    commands.append(PanChange(tick, amk_pan))
-                elif isinstance(effect, PanSlideEffect):
-                    new_command = slide_helper.handle_new_command(effect.change_per_tick)
-                    if new_command is not None:
-                        commands.append(new_command)
+            if effect := row.get_effect(PanEffect):
+                slide_helper.set_target(effect.pan_position)
+                amk_pan = FurnaceUtil.unity_to_amk_pan(effect.pan_position)
+                commands.append(PanChange(tick, amk_pan))
+            
+            if effect := row.get_effect(StereoPanEffect):
+                cur_pan = FurnaceUtil.stereo_to_unity_pan(effect.left_volume, effect.right_volume)
+                slide_helper.set_target(cur_pan)
+                amk_pan = FurnaceUtil.stereo_to_amk_pan(effect.left_volume, effect.right_volume)
+                commands.append(PanChange(tick, amk_pan))
+            
+            if effect := row.get_effect(PanSlideEffect):
+                new_command = slide_helper.handle_new_command(effect.change_per_tick)
+                if new_command is not None:
+                    commands.append(new_command)
                         
             new_command = slide_helper.tick(self.amk_ticks_per_row)
             if new_command is not None:
