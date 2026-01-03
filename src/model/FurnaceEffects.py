@@ -92,21 +92,8 @@ class NoteDelayEffect(FurnaceEffect):
     
     def __init__(self, raw_value: int):
         self.delay_ticks = raw_value
-
-
-class FineVolumeSlideEffect(FurnaceEffect):
-    """Fine volume slide effect (0xF3, 0xF4). Value is fine rate."""
-    
-    def __init__(self, raw_value: int, is_up: bool):
-        # fine volume slides are 64 times slower than normal volume slides
-        self.change_per_tick = None
-        if is_up:
-            if raw_value > 0:
-                self.change_per_tick = raw_value / 64
-        else:
-            if raw_value > 0:
-                self.change_per_tick = -raw_value / 64
         
+
 class VolumeSlideEffect(FurnaceEffect):
     """Fast volume slide effect (0xFA). Value encodes up (upper nibble) and down (lower nibble) rates."""
     
@@ -127,6 +114,19 @@ class VolumeSlideEffect(FurnaceEffect):
             self.change_per_tick = -down / rate_divisor
         else:
             print("Warning: Invalid volume slide effect value.")
+
+class FineVolumeSlideEffect(FurnaceEffect):
+    """Fine volume slide effect (0xF3, 0xF4). Value is fine rate."""
+    
+    def __init__(self, raw_value: int, is_up: bool):
+        # fine volume slides are 64 times slower than normal volume slides
+        self.change_per_tick = None
+        if is_up:
+            if raw_value > 0:
+                self.change_per_tick = raw_value / 256
+        else:
+            if raw_value > 0:
+                self.change_per_tick = -raw_value / 256
 
 
 class JumpToOrderEffect(FurnaceEffect):

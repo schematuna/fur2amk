@@ -57,13 +57,18 @@ class FurnaceUtil:
 # call handle_new_command whenever a relevant slide command is encountered
 # call set_target to manually set the target value
 class SlideHelper:
-    def __init__(self, starting_tick: int) -> None:
-        self.cur_tick: int = starting_tick
+    def __init__(self, tick_ratio: int, starting_tick: int) -> None:
+        # ratio of amk ticks to furnace ticks
+        self.tick_ratio: int = tick_ratio
+        # change per amk tick in furnace units
         self.change_per_tick: Optional[int] = 0
-        self.slide_start: Optional[int] = None
+        # target value in furnace units
         self.target_val: int = 0
 
-        self.active_note: Optional[int] = None
+        # starting tick in amk ticks
+        self.cur_tick: int = starting_tick 
+        # slide start in amk ticks
+        self.slide_start: Optional[int] = None
 
     def _get_target_amk(self) -> int:
         return self.target_val
@@ -81,7 +86,7 @@ class SlideHelper:
     def get_max_duration() -> int:
         return max(MMLUtil.TICK_TO_DURATION.keys())
 
-    def handle_new_command(self, change_per_tick: Optional[int]) -> Optional[MMLCommand]:
+    def handle_new_effect(self, effect: FurnaceEffect) -> Optional[MMLCommand]:
         # this could be another slide or a stop slide command. Either way, we wrap up any current slide
         new_command = None
         if self.slide_start is not None:
@@ -91,11 +96,12 @@ class SlideHelper:
             if self._is_target_relative():
                 self.target_val = 0
 
-        self.change_per_tick = change_per_tick
-
-        if self.change_per_tick is not None:
+        if effect.change_per_tick is not None:
+            # effect is in furnace units per furnace tick, convert to furnace units per amk tick
+            self.change_per_tick = effect.change_per_tick / self.tick_ratio
             self.slide_start = self.cur_tick
         else:
+            self.change_per_tick = None
             self.slide_start = None
         
         return new_command
@@ -104,7 +110,7 @@ class SlideHelper:
     def tick(self, ticks: int) -> None:
         new_command = None
         if self.slide_start is not None:
-            LONGEST_DURATION = SlideHelper.get_max_duration()
+            LONGEST_DURATION = self.get_max_duration()
             cur_duration = self.cur_tick - self.slide_start
             if cur_duration >= LONGEST_DURATION:
                 new_command = self._get_command(self.slide_start, LONGEST_DURATION, self._get_target_amk())
@@ -123,6 +129,11 @@ class SlideHelper:
         self.target_val = target
 
 class PitchSlider(SlideHelper):
+
+    def __init__(self, tick_ratio: int, starting_tick: int) -> None:
+        super().__init__(tick_ratio, starting_tick)
+        self.active_note: Optional[int] = None
+
     # Set the currently active note
     # Needed to figure out what note to slide to
     def set_active_note(self, note: int) -> None:
