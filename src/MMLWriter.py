@@ -35,6 +35,8 @@ class MMLWord:
         word_txt = ''
         command_idx = 0
         cur_tick = self.tick
+        # sort commands by tick, since we will iterate through them in order
+        self.commands = sorted(self.commands, key=lambda cmd : cmd.tick)
         
         # process any pre-note commands (at the same tick as note start)
         while command_idx < len(self.commands) and self.commands[command_idx].tick == self.tick:
@@ -73,8 +75,6 @@ class MMLWord:
             word_txt += command.get_text(mml_state)
             command_idx += 1
             
-            if cmd_tick < cur_tick:
-                print(f"Warning: Commands are being processed out of order. Command tick {cmd_tick} is before current tick {cur_tick}.")
             # Update cur_tick to this command's tick
             cur_tick = cmd_tick
             
@@ -107,6 +107,8 @@ class MMLSentence:
 
     def to_mml(self, mml_state: MMLState) -> str:
         sentence_txt = ''
+        # sort words by tick, since we will iterate through them in order
+        self.words = sorted(self.words, key=lambda word : word.tick)
         for word in self.words:
             sentence_txt += word.to_mml(mml_state) + ' '
         return sentence_txt.rstrip()
@@ -325,10 +327,6 @@ class MMLWriter:
                     cmd_idx += 1
                 else:
                     break
-
-            # sort commands by tick
-            # necessary because tiebreak can end up being handled after the corresponding pitchbend command
-            word.commands = sorted(word.commands, key=lambda cmd : cmd.tick)
 
             words.append(word)
         return words
