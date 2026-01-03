@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-import os
+import logging
 import sys
 from typing import Dict, Optional, Tuple
 
@@ -11,6 +11,7 @@ from .MMLUtil import *
 
 class AMKWriter:
     def __init__(self, amk_data: AMKData, module_path: str) -> None:
+        self.logger = logging.getLogger(__name__)
         self.txt: str = ''
         self.amk_data = amk_data
 
@@ -48,8 +49,7 @@ class AMKWriter:
         lines.append('}')
         self.txt += '\n'.join(lines) + '\n\n'
 
-    def add_sample_info(self, module_path: str) -> None:
-        path_name = os.path.splitext(os.path.basename(module_path.replace('\\', '/')))[0]
+    def add_sample_info(self, path_name: str) -> None:
         sample_lines = [f'#path "{path_name}"', '', '#samples', '{', '    #optimized']
         for _, (samp_name, _) in self.amk_data.samples.items():
             brr_rel = f'{samp_name}'
@@ -73,7 +73,7 @@ class AMKWriter:
             if amk_ins.is_noise:
                 # Noise instrument
                 samp_name = f'n{(amk_ins.noise_freq):02X}'
-                print(f"Info: Emitting noise instrument {samp_name} for instrument {MMLUtil.to_hex(idx)}.", file=sys.stderr)
+                self.logger.debug(f"Emitting noise instrument {samp_name} for instrument {MMLUtil.to_hex(idx)}.")
             else:
                 # Resolve sample filename and tuning
                 samp_entry = self.amk_data.samples[amk_ins.sample_index]
@@ -103,7 +103,7 @@ class AMKWriter:
                 elif amk_ins.gain is not None:
                     ga = amk_ins.gain
                 else:
-                    print(f"Info: Instrument {idx:02X} uses gain mode but has no SNES gain set; defaulting to 0.", file=sys.stderr)
+                    self.logger.debug(f"Instrument {idx:02X} uses gain mode but has no SNES gain set; defaulting to 0.")
                     ga = 0x00
             lines.append(f'    {samp_name:<{name_field_width}} ${da:02X} ${sr:02X} ${ga:02X} {samp_tuning} ;@{next_num}')
             next_num += 1

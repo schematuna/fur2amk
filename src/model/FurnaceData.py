@@ -1,6 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Optional, List, Tuple, Dict
 from enum import Enum
+import logging
 
 from .FurnaceEffects import *
 
@@ -76,6 +77,7 @@ class FurnaceInstrument:
     # Parse SNES-specific macro flags from macros
     # call after all macros have been read
     def parse_snes_macro_flags(self):
+        self.logger = logging.getLogger(__name__)
         for macro in self.macros.values():
             if macro.code == 2:  # code 2 corresponds to pitch freq
                 self.snes_macro_data.noise_freq = macro.values[0]
@@ -92,7 +94,7 @@ class FurnaceInstrument:
 
             if self.snes_macro_data.is_noise and self.snes_macro_data.noise_freq is None:
                 default_noise_freq = 29
-                print(f"Info: Instrument {self.index:02X} is noise but has no noise_freq set; defaulting to {default_noise_freq}.")
+                self.logger.debug(f"Instrument {self.index:02X} is noise but has no noise_freq set; defaulting to {default_noise_freq}.")
                 self.snes_macro_data.noise_freq = default_noise_freq
 @dataclass
 class FurnaceMacro:

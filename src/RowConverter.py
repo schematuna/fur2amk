@@ -1,6 +1,7 @@
 from typing import List, Optional
 from dataclasses import dataclass
 import sys
+import logging
 
 from .model.FurnaceData import FurnaceInstrument, FurnaceModule, FurnaceRow
 from .model.AMKData import *
@@ -19,6 +20,7 @@ class FurnaceState:
 
 class RowConverter:
     def __init__(self, fur_ticks_per_row: int) -> None:
+        self.logger = logging.getLogger(__name__)
         # determine musical duration to map to a furnace row
         # find first AMK tick value that is greater than or equal to the furnace tick rate
         self.amk_ticks_per_row = 12
@@ -30,8 +32,8 @@ class RowConverter:
         # ratio of amk ticks to furnace ticks
         self.tick_ratio = self.amk_ticks_per_row / fur_ticks_per_row
         if self.tick_ratio != round(self.tick_ratio):
-            print("Warning: Furnace ticks not cleanly convertible to amk ticks.")
-        print(f"One Furnace tick is {self.tick_ratio:.2g} AMK ticks.")
+            self.logger.warning("Furnace ticks not cleanly convertible to amk ticks.")
+        self.logger.info(f"One Furnace tick is {self.tick_ratio:.2g} AMK ticks.")
 
     def convert_loop_marker(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> Optional[int]:
         # iterate all rows for command 0Bxx (jump to order)
@@ -71,7 +73,7 @@ class RowConverter:
         amk_duration = max(2, int(ticks_to_slide * self.tick_ratio))
         max_duration = PitchSlider.get_max_duration()
         if amk_duration > max_duration:
-            print(f"Warning: Portamento duration {amk_duration} is greater than the longest tick duration {max_duration}.", file=sys.stderr)
+            self.logger.warning(f"Portamento duration {amk_duration} is greater than the longest tick duration {max_duration}.")
         command = PitchBend(tick, amk_duration, target_note)
 
         return target_note, command
@@ -82,7 +84,7 @@ class RowConverter:
         new_active_note = active_note
         if effect := row.get_effect(NoteSlideEffect):
             if active_note is None:
-                print(f"Warning: Pitch slide effect found on non-note row, ignoring.", file=sys.stderr)
+                self.logger.warning("Pitch slide effect found on non-note row, ignoring.")
             else:
                 target_note = active_note + effect.semitones
                 target_note = max(0,min(target_note, MMLUtil.AMK_MAX_PITCH))
@@ -91,7 +93,7 @@ class RowConverter:
                 amk_duration = max(2, int(ticks_to_slide * self.tick_ratio))
                 max_duration = slide_helper.get_max_duration()
                 if amk_duration > max_duration:
-                    print(f"Warning: Pitch slide duration {amk_duration} is greater than the longest tick duration {max_duration}.", file=sys.stderr)
+                    self.logger.warning(f"Pitch slide duration {amk_duration} is greater than the longest tick duration {max_duration}.")
                 commands.append(PitchBend(tick, amk_duration, target_note))
                 new_active_note = target_note
 
@@ -127,7 +129,7 @@ class RowConverter:
                     if portamento_command is not None:
                         commands.append(portamento_command)
                 else:
-                    print(f"Warning: Portamento effect found on non-note row, ignoring.", file=sys.stderr)
+                    self.logger.warning("Portamento effect found on non-note row, ignoring.")
 
             active_note, pitch_commands = self.convert_slides(tick, row, slide_helper, active_note)
             commands.extend(pitch_commands)
