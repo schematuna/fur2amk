@@ -4,7 +4,7 @@ import sys
 
 from .model.MMLCommands import *
 from .MMLUtil import MMLUtil
-from .model.FurnaceData import FurnaceCommandType
+from .model.FurnaceEffects import *
 
 class FurnaceUtil:
     PITCH_STEPS_PER_OCTAVE = 384
@@ -71,10 +71,6 @@ class SlideHelper:
     def _limit_target_val(self, target_val: int) -> int:
         return target_val
 
-    @staticmethod
-    def _get_change_per_tick(effect_num: int, value: int) -> int:
-        return None
-
     def _get_command(self, tick: int) -> MMLCommand:
         return None
 
@@ -85,7 +81,7 @@ class SlideHelper:
     def get_max_duration() -> int:
         return max(MMLUtil.TICK_TO_DURATION.keys())
 
-    def handle_new_command(self, effect_num: int, value: int) -> Optional[MMLCommand]:
+    def handle_new_command(self, change_per_tick: Optional[int]) -> Optional[MMLCommand]:
         # this could be another slide or a stop slide command. Either way, we wrap up any current slide
         new_command = None
         if self.slide_start is not None:
@@ -95,7 +91,7 @@ class SlideHelper:
             if self._is_target_relative():
                 self.target_val = 0
 
-        self.change_per_tick = self._get_change_per_tick(effect_num, value)
+        self.change_per_tick = change_per_tick
 
         if self.change_per_tick is not None:
             self.slide_start = self.cur_tick
@@ -143,19 +139,6 @@ class PitchSlider(SlideHelper):
         target_note = max(0, min(target_note, MMLUtil.AMK_MAX_PITCH))
         return target_note
 
-    @staticmethod
-    def _get_change_per_tick(effect_num: int, value: int) -> int:
-        if value == 0:
-            return None
-        else:
-            if effect_num == FurnaceCommandType.PITCH_SLIDE_UP.value:
-                return value
-            elif effect_num == FurnaceCommandType.PITCH_SLIDE_DOWN.value:
-                return -value
-            else:
-                print(f"Warning: Invalid pitch slide effect number {effect_num}.", file=sys.stderr)
-                return None
-
     def _get_command(self, tick: int, duration: int, target_note: int) -> MMLCommand:
         return PitchBend(tick, duration, target_note)
 
@@ -170,21 +153,6 @@ class PanSlider(SlideHelper):
     def _limit_target_val(self, target_val: int) -> int:
         return max(0, min(target_val, 0xFF))
 
-    @staticmethod
-    def _get_change_per_tick(effect_num: int, value: int) -> int:
-        left = value >> 4
-        right = value & 0x0F
-        if right == 0 and left == 0:
-            return None
-        elif right == 0:
-            # halved because pan is spread across both channels in Furnace
-            return -left / 2
-        elif left == 0:
-            return right / 2
-        else:
-            print(f"Warning: Invalid pan slide effect value {value}.", file=sys.stderr)
-            return None
-
     def _get_command(self, tick: int, duration: int, target_pan: int) -> MMLCommand:
         return PanFade(tick, duration, target_pan)
 
@@ -194,41 +162,6 @@ class VolumeSlider(SlideHelper):
 
     def _limit_target_val(self, target_val: int) -> int:
         return max(0, min(target_val, 0x7F))
-
-    @staticmethod
-    def _get_change_per_tick(effect_num: int, value: int) -> Optional[int]:
-        vol_change_per_tick = None
-        if effect_num == FurnaceCommandType.VOLUME_SLIDE.value or effect_num == FurnaceCommandType.FAST_VOLUME_SLIDE.value:
-            rate_divisor = 4
-            if effect_num == FurnaceCommandType.FAST_VOLUME_SLIDE.value:
-                # fast volume slides are 4 times faster than normal volume slides
-                rate_divisor = 1
-
-            up = value >> 4
-            down = value & 0x0F
-            if down == 0 and up == 0:
-                vol_change_per_tick = None
-            elif down == 0:
-                vol_change_per_tick = up / rate_divisor
-            elif up == 0:
-                vol_change_per_tick = -down / rate_divisor
-            else:
-                print("Warning: Invalid volume slide effect value.", file=sys.stderr)
-        # fine volume slides are 64 times slower than normal volume slides
-        elif effect_num == FurnaceCommandType.FINE_VOLUME_SLIDE_UP.value:
-            if value == 0:
-                vol_change_per_tick = None
-            else:
-                vol_change_per_tick = value / 64
-        elif effect_num == FurnaceCommandType.FINE_VOLUME_SLIDE_DOWN.value:
-            if value == 0:
-                vol_change_per_tick = None
-            else:
-                vol_change_per_tick = -value / 64
-        else:
-            print(f"Warning: Invalid volume slide effect number {effect_num}.", file=sys.stderr)
-        
-        return vol_change_per_tick
 
     def _get_command(self, tick: int, duration: int, target_volume: int) -> MMLCommand:
         return VolumeFade(tick, duration, target_volume)

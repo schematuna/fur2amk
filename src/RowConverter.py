@@ -5,6 +5,7 @@ import sys
 from .model.FurnaceData import FurnaceInstrument, FurnaceModule, FurnaceRow
 from .model.AMKData import *
 from .model.MMLCommands import *
+from .model.FurnaceEffects import *
 from .MMLUtil import *
 from .FurnaceUtil import *
 
@@ -38,8 +39,8 @@ class RowConverter:
         intro_order = None
         for row in flat_rows:
             for effect in row.Effects:
-                if effect[0] == 0x0B:
-                    intro_order = int(effect[1])
+                if isinstance(effect, JumpToOrderEffect):
+                    intro_order = effect.order_number
                     return intro_order * module.PatternLength * self.amk_ticks_per_row
 
         return None
@@ -65,9 +66,9 @@ class RowConverter:
 
         return pre_note_commands
 
-    def convert_portamento(self, tick: int, active_note: int, target_note: int, portamento_speed: int) -> Tuple[int, MMLCommand]:
+    def convert_portamento(self, tick: int, active_note: int, target_note: int, speed: int) -> Tuple[int, MMLCommand]:
         semitones = target_note - active_note
-        ticks_to_slide = FurnaceUtil.ticks_from_speed(portamento_speed, semitones)
+        ticks_to_slide = FurnaceUtil.ticks_from_speed(speed, semitones)
         amk_duration = max(2, int(ticks_to_slide * self.tick_ratio))
         max_duration = PitchSlider.get_max_duration()
         if amk_duration > max_duration:
@@ -80,25 +81,24 @@ class RowConverter:
         commands: List[MMLCommand] = []
         new_active_note = active_note
         for effect in (row.Effects or []):
-            effect_num = effect[0]
-            value = effect[1]
-            if effect_num == FurnaceCommandType.NOTE_SLIDE_UP.value or effect_num == FurnaceCommandType.NOTE_SLIDE_DOWN.value:
-                semitones, speed = self.get_pitch_slide_info(effect_num, value)
+            if isinstance(effect, NoteSlideEffect):
+                semitones = effect.semitones
+                speed = effect.speed
                 if active_note is None:
                     print(f"Warning: Pitch slide effect found on non-note row, ignoring.", file=sys.stderr)
                     continue
                 target_note = active_note + semitones
                 target_note = max(0,min(target_note, MMLUtil.AMK_MAX_PITCH))
                 # for note slides, each speed unit is 4 pitch steps per tick
-                ticks_to_slide = FurnaceUtil.ticks_from_speed(speed * 4, semitones)
+                ticks_to_slide = FurnaceUtil.ticks_from_speed(speed * 4, abs(semitones))
                 amk_duration = max(2, int(ticks_to_slide * self.tick_ratio))
                 max_duration = slide_helper.get_max_duration()
                 if amk_duration > max_duration:
                     print(f"Warning: Pitch slide duration {amk_duration} is greater than the longest tick duration {max_duration}.", file=sys.stderr)
                 commands.append(PitchBend(tick, amk_duration, target_note))
                 new_active_note = target_note
-            elif effect_num == FurnaceCommandType.PITCH_SLIDE_UP.value or effect_num == FurnaceCommandType.PITCH_SLIDE_DOWN.value:
-                new_command = slide_helper.handle_new_command(effect_num, value)
+            elif isinstance(effect, PitchSlideEffect):
+                new_command = slide_helper.handle_new_command(effect.change_per_tick)
                 if new_command is not None:
                     new_active_note = new_command.note
                     commands.append(new_command)
@@ -123,7 +123,12 @@ class RowConverter:
         active_note = None
         # process notes and pitch commands
         for i, row in enumerate(flat_rows):
-            portamento_speed = row.get_effect(FurnaceCommandType.PORTAMENTO)
+            portamento_speed = None
+            for effect in (row.Effects or []):
+                if isinstance(effect, PortamentoEffect):
+                    portamento_speed = effect.speed
+                    break
+            
             if portamento_speed is not None:
                 # handle portamento specially
                 if row.kind() == FurnaceRow.NoteKind.NOTE:
@@ -137,12 +142,14 @@ class RowConverter:
             # check for note delay (this also affects note offs)
             note_tick = tick
             for effect in (row.Effects or []):
-                effect_num = effect[0]
-                value = effect[1]
-                if effect_num == FurnaceCommandType.NOTE_DELAY.value:
-                    note_tick += int(value * self.tick_ratio)
+                if isinstance(effect, NoteDelayEffect):
+                    note_tick += int(effect.delay_ticks * self.tick_ratio)
 
-            found_legato = row.get_effect(FurnaceCommandType.QUICK_LEGATO) is not None
+            found_legato = False
+            for effect in (row.Effects or []):
+                if isinstance(effect, QuickLegatoEffect):
+                    found_legato = True
+                    break
                 
             note_kind = row.kind()
             # don't make a new note for portamento rows, pitchbend will handle that
@@ -180,11 +187,10 @@ class RowConverter:
 
             # check for quick legato, make a new note if found
             for effect in row.Effects:
-                effect_num = effect[0]
-                value = effect[1]
-                if self.is_quick_legato(effect_num):
+                if isinstance(effect, QuickLegatoEffect):
                     pre_note_commands = []
-                    semitones, delay = self.parse_quick_legato(effect_num, value)
+                    semitones = effect.semitones
+                    delay = effect.delay
                     new_note_onset = note_tick + int(delay * self.tick_ratio)
                     if not state.is_legato:
                         pre_note_commands.append(LegatoToggle(note_tick))
@@ -213,43 +219,6 @@ class RowConverter:
 
         return notes, commands
 
-    def is_volume_slide(self, effect_num: int) -> bool:
-        return effect_num == FurnaceCommandType.VOLUME_SLIDE.value \
-            or effect_num == FurnaceCommandType.FAST_VOLUME_SLIDE.value \
-            or effect_num == FurnaceCommandType.FINE_VOLUME_SLIDE_UP.value \
-            or effect_num == FurnaceCommandType.FINE_VOLUME_SLIDE_DOWN.value
-
-    def is_quick_legato(self, effect_num: int) -> bool:
-        return effect_num == FurnaceCommandType.QUICK_LEGATO.value
-
-    def get_pitch_slide_info(self, effect_num: int, value: int) -> Tuple[Optional[int], Optional[int]]:
-        if effect_num == FurnaceCommandType.NOTE_SLIDE_DOWN.value or \
-           effect_num == FurnaceCommandType.NOTE_SLIDE_UP.value:
-            # speed is first value of nibble, note is second+
-            # convert max $0F Furnace to quarter note $30 AMK
-            # TODO: figure out precise speed scaling, I just earballed it
-            speed = value >> 4
-            semitones = value & 0x0F
-            if effect_num == FurnaceCommandType.NOTE_SLIDE_DOWN.value:
-                semitones = -semitones
-        else:
-            print(f"Warning: Invalid pitch slide effect number {effect_num}.", file=sys.stderr)
-            return None, None
-
-        return semitones, speed
-
-    def parse_quick_legato(self, effect_num: int, value: int) -> Tuple[Optional[int], Optional[int]]:
-        if effect_num == FurnaceCommandType.QUICK_LEGATO.value:
-            x = value >> 4
-            semitones = value & 0x0F
-            delay = 0
-            if x < 8:
-                delay = x
-            else:
-                delay = x - 8
-                semitones = -semitones
-
-            return semitones, delay
 
     def convert_volume_commands(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
@@ -267,10 +236,12 @@ class RowConverter:
                 new_vol = None
 
             for effect in (row.Effects or []):
-                effect_num = effect[0]
-                value = effect[1]
-                if self.is_volume_slide(effect_num):
-                    new_command = slide_helper.handle_new_command(effect_num, value)
+                if isinstance(effect, VolumeSlideEffect):
+                    new_command = slide_helper.handle_new_command(effect.change_per_tick)
+                    if new_command is not None:
+                        commands.append(new_command)
+                elif isinstance(effect, FineVolumeSlideEffect):
+                    new_command = slide_helper.handle_new_command(effect.change_per_tick)
                     if new_command is not None:
                         commands.append(new_command)
                         
@@ -292,23 +263,17 @@ class RowConverter:
         slide_helper = PanSlider(tick)
         for row in flat_rows:
             for effect in (row.Effects or []):
-                effect_num = effect[0]
-                value = effect[1]
-
-                if effect_num == FurnaceCommandType.PAN.value:
-                    slide_helper.set_target(value)
-                    amk_pan = FurnaceUtil.unity_to_amk_pan(value)
+                if isinstance(effect, PanEffect):
+                    slide_helper.set_target(effect.pan_position)
+                    amk_pan = FurnaceUtil.unity_to_amk_pan(effect.pan_position)
                     commands.append(PanChange(tick, amk_pan))
-                elif effect_num == FurnaceCommandType.STEREO_PAN.value:
-                    left_volume = value >> 4
-                    right_volume = value & 0x0F
-                    cur_pan = FurnaceUtil.stereo_to_unity_pan(left_volume, right_volume)
+                elif isinstance(effect, StereoPanEffect):
+                    cur_pan = FurnaceUtil.stereo_to_unity_pan(effect.left_volume, effect.right_volume)
                     slide_helper.set_target(cur_pan)
-                    amk_pan = FurnaceUtil.stereo_to_amk_pan(left_volume, right_volume)
+                    amk_pan = FurnaceUtil.stereo_to_amk_pan(effect.left_volume, effect.right_volume)
                     commands.append(PanChange(tick, amk_pan))
-
-                if effect_num == FurnaceCommandType.PAN_SLIDE.value:
-                    new_command = slide_helper.handle_new_command(effect_num, value)
+                elif isinstance(effect, PanSlideEffect):
+                    new_command = slide_helper.handle_new_command(effect.change_per_tick)
                     if new_command is not None:
                         commands.append(new_command)
                         
