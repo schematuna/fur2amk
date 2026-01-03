@@ -78,6 +78,7 @@ class RowConverter:
 
     def convert_slides(self, tick: int, row: FurnaceRow, slide_helper: PitchSlider, active_note: Optional[int]) -> Tuple[Optional[int], List[MMLCommand]]:
         commands: List[MMLCommand] = []
+        slide_helper.set_active_note(active_note)
         new_active_note = active_note
         if effect := row.get_effect(NoteSlideEffect):
             if active_note is None:
@@ -95,7 +96,7 @@ class RowConverter:
                 new_active_note = target_note
 
         if effect := row.get_effect(PitchSlideEffect):
-            new_command = slide_helper.handle_new_command(effect.change_per_tick)
+            new_command = slide_helper.handle_new_effect(effect)
             if new_command is not None:
                 new_active_note = new_command.note
                 commands.append(new_command)
@@ -112,7 +113,7 @@ class RowConverter:
         commands: List[MMLCommand] = []
         tick = 0
         state = FurnaceState()
-        slide_helper = PitchSlider(tick)
+        slide_helper = PitchSlider(self.tick_ratio, tick)
 
         # the current note duration
         cur_dur: Optional[MMLNote] = None
@@ -120,19 +121,18 @@ class RowConverter:
         active_note = None
         # process notes and pitch commands
         for i, row in enumerate(flat_rows):
-            portamento_speed = None
+            has_portamento = False
             if effect := row.get_effect(PortamentoEffect):
-                portamento_speed = effect.speed
-            
-            if portamento_speed is not None:
-                # handle portamento specially
+                has_portamento = True
                 if row.kind() == FurnaceRow.NoteKind.NOTE:
-                    active_note, portamento_command = self.convert_portamento(tick, active_note, row.Note, portamento_speed)
+                    active_note, portamento_command = self.convert_portamento(tick, active_note, row.Note, effect.speed)
                     if portamento_command is not None:
                         commands.append(portamento_command)
                 else:
                     print(f"Warning: Portamento effect found on non-note row, ignoring.", file=sys.stderr)
 
+            active_note, pitch_commands = self.convert_slides(tick, row, slide_helper, active_note)
+            commands.extend(pitch_commands)
 
             # check for note delay (this also affects note offs)
             note_tick = tick
@@ -145,7 +145,7 @@ class RowConverter:
                 
             note_kind = row.kind()
             # don't make a new note for portamento rows, pitchbend will handle that
-            if note_kind == FurnaceRow.NoteKind.NOTE and portamento_speed is None:
+            if note_kind == FurnaceRow.NoteKind.NOTE and not has_portamento:
                 fur_ins = None
                 for ins in instruments:
                     if ins.index == row.Ins:
@@ -192,10 +192,6 @@ class RowConverter:
                 cur_dur = MMLNote(new_note_onset, 0, new_note, cur_dur.instrument, pre_note_commands)
                 active_note = new_note
 
-            slide_helper.set_active_note(active_note)
-            active_note, pitch_commands = self.convert_slides(tick, row, slide_helper, active_note)
-            commands.extend(pitch_commands)
-
             tick += self.amk_ticks_per_row
         
         # Finalize possible final note
@@ -215,7 +211,7 @@ class RowConverter:
         tick = 0
         new_vol = None
         # furnace volume units per furnace tick
-        slide_helper = VolumeSlider(tick)
+        slide_helper = VolumeSlider(self.tick_ratio, tick)
         for row in flat_rows:
             vol = row.Vol
             if vol is not None:
@@ -225,12 +221,12 @@ class RowConverter:
                 new_vol = None
 
             if effect := row.get_effect(VolumeSlideEffect):
-                new_command = slide_helper.handle_new_command(effect.change_per_tick)
+                new_command = slide_helper.handle_new_effect(effect)
                 if new_command is not None:
                     commands.append(new_command)
                     
             if effect := row.get_effect(FineVolumeSlideEffect):
-                new_command = slide_helper.handle_new_command(effect.change_per_tick)
+                new_command = slide_helper.handle_new_effect(effect)
                 if new_command is not None:
                     commands.append(new_command)
                         
@@ -249,7 +245,7 @@ class RowConverter:
         commands: List[MMLCommand] = []
         # amk ticks
         tick = 0
-        slide_helper = PanSlider(tick)
+        slide_helper = PanSlider(self.tick_ratio, tick)
         for row in flat_rows:
             if effect := row.get_effect(PanEffect):
                 slide_helper.set_target(effect.pan_position)
@@ -263,7 +259,7 @@ class RowConverter:
                 commands.append(PanChange(tick, amk_pan))
             
             if effect := row.get_effect(PanSlideEffect):
-                new_command = slide_helper.handle_new_command(effect.change_per_tick)
+                new_command = slide_helper.handle_new_effect(effect)
                 if new_command is not None:
                     commands.append(new_command)
                         
