@@ -96,13 +96,11 @@ class RowConverter:
                 new_active_note = target_note
 
         if effect := row.get_effect(PitchSlideEffect):
-            new_command = slide_helper.handle_new_effect(effect)
-            if new_command is not None:
+            if new_command := slide_helper.handle_new_effect(effect):
                 new_active_note = new_command.note
                 commands.append(new_command)
                         
-        new_command = slide_helper.tick(self.amk_ticks_per_row)
-        if new_command is not None:
+        if new_command := slide_helper.tick(self.amk_ticks_per_row):
             new_active_note = new_command.note
             commands.append(new_command)
 
@@ -199,6 +197,7 @@ class RowConverter:
             cur_dur.duration = tick - cur_dur.tick
             notes.append(cur_dur)
 
+        # if necessary, toggle legato off before looping
         if state.is_legato:
             notes[-1].pre_note_commands.append(LegatoToggle(tick))
 
@@ -220,21 +219,15 @@ class RowConverter:
             else:
                 new_vol = None
 
-            if effect := row.get_effect(VolumeSlideEffect):
-                new_command = slide_helper.handle_new_effect(effect)
-                if new_command is not None:
+            if effect := row.get_effect(VolumeSlideEffect) or row.get_effect(FineVolumeSlideEffect):
+                if new_command := slide_helper.handle_new_effect(effect):
                     commands.append(new_command)
                     
-            if effect := row.get_effect(FineVolumeSlideEffect):
-                new_command = slide_helper.handle_new_effect(effect)
-                if new_command is not None:
-                    commands.append(new_command)
-                        
             # set row volume after ending previous command but before ticking new one
             if new_vol is not None:
                 slide_helper.set_target(new_vol)
-            new_command = slide_helper.tick(self.amk_ticks_per_row)
-            if new_command is not None:
+                
+            if new_command := slide_helper.tick(self.amk_ticks_per_row):
                 commands.append(new_command)
    
             tick += self.amk_ticks_per_row
@@ -259,12 +252,10 @@ class RowConverter:
                 commands.append(PanChange(tick, amk_pan))
             
             if effect := row.get_effect(PanSlideEffect):
-                new_command = slide_helper.handle_new_effect(effect)
-                if new_command is not None:
+                if new_command := slide_helper.handle_new_effect(effect):
                     commands.append(new_command)
                         
-            new_command = slide_helper.tick(self.amk_ticks_per_row)
-            if new_command is not None:
+            if new_command := slide_helper.tick(self.amk_ticks_per_row):
                 commands.append(new_command)
    
             tick += self.amk_ticks_per_row
