@@ -1,5 +1,6 @@
 from typing import List
 import os
+import logging
 
 class BRRBlock:
     def __init__(self, data: bytes) -> None:
@@ -53,6 +54,9 @@ class BRRSample:
 
 # reads in native BRR from Furnace sample format and lints it/fixes it as needed for amk
 class BRRConverter:
+    def __init__(self) -> None:
+        self.logger = logging.getLogger(__name__)
+
     def dump_samples_to_brr(self, out_dir: str, samples: List[BRRSample]) -> None:
         created = 0
         for s in samples:
@@ -84,11 +88,11 @@ class BRRConverter:
                 continue
 
             else:
-                print(f"[diag] info: sample {s.index:02d} {s.name} has no raw BRR data, skipping")
+                self.logger.debug(f"sample {s.index:02d} {s.name} has no raw BRR data, skipping")
                 pass
             
         # summary only
-        print(f"[diag] summary: brr_created={created}")
+        self.logger.debug(f"brr_created={created}")
 
     def validate_and_fix_brr_data(self, data: BRRData, loop_end: int, name: str) -> None:
         is_looped = loop_end is not None and loop_end > 0
@@ -103,13 +107,13 @@ class BRRConverter:
 
             if is_looped and (i == loop_end):
                 if not loop_flag:
-                    print(f"warning: BRR loop end block ({i}) missing loop flag; fixing {name} ")
+                    self.logger.debug(f"BRR loop end block ({i}) missing loop flag; fixing {name} ")
                     block.header |= 2
                 if not end_flag:
-                    print(f"warning: BRR loop end block ({i}) missing end flag; fixing {name} ")
+                    self.logger.debug(f"BRR loop end block ({i}) missing end flag; fixing {name} ")
                     block.header |= 1
             
             if not is_looped and (i >= len(data.blocks)) and not end_flag:
-                print(f"warning: {name} BRR last block ({i}) missing end flag; fixing")
+                self.logger.debug(f"{name} BRR last block ({i}) missing end flag; fixing")
                 block.header |= 1
                 

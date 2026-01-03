@@ -4,6 +4,7 @@ import io
 import struct
 import zlib
 from typing import List, Tuple
+import logging
 
 from .model.FurnaceData import *
 from .model.FurnaceEffects import FurnaceEffectFactory
@@ -17,7 +18,11 @@ class FurnaceParser:
     Reader for Furnace .fur (INFO/SMP2/INS2/PATN).
     """
 
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+
     def parse(self, filename: str) -> FurnaceModule:
+        self.logger.debug(f"Parsing {filename}")
         data = self._read_file_bytes(filename)
         # Try as-is, else zlib-decompress and retry
         if data and data[0] == 0x78:  # zlib magic byte
@@ -30,7 +35,7 @@ class FurnaceParser:
 
         mod = FurnaceModule()
         if (mod.NumChannels != 8):  # default for SNES
-            print("Warning: Unsupported channel count; defaulting to 8 channels.")
+            self.logger.warning("Unsupported channel count; defaulting to 8 channels.")
             mod.NumChannels = 8
 
         # Keep data around for pointer-based seeks
@@ -211,7 +216,7 @@ class FurnaceParser:
         _fmt_version = self._ru16(s)
         ins_type = self._ru16(s)
         if ins_type != 29:
-            print(f"Warning: Unsupported instrument type {ins_type}, SNES instruments expected. Output may be incorrect.")
+            self.logger.warning(f"Unsupported instrument type {ins_type}, SNES instruments expected. Output may be incorrect.")
         idx = len(mod.Instruments)
         ins = FurnaceInstrument(index=idx, name=f'Inst{idx}')
         # Parse features until EN

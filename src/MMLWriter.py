@@ -1,5 +1,6 @@
 from typing import Dict, List, Optional
 from dataclasses import dataclass, replace
+import logging
 
 from .model.MMLData import *
 from .model.MMLCommands import *
@@ -234,6 +235,7 @@ class MMLLine:
 
 class MMLWriter:
     def __init__(self, mml_data: MMLData, label_start: int) -> None:
+        self.logger = logging.getLogger(__name__)
         self.mml_data = mml_data
         self.label_count = label_start
 
@@ -294,7 +296,7 @@ class MMLWriter:
         commands = sorted(commands, key=lambda cmd : cmd.tick)
         
         if not notes:
-            print(f"Info: Channel has no notes.")
+            self.logger.debug("Channel has no notes.")
             return []
 
         mml_state = MMLState()
@@ -320,7 +322,7 @@ class MMLWriter:
                         word.commands.append(TieBreakCommand(cmd_tick))
                         new_tick = cmd_tick + command.duration
                         if new_tick > duration.tick + duration.duration:
-                            print(f"Warning: Pitchbend duration {command.duration} exceeds the duration of the note. The command will be ignored.")
+                            self.logger.warning(f"Pitchbend duration {command.duration} exceeds the duration of the note. The command will be ignored.")
                         command.tick = new_tick
                         
                     word.commands.append(command)

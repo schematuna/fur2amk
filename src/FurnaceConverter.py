@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import sys
+import logging
 from typing import Dict, List, Tuple
 
 from .model.FurnaceData import FurnaceModule, FurnaceRow
@@ -12,6 +13,7 @@ from .RowConverter import RowConverter
 
 class FurnaceConverter:
     def __init__(self) -> None:
+        self.logger = logging.getLogger(__name__)
         self.row_converter = None
         # keeps track of how an AMK instrument maps to a Furnace instrument
         self.ins_map: Dict[int, int] = {}
@@ -57,7 +59,7 @@ class FurnaceConverter:
                 amk_ins.noise_freq = ins.snes_macro_data.noise_freq
                 if ins.snes_macro_data.noise_freq is None:
                     ins.snes_macro_data.noise_freq = 29  # default noise freq if unset
-                    print(f"Warning: Instrument {ins.index} is a noise instrument but has no noise frequency set; You should set it explicitly in Furnace.", file=sys.stderr)
+                    self.logger.warning(f"Instrument {ins.index} is a noise instrument but has no noise frequency set; You should set it explicitly in Furnace.")
             else:
                 amk_ins.sample_index = int(ins.initial_sample)
 
@@ -73,7 +75,7 @@ class FurnaceConverter:
                 amk_ins.gain_values = ins.snes_macro_data.gain_values
                 amk_ins.gain = ins.sn_gain
                 if amk_ins.gain_values is None or amk_ins.gain is None:
-                    print(f"Warning: Instrument {ins.index:02X} uses gain mode but does not have gain parameters set.")
+                    self.logger.debug(f"Instrument {ins.index:02X} uses gain mode but does not have gain parameters set.")
 
             instruments.append(amk_ins)
             # remember how this AMK instrument maps to a Furnace instrument
@@ -150,7 +152,7 @@ class FurnaceConverter:
                 if rows:
                     flat_rows.extend(rows)
                 else:
-                    print(f"Warning: Channel {ch} references missing pattern {pat}. Inserting empty pattern.", file=sys.stderr)
+                    self.logger.warning(f"Channel {ch} references missing pattern {pat}. Inserting empty pattern.")
                     flat_rows.extend([FurnaceRow() for _ in range(module.PatternLength)])
 
             loop_tick = self.row_converter.convert_loop_marker(flat_rows, module)
