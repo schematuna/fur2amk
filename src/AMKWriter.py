@@ -140,10 +140,5 @@ class AMKWriter:
 
         return
 
-    # Output
-    def save(self, filename: str) -> None:
-        out_dir = os.path.dirname(filename)
-        if out_dir and not os.path.exists(out_dir):
-            os.makedirs(out_dir, exist_ok=True)
-        with open(filename, 'w', encoding='utf-8') as f:
-            f.write(self.txt)
+    def get_text(self) -> str:
+        return self.txt

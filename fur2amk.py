@@ -164,12 +164,21 @@ def main() -> None:
     parser = FurnaceParser()
     module = parser.parse(module_path)
 
-    # Build events and MML
+    # Build AMK object
     converter = FurnaceConverter()
-
-    # make BRRs
     amk_data = converter.convert(module)
-    mml = AMKWriter(amk_data, module_path)
+
+    amk_writer = AMKWriter(amk_data, module_path)
+
+    # Output txt file
+    song_name = os.path.splitext(os.path.basename(module_path))[0]
+    out_path = os.path.join('music', f'{song_name}.txt')
+    out_dir = os.path.dirname(out_path)
+    if out_dir and not os.path.exists(out_dir):
+        os.makedirs(out_dir, exist_ok=True)
+    with open(out_path, 'w', encoding='utf-8') as f:
+        f.write(amk_writer.get_text())
+        print(f"Wrote {out_path}")
 
     # Attempt to dump samples to BRR files (unless disabled)
     if not bool(Config.flag('nosmpl')):
@@ -182,11 +191,6 @@ def main() -> None:
         brr_converter = BRRConverter()
         brr_converter.dump_samples_to_brr(sample_dir, samples)
 
-    # Output
-    song_name = os.path.splitext(os.path.basename(module_path))[0]
-    out_path = os.path.join('music', f'{song_name}.txt')
-    mml.save(out_path)
-    print(f"Wrote {out_path}")
 
 if __name__ == "__main__":
     main()
