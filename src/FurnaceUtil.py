@@ -146,6 +146,8 @@ class PitchSlider(SlideHelper):
 
     def _get_target_amk(self) -> int:
         semitones = FurnaceUtil.fur_pitch_change_to_semitones(self.target_val)
+        if self.active_note is None:
+            raise ValueError("Active note not set for PitchSlider")
         target_note = self.active_note + semitones
         target_note = max(0, min(target_note, MMLUtil.AMK_MAX_PITCH))
         return target_note

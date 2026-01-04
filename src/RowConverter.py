@@ -80,7 +80,8 @@ class RowConverter:
 
     def convert_slides(self, tick: int, row: FurnaceRow, slide_helper: PitchSlider, active_note: Optional[int]) -> Tuple[Optional[int], List[MMLCommand]]:
         commands: List[MMLCommand] = []
-        slide_helper.set_active_note(active_note)
+        if active_note is not None:
+            slide_helper.set_active_note(active_note)
         new_active_note = active_note
         if effect := row.get_effect(NoteSlideEffect):
             if active_note is None:
