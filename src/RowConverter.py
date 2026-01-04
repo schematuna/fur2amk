@@ -1,5 +1,5 @@
 from typing import List, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 import sys
 import logging
 
@@ -17,6 +17,23 @@ class FurnaceState:
     fur_ins_idx: int = None
     echo: bool = True
     is_legato: bool = False
+
+@dataclass
+class MappingInfo:
+    amk_ins_idx: int
+    note_to_play: int
+
+# conversion helper data class
+@dataclass
+class InstrumentInfo:
+    # default amk instrument
+    amk_ins: Optional[int] = None
+
+    # sample map data
+    # note -> mapping_info
+    ins_map: Dict[int, MappingInfo] = field(default_factory=dict)
+    # list of remote command indices associated with this instrument
+    remote_commands: List[int] = field(default_factory=list)
 
 class RowConverter:
     def __init__(self, fur_ticks_per_row: int) -> None:
@@ -46,7 +63,7 @@ class RowConverter:
 
         return None
 
-    def get_pre_note_commands(self, fur_ins: FurnaceInstrument, ins_remote_map: Dict[int, int], state: FurnaceState, note_tick: int) -> List[MMLCommand]:
+    def get_pre_note_commands(self, fur_ins: FurnaceInstrument, ins_info: Dict[int, InstrumentInfo], state: FurnaceState, note_tick: int) -> List[MMLCommand]:
         # instrument echo
         pre_note_commands = []
         if fur_ins.snes_macro_data.is_echo != state.echo:
@@ -54,9 +71,10 @@ class RowConverter:
             state.echo = fur_ins.snes_macro_data.is_echo
 
         # mid-note gain change, handled by remote command
-        if fur_ins.index in ins_remote_map:
+        if fur_ins.index in ins_info and len(ins_info[fur_ins.index].remote_commands) > 0:
             gain_speed = fur_ins.snes_macro_data.gain_speed
-            remote_comand_idx = ins_remote_map[fur_ins.index]
+            # just assume first remote command is gain for now
+            remote_comand_idx = ins_info[fur_ins.index].remote_commands[0]
             gain_remote = RemoteCommand(note_tick, remote_comand_idx, RemoteCommandTiming.AFTER_START, gain_speed)
             if gain_remote is not state.gain_remote:
                 pre_note_commands.append(gain_remote)
@@ -109,7 +127,7 @@ class RowConverter:
 
         return new_active_note, commands
 
-    def convert_notes(self, flat_rows: List[FurnaceRow], ins_remote_map: Dict[int, int], instruments: List[FurnaceInstrument]) -> List[MMLNote]:
+    def convert_notes(self, flat_rows: List[FurnaceRow], ins_info: Dict[int, InstrumentInfo], instruments: List[FurnaceInstrument]) -> List[MMLNote]:
         notes: List[MMLNote] = []
         commands: List[MMLCommand] = []
         tick = 0
@@ -152,20 +170,36 @@ class RowConverter:
                     if ins.index == row.Ins:
                         fur_ins = ins
                         break
-                pre_note_commands = self.get_pre_note_commands(fur_ins, ins_remote_map, state, note_tick)
+                pre_note_commands = self.get_pre_note_commands(fur_ins, ins_info, state, note_tick)
 
                 if found_legato != state.is_legato:
                     pre_note_commands.append(LegatoToggle(note_tick))
                     state.is_legato = found_legato
                     
-                # TODO: handle sample maps here, AMK doesn't need to know about that
-                amk_ins_idx = row.Ins
+                note_to_play = row.Note
+                amk_ins_idx = None
+                if row.Ins not in ins_info:
+                    self.logger.error(f"No instrument info found for Furnace instrument {row.Ins}, this is not right.")
+                    continue
+                # Get the AMK instrument index using ins_map
+                if fur_ins.use_sample_map:
+                    note_map = ins_info[row.Ins].ins_map
+                    # Try to find exact note match first
+                    if row.Note in note_map:
+                        amk_ins_idx = note_map[row.Note].amk_ins_idx
+                        note_to_play = note_map[row.Note].note_to_play
+                    else:
+                        # No mapping found, use Furnace instrument index as fallback
+                        self.logger.warning(f"No instrument mapping found for Furnace instrument {row.Ins}, note {row.Note}.")
+                        amk_ins_idx = 0
+                else:
+                    amk_ins_idx = ins_info[row.Ins].amk_ins
 
                 if cur_dur is not None:
                     cur_dur.duration = note_tick - cur_dur.tick
                     notes.append(cur_dur)
-                cur_dur = MMLNote(note_tick, 0, row.Note, amk_ins_idx, pre_note_commands)
-                active_note = row.Note
+                cur_dur = MMLNote(note_tick, 0, note_to_play, amk_ins_idx, pre_note_commands)
+                active_note = note_to_play
 
             elif note_kind == FurnaceRow.NoteKind.OFF or note_kind == FurnaceRow.NoteKind.RELEASE:
                 if cur_dur is not None:

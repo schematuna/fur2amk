@@ -9,18 +9,14 @@ from typing import Dict, List, Tuple
 from .model.FurnaceData import FurnaceModule, FurnaceRow
 from .model.AMKData import *
 from .model.MMLCommands import *
-from .RowConverter import RowConverter
+from .RowConverter import *
 
 class FurnaceConverter:
     def __init__(self) -> None:
         self.logger = logging.getLogger(__name__)
         self.row_converter = None
-        # keeps track of how an AMK instrument maps to a Furnace instrument
-        self.ins_map: Dict[int, int] = {}
-        # Keeps track of instruments that have an associated remote command
-        # TODO: just store remote commands in the AMKInstrument object
-        # fur_ins_idx -> remote_command_idx
-        self.ins_remote_map: Dict[int, int] = {}
+        # mapping of furnace instrument index to conversion info
+        self.instrument_info : Dict[int, InstrumentInfo] = {}
 
     def convert_spc_info(self, module: FurnaceModule) -> SPCInfo:
         info = SPCInfo()
@@ -52,37 +48,61 @@ class FurnaceConverter:
 
         amk_ins_index = 0
         for ins in module.Instruments:
-            amk_ins = AMKInstrument()
+            ins_info = InstrumentInfo()
+            amk_instruments: List[AMKInstrument] = []
             # first, check if this is a noise instrument
             if ins.snes_macro_data.is_noise:
+                amk_ins = AMKInstrument()
                 amk_ins.is_noise = True
                 amk_ins.noise_freq = ins.snes_macro_data.noise_freq
-                if ins.snes_macro_data.noise_freq is None:
-                    ins.snes_macro_data.noise_freq = 29  # default noise freq if unset
+                if amk_ins.noise_freq is None:
+                    amk_ins.noise_freq = 29  # default noise freq if unset
                     self.logger.warning(f"Instrument {ins.index} is a noise instrument but has no noise frequency set; You should set it explicitly in Furnace.")
+                amk_instruments.append(amk_ins)
+                ins_info.amk_ins = amk_ins_index
+                amk_ins_index += 1
             else:
-                amk_ins.sample_index = int(ins.initial_sample)
+                if ins.use_sample_map:
+                    for i, mapping in enumerate(ins.sample_table):
+                        # print(mapping, file=sys.stderr)
+                        idx = mapping[1]
+                        if idx != 65535:
+                            amk_ins = AMKInstrument()
+                            amk_ins.sample_index = mapping[1]
+                            amk_instruments.append(amk_ins)
+                            # Store the note -> AMK instrument mapping
+                            # Convert from 0:C-(-5) for furnace note to 0:C-0 for sample map
+                            note = i + 60
+                            # TODO: this correct?
+                            note_to_play = mapping[0] + 60
+                            ins_info.ins_map[note] = MappingInfo(amk_ins_index, note_to_play)
+                            amk_ins_index += 1
+                else:
+                    amk_ins = AMKInstrument()
+                    amk_ins.sample_index = int(ins.initial_sample)
+                    amk_instruments.append(amk_ins)
+                    ins_info.amk_ins = amk_ins_index
+                    amk_ins_index += 1
+                
+            self.instrument_info[ins.index] = ins_info
 
-            if ins.sn_envelope_on:
-                amk_ins.uses_envelope = True
-                env = AMKEnvelope()
-                env.attack = ins.sn_attack
-                env.decay = ins.sn_decay
-                env.sustain = ins.sn_sustain
-                env.release = ins.sn_release
-                amk_ins.envelope = env
-            else:
-                amk_ins.gain_values = ins.snes_macro_data.gain_values
-                amk_ins.gain = ins.sn_gain
-                if amk_ins.gain_values is None or amk_ins.gain is None:
-                    self.logger.debug(f"Instrument {ins.index:02X} uses gain mode but does not have gain parameters set.")
+            # Apply envelope/gain settings to all AMK instruments created from this Furnace instrument
+            for amk_ins in amk_instruments:
+                if ins.sn_envelope_on:
+                    amk_ins.uses_envelope = True
+                    env = AMKEnvelope()
+                    env.attack = ins.sn_attack
+                    env.decay = ins.sn_decay
+                    env.sustain = ins.sn_sustain
+                    env.release = ins.sn_release
+                    amk_ins.envelope = env
+                else:
+                    amk_ins.gain_values = ins.snes_macro_data.gain_values
+                    amk_ins.gain = ins.sn_gain
+                    if amk_ins.gain_values is None or amk_ins.gain is None:
+                        self.logger.debug(f"Instrument {ins.index:02X} uses gain mode but does not have gain parameters set.")
 
-            instruments.append(amk_ins)
-            # remember how this AMK instrument maps to a Furnace instrument
-            # needed for samples maps where a Furnace instrument can map to multiple AMK instruments
-            self.ins_map[amk_ins_index] = ins.index
-            amk_ins_index += 1
-
+                instruments.append(amk_ins)
 
         return instruments
     
@@ -98,7 +118,7 @@ class FurnaceConverter:
                 comment = "Gain toggle for Furnace instrument " + str(fur_ins.index)+ ": " + fur_ins.name
                 remote_def = AMKRemoteDef(command_num, EnableGainCommand(None, gmacro[1]), comment)
                 amk_data.remote_defs.append(remote_def)
-                self.ins_remote_map[fur_ins.index] = command_num
+                self.instrument_info[fur_ins.index].remote_commands.append(command_num)
                 command_num += 1
 
         # need to indicate where to pick up with labels
@@ -158,7 +178,7 @@ class FurnaceConverter:
             loop_tick = self.row_converter.convert_loop_marker(flat_rows, module)
             if loop_tick is not None:
                 mml_data.loop_tick = loop_tick
-            mml_data.notes[ch], pitch_commands = self.row_converter.convert_notes(flat_rows, self.ins_remote_map, module.Instruments)
+            mml_data.notes[ch], pitch_commands = self.row_converter.convert_notes(flat_rows, self.instrument_info, module.Instruments)
             mml_data.commands[ch] = pitch_commands
             mml_data.commands[ch].extend(self.row_converter.convert_commands(flat_rows, module))
 
