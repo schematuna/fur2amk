@@ -4,8 +4,6 @@ import logging
 
 
 class MMLUtil:
-
-
     AMK_TICKS_PER_BEAT = 48
     TICK_TO_DURATION = {
         int(AMK_TICKS_PER_BEAT / 16): 64,

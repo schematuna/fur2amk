@@ -68,7 +68,6 @@ class AMKWriter:
         name_col = max(len(name) for name, _ in self.amk_data.samples.values())
         # get max sample name length for alignment
         name_field_width = name_col + 2  # account for quotes
-        # if using sample maps, each sample for an instrument gets its own AMK instrument
         for idx, amk_ins in enumerate(self.amk_data.instruments):
             if amk_ins.is_noise:
                 # Noise instrument
