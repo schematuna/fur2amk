@@ -1,7 +1,11 @@
 from typing import List, Tuple, Optional
 from dataclasses import dataclass
+import logging
+
 
 class MMLUtil:
+
+
     AMK_TICKS_PER_BEAT = 48
     TICK_TO_DURATION = {
         int(AMK_TICKS_PER_BEAT / 16): 64,
@@ -13,7 +17,11 @@ class MMLUtil:
         int(AMK_TICKS_PER_BEAT * 4): 1
     }
 
-    AMK_MAX_PITCH = 141
+    AMK_MIN_PITCH = 72  # o1 c
+    AMK_MAX_PITCH = 141  # o6 a
+
+    # Track out-of-range notes
+    _out_of_range_count = 0
     # Convert -128->127 ranged values to 2's complement hex
     @staticmethod
     def to_hex(val: int) -> str:
@@ -73,15 +81,36 @@ class MMLUtil:
 
     @staticmethod
     def note_name_and_octave(i: int) -> Tuple[str, int]:
+        original_i = i
         # highest allowed AMK pitch is o6 a
         # TODO: use pitch bend or something to fix automatically?
         while i > MMLUtil.AMK_MAX_PITCH:
             i -= 12
+        # lowest allowed AMK pitch is o1 c
+        while i < MMLUtil.AMK_MIN_PITCH:
+            i += 12
+
+        # Track if note was out of range
+        if i != original_i:
+            MMLUtil._out_of_range_count += 1
+
         # Map Furnace note index (0=C-0) to AMK note name and octave using oN
         names = ['c', 'c+', 'd', 'd+', 'e', 'f', 'f+', 'g', 'g+', 'a', 'a+', 'b']
         note = i % 12
         octave = i // 12 - 5  # align with fur2tad convention
         return names[note], octave
+
+    @staticmethod
+    def reset_out_of_range_count():
+        """Reset the out-of-range note counter."""
+        MMLUtil._out_of_range_count = 0
+
+    @staticmethod
+    def print_out_of_range_warning():
+        """Print a warning if any notes were out of range."""
+        if MMLUtil._out_of_range_count > 0:
+            logger = logging.getLogger(__name__)
+            logger.warning(f"{MMLUtil._out_of_range_count} note(s) were out of AMK's supported range (o1 c to o6 a) and were shifted by octaves to fit.")
 
 @dataclass
 class MMLState:

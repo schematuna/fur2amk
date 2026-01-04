@@ -261,12 +261,44 @@ class RowConverter:
 
         return commands
 
+    def convert_other_commands(self, flat_rows: List[FurnaceRow]) -> List[MMLCommand]:
+        commands: List[MMLCommand] = []
+        tick = 0
+
+        for row in flat_rows:
+            if effect := row.get_effect(VibratoEffect):
+                # Vibrato off when both speed and depth are 0
+                if effect.speed == 0 and effect.depth == 0:
+                    commands.append(DisableVibrato(tick))
+                else:
+                    if effect.speed > 0:
+                        # Furnace speed (vibratoRate) controls how many positions in the 64-entry sine table
+                        # to advance per tick. One complete cycle = 64 positions.
+                        amk_ticks_per_cycle = (64 * self.tick_ratio) / effect.speed
+                        # 256 scalar seems to make it sounds closer to Furnace vibrato rates
+                        amk_speed = 256 / amk_ticks_per_cycle
+                        # Clamp to valid range (1-255)
+                        speed = max(1, min(255, int(round(amk_speed))))
+                    else:
+                        speed = 0
+
+                    # Furnace depth (0-15) represents vibrato depth where 15 = ±1 semitone
+                    # Map linearly: 15 in Furnace -> 0xC0 in AMK, which sounds about right
+                    amplitude = (effect.depth * 0xC0) // 15
+
+                    commands.append(Vibrato(tick, speed, amplitude))
+
+            tick += self.amk_ticks_per_row
+
+        return commands
+
     def convert_commands(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLCommand]:
         # process rows into commands
         commands: List[MMLCommand] = []
 
         commands.extend(self.convert_volume_commands(flat_rows, module))
         commands.extend(self.convert_pan_commands(flat_rows, module))
+        commands.extend(self.convert_other_commands(flat_rows))
 
         # sort commands by tick
         sorted_commands = sorted(commands, key=lambda x: x.tick)
