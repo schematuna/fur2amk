@@ -21,6 +21,10 @@ Jump commands:
     You can use one instance of the "Jump to Order" command 0Bxx. 
     The last instance of the command will be used to place the intro marker in the amk output.
 
+Note Range:
+    AMK only supports C1 -> A6. If any notes are out of this range they will be octave-shifted until they are in range.
+    You can resolve this by retuning samples and find/replacing notes in Furnace to get them in range.
+
 Wavetables are not supported. All instruments must use samples or noise.
     
 """
@@ -37,7 +41,7 @@ import argparse
 from src.FurnaceParser import FurnaceParser
 from src.FurnaceConverter import FurnaceConverter
 from src.AMKWriter import AMKWriter
-from src.BRRHandler import BRRConverter, BRRSample 
+from src.BRRHandler import BRRConverter, BRRSample
 from copy_to_amk import main as copy_to_amk_main
 
 # TODO: support mid-sample loop points in BRR validation/writing

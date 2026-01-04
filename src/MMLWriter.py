@@ -414,4 +414,8 @@ class MMLWriter:
                 word_txt += line.to_mml(mml_state) + '\n'
 
             txt += word_txt + '\n\n'
+
+        # Print warning if any notes were out of range
+        MMLUtil.print_out_of_range_warning()
+
         return txt

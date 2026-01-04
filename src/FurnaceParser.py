@@ -201,7 +201,9 @@ class FurnaceParser:
             # BRR data (9 bytes per block). Keep raw for direct write.
             samp.brr_raw = raw
         else:
-            raise CompileErrorException(f"Only BBR samples are supported, got depth {samp.depth}")
+            self.logger.error(f"Sample '{samp.name}' has unsupported depth {samp.depth} (only BRR/depth 9 is supported). Using empty BRR data.")
+            # Create minimal valid BRR block: 9 bytes with end flag set
+            samp.brr_raw = bytes([0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
         # Loop markers
         if loop_start is not None and loop_end is not None and loop_start >= 0 and loop_end > loop_start:
             samp.loop_start = int(loop_start)

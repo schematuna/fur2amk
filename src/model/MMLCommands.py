@@ -109,3 +109,17 @@ class RemoteCommand(MMLCommand):
             return f"(!{self.command_idx}, {self.timing.value}, ={self.wait_ticks})"
         else:
             return f"(!{self.command_idx}, {self.timing.value})"
+
+@dataclass
+class Vibrato(MMLCommand):
+    duration: int  # speed
+    amplitude: int  # depth
+
+    def to_mml(self, mml_state: 'MMLState' = None) -> str:
+        # Delay is always 0 since Furnace doesn't have a delay parameter for vibrato
+        return f"$DE$00${MMLUtil.to_hex(self.duration)}${MMLUtil.to_hex(self.amplitude)}"
+
+@dataclass
+class DisableVibrato(MMLCommand):
+    def to_mml(self, mml_state: 'MMLState' = None) -> str:
+        return "$DF"

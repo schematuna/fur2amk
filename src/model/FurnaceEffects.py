@@ -128,6 +128,14 @@ class FineVolumeSlideEffect(FurnaceEffect):
             if raw_value > 0:
                 self.change_per_tick = -raw_value / 256
 
+class VibratoEffect(FurnaceEffect):
+    def __init__(self, raw_value: int):
+        # speed is number of table positions to move every tick
+        # table is 64 positions long, so fastest rate is 15/64 cycles per tick, or ~4 cycles per tick
+        self.speed = raw_value >> 4
+        # max depth is +/-1 semitone
+        self.depth = raw_value & 0x0F
+
 
 class JumpToOrderEffect(FurnaceEffect):
     """Jump to order effect (0x0B). Value is order number."""
@@ -141,6 +149,7 @@ class FurnaceEffectFactory:
             0x01: lambda v: PitchSlideEffect(v, True),
             0x02: lambda v: PitchSlideEffect(v, False),
             0x03: PortamentoEffect,
+            0x04: VibratoEffect,
             0x08: StereoPanEffect,
             0x0A: lambda v: VolumeSlideEffect(v, False),
             0x0B: JumpToOrderEffect,
