@@ -25,6 +25,8 @@ Note Range:
     AMK only supports C1 -> A6. If any notes are out of this range they will be octave-shifted until they are in range.
     You can resolve this by retuning samples and find/replacing notes in Furnace to get them in range.
 
+Compatibility Flags are not supported. Conversion assumes that all compatibility flags are disabled.
+
 Wavetables are not supported. All instruments must use samples or noise.
     
 """

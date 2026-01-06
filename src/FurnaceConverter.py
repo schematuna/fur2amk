@@ -64,7 +64,6 @@ class FurnaceConverter:
             else:
                 if ins.use_sample_map:
                     for i, mapping in enumerate(ins.sample_table):
-                        # print(mapping, file=sys.stderr)
                         idx = mapping[1]
                         if idx != 65535:
                             amk_ins = AMKInstrument()
@@ -73,7 +72,6 @@ class FurnaceConverter:
                             # Store the note -> AMK instrument mapping
                             # Convert from 0:C-(-5) for furnace note to 0:C-0 for sample map
                             note = i + 60
-                            # TODO: this correct?
                             note_to_play = mapping[0] + 60
                             ins_info.ins_map[note] = MappingInfo(amk_ins_index, note_to_play)
                             amk_ins_index += 1
