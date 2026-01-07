@@ -320,8 +320,10 @@ class MMLWriter:
 
                     # special pitchbend handling
                     if isinstance(commands[cmd_idx], PitchBend):
+                        if cmd_tick > duration.tick:
+                            # place silent tiebreak command if pitchbend starts in the middle of a duration
+                            word.commands.append(TieBreakCommand(cmd_tick))
                         # Pitchbend commands are placed after the duration to be modulated
-                        word.commands.append(TieBreakCommand(cmd_tick))
                         new_tick = cmd_tick + command.duration
                         if new_tick > duration.tick + duration.duration:
                             self.logger.warning(f"Pitchbend duration {command.duration} exceeds the duration of the note. The command will be ignored.")
