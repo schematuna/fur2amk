@@ -149,6 +149,13 @@ class RowConverter:
                 else:
                     self.logger.warning("Portamento effect found on non-note row, ignoring.")
 
+            note_kind = row.kind()
+            if note_kind == FurnaceRow.NoteKind.OFF or note_kind == FurnaceRow.NoteKind.RELEASE:
+                # finish any pitch slides that are still active
+                # necessary to end the slide before we tick again
+                pitch_command = slide_helper.end_slide(None)
+                if pitch_command is not None:
+                    commands.append(pitch_command)
             active_note, pitch_commands = self.convert_slides(tick, row, slide_helper, active_note)
             commands.extend(pitch_commands)
 
@@ -161,7 +168,6 @@ class RowConverter:
             if effect := row.get_effect(QuickLegatoEffect):
                 found_legato = True
                 
-            note_kind = row.kind()
             # don't make a new note for portamento rows, pitchbend will handle that
             if note_kind == FurnaceRow.NoteKind.NOTE and not has_portamento:
                 fur_ins = None
@@ -202,10 +208,6 @@ class RowConverter:
                 slide_helper.set_target(active_note)
 
             elif note_kind == FurnaceRow.NoteKind.OFF or note_kind == FurnaceRow.NoteKind.RELEASE:
-                # finish any pitch slides that are still active
-                pitch_command = slide_helper.end_slide(None)
-                if pitch_command is not None:
-                    commands.append(pitch_command)
                 if cur_dur is not None:
                     if found_legato != state.is_legato:
                         cur_dur.pre_note_commands.append(LegatoToggle(note_tick))
