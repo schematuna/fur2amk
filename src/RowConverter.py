@@ -98,8 +98,6 @@ class RowConverter:
 
     def convert_slides(self, tick: int, row: FurnaceRow, slide_helper: PitchSlider, active_note: Optional[int]) -> Tuple[Optional[int], List[MMLCommand]]:
         commands: List[MMLCommand] = []
-        if active_note is not None:
-            slide_helper.set_active_note(active_note)
         new_active_note = active_note
         if effect := row.get_effect(NoteSlideEffect):
             if active_note is None:
@@ -115,6 +113,7 @@ class RowConverter:
                     self.logger.warning(f"Pitch slide duration {amk_duration} is greater than the longest tick duration {max_duration}.")
                 commands.append(PitchBend(tick, amk_duration, target_note))
                 new_active_note = target_note
+                slide_helper.set_target(new_active_note)
 
         if effect := row.get_effect(PitchSlideEffect):
             if new_command := slide_helper.handle_new_effect(effect):
@@ -200,12 +199,13 @@ class RowConverter:
                     notes.append(cur_dur)
                 cur_dur = MMLNote(note_tick, 0, note_to_play, amk_ins_idx, pre_note_commands)
                 active_note = note_to_play
+                slide_helper.set_target(active_note)
 
             elif note_kind == FurnaceRow.NoteKind.OFF or note_kind == FurnaceRow.NoteKind.RELEASE:
                 # finish any pitch slides that are still active
-                if slide_helper.slide_start is not None:
-                    slide_helper._complete_slide(note_tick - slide_helper.slide_start)
-                    slide_helper._stop_sliding()
+                pitch_command = slide_helper.end_slide(None)
+                if pitch_command is not None:
+                    commands.append(pitch_command)
                 if cur_dur is not None:
                     if found_legato != state.is_legato:
                         cur_dur.pre_note_commands.append(LegatoToggle(note_tick))
@@ -230,6 +230,7 @@ class RowConverter:
                 new_note = max(0,min(new_note, MMLUtil.AMK_MAX_PITCH))
                 cur_dur = MMLNote(new_note_onset, 0, new_note, cur_dur.instrument, pre_note_commands)
                 active_note = new_note
+                slide_helper.set_target(active_note)
 
             tick += self.amk_ticks_per_row
         

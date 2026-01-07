@@ -10,9 +10,9 @@ class FurnaceUtil:
     PITCH_STEPS_PER_OCTAVE = 384
 
     @staticmethod
-    def fur_pitch_change_to_semitones(change: int) -> int:
-        semitones = round(change * 12 / FurnaceUtil.PITCH_STEPS_PER_OCTAVE)
-        return int(semitones)
+    def fur_pitch_change_to_semitones(change: int) -> float:
+        semitones = change * 12 / FurnaceUtil.PITCH_STEPS_PER_OCTAVE
+        return semitones
 
     @staticmethod
     def ticks_from_speed(speed: int, semitones: int) -> float:
@@ -59,19 +59,21 @@ class FurnaceUtil:
 class SlideHelper:
     def __init__(self, tick_ratio: int, starting_tick: int) -> None:
         # ratio of amk ticks to furnace ticks
-        self.tick_ratio: int = tick_ratio
+        self.tick_ratio: float = tick_ratio
         # change per amk tick in furnace units
-        self.change_per_tick: Optional[int] = 0
+        self.change_per_tick: Optional[float] = 0
         # target value in furnace units
-        self.target_val: int = 0
+        self.target_val: float = 0
 
         # starting tick in amk ticks
         self.cur_tick: int = starting_tick
         # slide start in amk ticks
         self.slide_start: Optional[int] = None
+        # are we currently in a slide
+        self.is_sliding: bool = False
 
         # whether this slide should stop when limit is reached
-        self.stop_on_limit: bool = False
+        self.stop_on_limit: bool = True
 
     # return the target value in amk units
     def _get_target_amk(self) -> int:
@@ -83,133 +85,113 @@ class SlideHelper:
     def _get_command(self, tick: int) -> MMLCommand:
         return None
 
-    def _is_target_relative(self) -> bool:
-        return False
-
-    def _is_at_limit(self) -> bool:
-        """Returns True if target_val has reached a limit and cannot continue."""
-        return False
-
-    def _complete_slide(self, duration: int) -> Optional[MMLCommand]:
-        new_command = self._get_command(self.slide_start, duration, self._get_target_amk())
-        if self._is_target_relative():
-            self.target_val = 0
-        return new_command
-
-    def _stop_sliding(self) -> None:
-        self.change_per_tick = None
-        self.slide_start = None
+    def _get_change_per_tick(self, effect: FurnaceEffect) -> float:
+        if effect.change_per_tick is not None:
+            # effect is in furnace units per furnace tick, convert to furnace units per amk tick
+            return effect.change_per_tick / self.tick_ratio
+        else:
+            return None
 
     @staticmethod
     def get_max_duration() -> int:
         return max(MMLUtil.TICK_TO_DURATION.keys())
 
+    #########################################################
+
+    def set_target(self, target: int) -> None:
+        self.target_val = target
+
+    def end_slide(self, duration: int = None) -> Optional[MMLCommand]:
+        if not self.is_sliding:
+            return None
+        if duration is None:
+            duration = self.cur_tick - self.slide_start
+        new_command = self._get_command(self.slide_start, duration, self._get_target_amk())
+        self.is_sliding = False
+        return new_command
+
+    def start_slide(self) -> None:
+        self.slide_start = self.cur_tick
+        self.is_sliding = True
+
     def handle_new_effect(self, effect: FurnaceEffect) -> Optional[MMLCommand]:
         # this could be another slide or a stop slide command. Either way, we wrap up any current slide
         new_command = None
-        if self.slide_start is not None:
-            new_command = self._complete_slide(self.cur_tick - self.slide_start)
+        new_command = self.end_slide(None)
 
-        if effect.change_per_tick is not None:
-            # effect is in furnace units per furnace tick, convert to furnace units per amk tick
-            self.change_per_tick = effect.change_per_tick / self.tick_ratio
-            self.slide_start = self.cur_tick
-        else:
-            self._stop_sliding()
+        if change_per_tick := self._get_change_per_tick(effect):
+            self.change_per_tick = change_per_tick
+            self.start_slide()
         
         return new_command
 
     # increase slide length, provide number of amk ticks to increment by
     def tick(self, ticks: int) -> Optional[MMLCommand]:
         new_command = None
-        if self.slide_start is not None:
+        if self.is_sliding:
             LONGEST_DURATION = self.get_max_duration()
             cur_duration = self.cur_tick - self.slide_start
             if cur_duration >= LONGEST_DURATION:
-                new_command = self._complete_slide(LONGEST_DURATION)
-                self.slide_start = self.cur_tick
+                new_command = self.end_slide(LONGEST_DURATION)
+                self.start_slide()
 
             self.target_val += self.change_per_tick * ticks
-            self.target_val = self._limit_target_val(self.target_val)
+            bounded_target = self._limit_target_val(self.target_val)
+            target_was_limited = bounded_target != self.target_val
+            self.target_val = bounded_target
 
             # Check if we've reached a limit and should stop
             # Furnace automatically stops most slides when they reach a limit
-            if self.stop_on_limit and self._is_at_limit():
-                if self.slide_start is not None:
-                    new_command = self._complete_slide(self.cur_tick - self.slide_start)
-                    self._stop_sliding()
+            if self.stop_on_limit and target_was_limited:
+                new_command = self.end_slide(None)
 
         self.cur_tick += ticks
 
         return new_command
 
-    def set_target(self, target: int) -> None:
-        self.target_val = target
-
 class PitchSlider(SlideHelper):
-
-    def __init__(self, tick_ratio: int, starting_tick: int) -> None:
-        super().__init__(tick_ratio, starting_tick)
-        self.active_note: Optional[int] = None
-        self.stop_on_limit = True
-
-    # Set the currently active note
-    # Needed to figure out what note to slide to
-    def set_active_note(self, note: int) -> None:
-        self.active_note = note
-
     # pitchbend can't operate on a whole note, since 1 = 2^2 under the hood
     @staticmethod
     def get_max_duration() -> int:
         return int(SlideHelper.get_max_duration() / 2)
 
     def _get_target_amk(self) -> int:
-        semitones = FurnaceUtil.fur_pitch_change_to_semitones(self.target_val)
-        if self.active_note is None:
-            raise ValueError("Active note not set for PitchSlider")
-        target_note = self.active_note + semitones
-        target_note = max(MMLUtil.AMK_MIN_PITCH, min(target_note, MMLUtil.AMK_MAX_PITCH))
-        return target_note
+        # round to nearest semitone
+        return round(self.target_val)
+
+    def _get_change_per_tick(self, effect: FurnaceEffect) -> float:
+        if effect.change_per_tick is not None:
+            return FurnaceUtil.fur_pitch_change_to_semitones(effect.change_per_tick / self.tick_ratio)
+        else:
+            return None
+
+    def _limit_target_val(self, target_val: float) -> float:
+        return max(MMLUtil.AMK_MIN_PITCH, min(target_val, MMLUtil.AMK_MAX_PITCH))
 
     def _get_command(self, tick: int, duration: int, target_note: int) -> MMLCommand:
         return PitchBend(tick, duration, target_note)
 
-    def _is_target_relative(self) -> bool:
-        return True
-
-    def _is_at_limit(self) -> bool:
-        """Check if pitch slide has reached min or max pitch limit."""
-        if self.active_note is None:
-            return False
-        semitones = FurnaceUtil.fur_pitch_change_to_semitones(self.target_val)
-        target_note = self.active_note + semitones
-        # We're at limit if clamping would occur
-        return target_note <= MMLUtil.AMK_MIN_PITCH or target_note >= MMLUtil.AMK_MAX_PITCH
-
 
 class PanSlider(SlideHelper):
+    def __init__(self, tick_ratio: int, starting_tick: int) -> None:
+        super().__init__(tick_ratio, starting_tick)
+        self.stop_on_limit = False
+
     def _get_target_amk(self) -> int:
         return FurnaceUtil.unity_to_amk_pan(round(self.target_val))
 
-    def _limit_target_val(self, target_val: int) -> int:
+    def _limit_target_val(self, target_val: float) -> float:
         return max(0, min(target_val, 0xFF))
 
     def _get_command(self, tick: int, duration: int, target_pan: int) -> MMLCommand:
         return PanFade(tick, duration, target_pan)
 
 class VolumeSlider(SlideHelper):
-    def __init__(self, tick_ratio: int, starting_tick: int) -> None:
-        super().__init__(tick_ratio, starting_tick)
-        self.stop_on_limit = True
-
     def _get_target_amk(self) -> int:
         return MMLUtil.find_v(round(self.target_val))
 
-    def _limit_target_val(self, target_val: int) -> int:
+    def _limit_target_val(self, target_val: float) -> float:
         return max(0, min(target_val, 0x7F))
-
-    def _is_at_limit(self) -> bool:
-        return self._limit_target_val(self.target_val) == self.target_val
 
     def _get_command(self, tick: int, duration: int, target_volume: int) -> MMLCommand:
         return VolumeFade(tick, duration, target_volume)
