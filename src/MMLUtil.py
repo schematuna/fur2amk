@@ -121,33 +121,40 @@ class DurationFormatter:
     # TODO: support triplets for relevant time signatures and/or beat subdivisions
 
     @staticmethod
-    def format(duration_ticks: int, continuation: bool = False) -> str:
+    def format(duration_ticks: int, continuation: bool = False, no_ties: bool = False) -> str:
         """Format a note or rest token with duration and ties.
-        
+
         Args:
             duration_ticks: Duration in ticks
-        
+            continuation: Whether this is a tie continuation (starts with ^)
+            no_ties: If True, avoid using ties - use ={ticks} if it would require multiple durations
+
         Returns:
-            Formatted token with duration (e.g., 'c16', 'r8^16', 'c1^2^4')
+            Formatted token with duration (e.g., 'c16', 'r8^16', 'c1^2^4', '=7')
         """
         if duration_ticks <= 0:
             return ''
-        
+
         # Use run_to_denoms to convert ticks to MML duration denominators
         denoms, remainder = DurationFormatter.run_to_denoms(duration_ticks)
-        
+
         token = ''
-    
+
         if continuation:
             token += '^'
 
+        # If no_ties is set and we would need multiple durations or a remainder, use raw tick notation
+        if no_ties and (len(denoms) > 1 or remainder > 0):
+            token += f'={duration_ticks}'
+            return token
+
         if len(denoms) > 0:
             token += str(denoms[0])
-            
+
             # Additional durations use tie syntax
             for d in denoms[1:]:
                 token += f'^{d}'
-        
+
         # Handle remainder using ={ticks} notation
         if remainder > 0:
             if len(denoms) > 0:

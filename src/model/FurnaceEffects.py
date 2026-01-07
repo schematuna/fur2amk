@@ -23,6 +23,14 @@ class PortamentoEffect(FurnaceEffect):
     def __init__(self, raw_value: int):
         self.speed = raw_value
 
+class NoteSlideEffect(FurnaceEffect):
+    """Note slide effect (0xE1/0xE2). Value encodes speed (upper nibble) and semitones (lower nibble)."""
+    
+    def __init__(self, raw_value: int, is_up: bool):
+        self.speed = raw_value >> 4
+        self.semitones = raw_value & 0x0F
+        if not is_up:
+            self.semitones = -self.semitones
 
 class StereoPanEffect(FurnaceEffect):
     """Stereo pan effect (0x08). Value encodes left (upper nibble) and right (lower nibble) volumes."""
@@ -61,16 +69,6 @@ class PanSlideEffect(FurnaceEffect):
             self.change_per_tick = right / 2
         else:
             print(f"Warning: Invalid pan slide effect value {raw_value}.")
-
-
-class NoteSlideEffect(FurnaceEffect):
-    """Note slide effect (0xE1/0xE2). Value encodes speed (upper nibble) and semitones (lower nibble)."""
-    
-    def __init__(self, raw_value: int, is_up: bool):
-        self.speed = raw_value >> 4
-        self.semitones = raw_value & 0x0F
-        if not is_up:
-            self.semitones = -self.semitones
 
 
 class QuickLegatoEffect(FurnaceEffect):

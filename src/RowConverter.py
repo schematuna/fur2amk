@@ -202,6 +202,10 @@ class RowConverter:
                 active_note = note_to_play
 
             elif note_kind == FurnaceRow.NoteKind.OFF or note_kind == FurnaceRow.NoteKind.RELEASE:
+                # finish any pitch slides that are still active
+                if slide_helper.slide_start is not None:
+                    slide_helper._complete_slide(note_tick - slide_helper.slide_start)
+                    slide_helper._stop_sliding()
                 if cur_dur is not None:
                     if found_legato != state.is_legato:
                         cur_dur.pre_note_commands.append(LegatoToggle(note_tick))

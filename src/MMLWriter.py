@@ -84,7 +84,9 @@ class MMLWord:
                 next_cmd = self.commands[command_idx]
                 next_cmd_tick = next_cmd.tick
                 if next_cmd_tick > cur_tick:
-                    word_txt += DurationFormatter.format(next_cmd_tick - cur_tick, cont)
+                    # PitchBend requires raw tick notation without ties
+                    no_ties = isinstance(next_cmd, PitchBend)
+                    word_txt += DurationFormatter.format(next_cmd_tick - cur_tick, cont, no_ties)
                     if not isinstance(next_cmd, TieBreakCommand): # don't add space if next command is a tie break
                         word_txt += ' '
                     cur_tick = next_cmd_tick
