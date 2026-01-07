@@ -135,12 +135,9 @@ class SlideHelper:
             # Check if we've reached a limit and should stop
             # Furnace automatically stops most slides when they reach a limit
             if self.stop_on_limit and self._is_at_limit():
-                # Emit final command for the slide that reached the limit
                 if self.slide_start is not None:
                     new_command = self._complete_slide(self.cur_tick - self.slide_start)
-
-                # Stop the slide
-                self._stop_sliding()
+                    self._stop_sliding()
 
         self.cur_tick += ticks
 
@@ -210,6 +207,9 @@ class VolumeSlider(SlideHelper):
 
     def _limit_target_val(self, target_val: int) -> int:
         return max(0, min(target_val, 0x7F))
+
+    def _is_at_limit(self) -> bool:
+        return self._limit_target_val(self.target_val) == self.target_val
 
     def _get_command(self, tick: int, duration: int, target_volume: int) -> MMLCommand:
         return VolumeFade(tick, duration, target_volume)
