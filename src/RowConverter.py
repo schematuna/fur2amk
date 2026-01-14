@@ -85,6 +85,28 @@ class RowConverter:
 
         return pre_note_commands
 
+    def get_note_info(self, fur_ins_idx: int, note: int, ins_info: Dict[int, InstrumentInfo], use_sample_map: bool) -> Tuple[int, int]:
+        note_to_play = note
+        amk_ins_idx = None
+        if fur_ins_idx not in ins_info:
+            self.logger.error(f"No instrument info found for Furnace instrument {fur_ins_idx}, this is not right.")
+            return None, None
+        # Get the AMK instrument index using ins_map
+        if use_sample_map:
+            note_map = ins_info[fur_ins_idx].ins_map
+            # Try to find exact note match first
+            if note in note_map:
+                amk_ins_idx = note_map[note].amk_ins_idx
+                note_to_play = note_map[note].note_to_play
+            else:
+                # No mapping found, use Furnace instrument index as fallback
+                self.logger.warning(f"No instrument mapping found for Furnace instrument {fur_ins_idx}, note {note}.")
+                amk_ins_idx = 0
+        else:
+            amk_ins_idx = ins_info[fur_ins_idx].amk_ins
+
+        return note_to_play, amk_ins_idx
+
     def convert_portamento(self, tick: int, active_note: int, target_note: int, speed: int) -> Tuple[int, MMLCommand]:
         semitones = target_note - active_note
         ticks_to_slide = FurnaceUtil.ticks_from_speed(speed, semitones)
@@ -139,6 +161,7 @@ class RowConverter:
         active_note = None
         # process notes and pitch commands
         for row in flat_rows:
+            # handle portamento before reading this row's note info
             has_portamento = False
             if effect := row.get_effect(PortamentoEffect):
                 has_portamento = True
@@ -148,17 +171,6 @@ class RowConverter:
                         commands.append(portamento_command)
                 else:
                     self.logger.warning("Portamento effect found on non-note row, ignoring.")
-
-            note_kind = row.kind()
-            if note_kind == FurnaceRow.NoteKind.OFF or note_kind == FurnaceRow.NoteKind.RELEASE:
-                # finish any pitch slides that are still active
-                # necessary to end the slide before we tick again
-                # TODO: set active note to this row's note before ticking the slide helper
-                pitch_command = slide_helper.end_slide(None)
-                if pitch_command is not None:
-                    commands.append(pitch_command)
-            active_note, pitch_commands = self.convert_slides(tick, row, slide_helper, active_note)
-            commands.extend(pitch_commands)
 
             # check for note delay (this also affects note offs)
             note_tick = tick
@@ -170,6 +182,7 @@ class RowConverter:
                 found_legato = True
                 
             # don't make a new note for portamento rows, pitchbend will handle that
+            note_kind = row.kind()
             if note_kind == FurnaceRow.NoteKind.NOTE and not has_portamento:
                 fur_ins = None
                 for ins in instruments:
@@ -182,24 +195,9 @@ class RowConverter:
                     pre_note_commands.append(LegatoToggle(note_tick))
                     state.is_legato = found_legato
                     
-                note_to_play = row.Note
-                amk_ins_idx = None
-                if row.Ins not in ins_info:
-                    self.logger.error(f"No instrument info found for Furnace instrument {row.Ins}, this is not right.")
+                note_to_play, amk_ins_idx = self.get_note_info(row.Ins, row.Note, ins_info, fur_ins.use_sample_map)
+                if note_to_play is None or amk_ins_idx is None:
                     continue
-                # Get the AMK instrument index using ins_map
-                if fur_ins.use_sample_map:
-                    note_map = ins_info[row.Ins].ins_map
-                    # Try to find exact note match first
-                    if row.Note in note_map:
-                        amk_ins_idx = note_map[row.Note].amk_ins_idx
-                        note_to_play = note_map[row.Note].note_to_play
-                    else:
-                        # No mapping found, use Furnace instrument index as fallback
-                        self.logger.warning(f"No instrument mapping found for Furnace instrument {row.Ins}, note {row.Note}.")
-                        amk_ins_idx = 0
-                else:
-                    amk_ins_idx = ins_info[row.Ins].amk_ins
 
                 if cur_dur is not None:
                     cur_dur.duration = note_tick - cur_dur.tick
@@ -209,6 +207,10 @@ class RowConverter:
                 slide_helper.set_target(active_note)
 
             elif note_kind == FurnaceRow.NoteKind.OFF or note_kind == FurnaceRow.NoteKind.RELEASE:
+                # finish any pitch slides that are still active
+                pitch_command = slide_helper.end_slide(None)
+                if pitch_command is not None:
+                    commands.append(pitch_command)
                 if cur_dur is not None:
                     if found_legato != state.is_legato:
                         cur_dur.pre_note_commands.append(LegatoToggle(note_tick))
@@ -217,7 +219,6 @@ class RowConverter:
                     notes.append(cur_dur)
                 cur_dur = None
                 active_note = None
-            
 
             # check for quick legato, make a new note if found
             if effect := row.get_effect(QuickLegatoEffect):
@@ -235,6 +236,11 @@ class RowConverter:
                 active_note = new_note
                 slide_helper.set_target(active_note)
 
+            # handle pitch slides after processing this row's note info
+            active_note, pitch_commands = self.convert_slides(tick, row, slide_helper, active_note)
+            commands.extend(pitch_commands)
+
+            # increment tick before next row
             tick += self.amk_ticks_per_row
         
         # Finalize possible final note
