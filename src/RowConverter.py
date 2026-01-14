@@ -153,6 +153,7 @@ class RowConverter:
             if note_kind == FurnaceRow.NoteKind.OFF or note_kind == FurnaceRow.NoteKind.RELEASE:
                 # finish any pitch slides that are still active
                 # necessary to end the slide before we tick again
+                # TODO: set active note to this row's note before ticking the slide helper
                 pitch_command = slide_helper.end_slide(None)
                 if pitch_command is not None:
                     commands.append(pitch_command)
