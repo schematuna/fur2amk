@@ -128,9 +128,7 @@ class FurnaceConverter:
         fur_ticks_per_beat = rows_per_beat * module.Speed1
         beats_per_second = module.TicksPerSecond / fur_ticks_per_beat
         bpm = int(round(60 * beats_per_second))
-        # Empirically measured linear relationship between BPM and AMK tempo
-        amk_tempo = int(round((bpm - 3.7) / 2.175)) 
-        # AMK docs say to use bpm * 8192 / 20025, but that's off
+        amk_tempo = int(round(bpm * 0.4096 - 1))
         return amk_tempo
 
     def convert_volume(self, module: FurnaceModule) -> int:
