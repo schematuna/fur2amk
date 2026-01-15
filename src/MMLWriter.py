@@ -248,6 +248,23 @@ class MMLWriter:
                     return True
         return False
 
+    def get_section_num(self, tick: int) -> int:
+        """
+        Calculate which section (order) a given tick falls into.
+        Accounts for variable-length sections from pattern jump commands.
+        """
+        if not self.mml_data.section_lengths:
+            return 0
+
+        accumulated_ticks = 0
+        for section_idx, section_ticks in enumerate(self.mml_data.section_lengths):
+            if tick < accumulated_ticks + section_ticks:
+                return section_idx
+            accumulated_ticks += section_ticks
+
+        # If tick is beyond all sections, return the last section
+        return len(self.mml_data.section_lengths) - 1
+
     def optimize_loops(self, lines: List[MMLLine], label_count: int) -> int:
         # Identify and label loops in the channel lines
         labels_assigned: Dict[int, MMLLine] = {}
@@ -397,7 +414,7 @@ class MMLWriter:
             line_words: List[MMLWord] = []
             cur_section_num = 0
             for word in words:
-                sectionNum = word.tick // self.mml_data.section_length
+                sectionNum = self.get_section_num(word.tick)
                 # split line at loop point
                 is_loop_point = has_loop_point and word.tick == self.mml_data.loop_tick
                 if sectionNum != cur_section_num or is_loop_point:
