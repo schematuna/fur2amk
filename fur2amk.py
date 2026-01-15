@@ -1,34 +1,7 @@
 """
-fur2amk
+fur2amk - Convert Furnace SNES modules to AddmusicK format
 
-Requires furnace files saved in Furnace 0.6pre5 or later
-
-Requires all samples to be converted to BRR format prior to use.
-
-Furnace projects may require optimization if AMK throws an error about ARAM.
-There are a few ways to do this:
-    1. decrease the SNES echo delay in the chip manager
-    2. reduce sample sizes by downsampling or trimming
-        - need to switch to 8 or 16 bit PCM first, edit, then back to BRR
-    3. replace interpolated commands with slide commands
-
-Gain handling:
-    If the gain macro is used in Furnace, the first gain value is used as the primary gain setting for the instrument. 
-    Any additional gain values are handled via remote commands.
-    If the gain macro is unused then the gain setting in the instrument SNES tab is used.
-
-Jump commands:
-    You can use one instance of the "Jump to Order" command 0Bxx. 
-    The last instance of the command will be used to place the intro marker in the amk output.
-
-Note Range:
-    AMK only supports C1 -> A6. If any notes are out of this range they will be octave-shifted until they are in range.
-    You can resolve this by retuning samples and find/replacing notes in Furnace to get them in range.
-
-Compatibility Flags are not supported. Conversion assumes that all compatibility flags are disabled.
-
-Wavetables are not supported. All instruments must use samples or noise.
-    
+See README.md for quick start and ADVANCED.md for detailed usage notes.
 """
 
 from __future__ import annotations
@@ -36,7 +9,8 @@ from __future__ import annotations
 import os
 import logging
 import sys
-from typing import List
+import json
+from typing import List, Optional
 import argparse
 
 
@@ -54,8 +28,24 @@ from copy_to_amk import main as copy_to_amk_main
 #       look into alternative ADSR handling (Furnace has more options than AMK)
 #       "Divider" BPM control
 #       Recommended furnace pre-emphasis settings?
+#       legato by default
+#       support virtual tempo (simple tempo multiplier)
+#       filter special characters in comments
+#       sample fine tune
 
 # --------------------------------------------------------------------------------------
+
+
+def load_config() -> dict:
+    """Load configuration from fur2amk_config.json in the script directory."""
+    config_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'fur2amk_config.json')
+    if os.path.exists(config_path):
+        try:
+            with open(config_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError) as e:
+            logging.warning(f"Failed to load config.json: {e}. Using defaults.")
+    return {}
 
 
 def parse_args(argv: List[str]) -> argparse.Namespace:
@@ -87,13 +77,6 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
         default=False,
         help='Skip sample conversion/dumping'
     )
-
-    parser.add_argument(
-        '-c', '--copy',
-        action='store_true',
-        default=False,
-        help='Run copy_to_amk.py after conversion'
-    )
     
     args = parser.parse_args(argv[1:])
     
@@ -106,6 +89,9 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
 
 def main() -> None:
     args = parse_args(sys.argv)
+    
+    # Load configuration
+    config = load_config()
     
     # Configure logging
     log_level = logging.DEBUG if args.verbose else logging.INFO
@@ -145,9 +131,11 @@ def main() -> None:
         brr_converter = BRRConverter()
         brr_converter.dump_samples_to_brr(sample_dir, samples)
 
-    if args.copy:
+    # Copy to AddmusicK if configured
+    amk_dir = config.get('amk_dir')
+    if amk_dir:
         copy_to_amk_main([
-            '--amk-dir', '..\AddmusicK_1.0.11',
+            '--amk-dir', amk_dir,
             '--song', song_name
         ])
 
