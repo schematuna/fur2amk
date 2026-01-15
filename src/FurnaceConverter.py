@@ -157,26 +157,32 @@ class FurnaceConverter:
         mml_data.num_channels = module.NumChannels
         # for formatting and duration calculations
         # lengths are in ticks
-        mml_data.measure_length     = module.HighlightB * self.row_converter.amk_ticks_per_row
-        mml_data.section_length     = module.PatternLength * self.row_converter.amk_ticks_per_row
-        mml_data.song_length        = len(module.OrdersPerChannel[0]) * mml_data.section_length
+        mml_data.measure_length = module.HighlightB * self.row_converter.amk_ticks_per_row
 
+        # Analyze pattern lengths and detect loop point (returns rows)
+        pattern_lengths_rows, pattern_offsets, loop_tick = self.row_converter.analyze_pattern_lengths(module)
+
+        # Convert to ticks and store
+        mml_data.section_lengths = [length * self.row_converter.amk_ticks_per_row
+                                     for length in pattern_lengths_rows]
+        mml_data.song_length = sum(mml_data.section_lengths)
+        mml_data.loop_tick = loop_tick
 
         for ch in range(module.NumChannels):
             flat_rows: List[FurnaceRow] = []
             patmap = module.PatternsByChannel[ch] if ch < len(module.PatternsByChannel) else {}
             orders = module.OrdersPerChannel[ch] if ch < len(module.OrdersPerChannel) else []
-            for pat in orders:
+
+            for order_idx, pat in enumerate(orders):
                 rows = patmap.get(pat)
                 if rows:
-                    flat_rows.extend(rows)
+                    start_offset = pattern_offsets[order_idx]
+                    end_offset = start_offset + pattern_lengths_rows[order_idx]
+                    flat_rows.extend(rows[start_offset:end_offset])
                 else:
                     self.logger.warning(f"Channel {ch} references missing pattern {pat}. Inserting empty pattern.")
-                    flat_rows.extend([FurnaceRow() for _ in range(module.PatternLength)])
+                    flat_rows.extend([FurnaceRow() for _ in range(pattern_lengths_rows[order_idx])])
 
-            loop_tick = self.row_converter.convert_loop_marker(flat_rows, module)
-            if loop_tick is not None:
-                mml_data.loop_tick = loop_tick
             mml_data.notes[ch], pitch_commands = self.row_converter.convert_notes(flat_rows, self.instrument_info, module.Instruments)
             mml_data.commands[ch] = pitch_commands
             mml_data.commands[ch].extend(self.row_converter.convert_commands(flat_rows, module))

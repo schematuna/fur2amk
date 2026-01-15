@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import Dict, List, Optional
 
 from .MMLCommands import MMLCommand
 
@@ -11,7 +11,7 @@ class MMLNote:
     instrument: int = None
 
     # commands that are qualities of the note
-    # e.g. setting/resetting note state 
+    # e.g. setting/resetting note state
     pre_note_commands: List[MMLCommand] = field(default_factory=lambda: [])
 
 @dataclass
@@ -21,11 +21,11 @@ class MMLData:
     song_length: int = 0
 
     # list of notes for each channel. Rests are handled automatically by the MMLWriter.
-    notes: List[List['MMLNote']] = field(default_factory=lambda: [[] for _ in range(8)])
+    notes: Dict[int, List['MMLNote']] = field(default_factory=dict)
     # free floating commands that are not necessarily attached to a note
-    commands: List[List['MMLCommand']] = field(default_factory=lambda: [[] for _ in range(8)])
+    commands: Dict[int, List['MMLCommand']] = field(default_factory=dict)
     loop_tick: Optional[int] = None
 
     # song data for formatting, in ticks
     measure_length: int = 192
-    section_length: int = 192 * 4
+    section_lengths: List[int] = field(default_factory=list)  # [order] -> ticks per section

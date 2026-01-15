@@ -13,7 +13,6 @@ __pycache__/
 Thumbs.db
 
 # Tool outputs
-fur2amk_last_run.txt
 music/**
 
 # Misc

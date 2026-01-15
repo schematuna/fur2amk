@@ -141,6 +141,11 @@ class JumpToOrderEffect(FurnaceEffect):
     def __init__(self, raw_value: int):
         self.order_number = raw_value
 
+class JumpToNextPatternEffect(FurnaceEffect):
+    """Jump to next pattern effect (0x0D). Value is row number to start on."""
+    
+    def __init__(self, raw_value: int):
+        self.row_number = raw_value
 
 class FurnaceEffectFactory:
     effect_map = {
@@ -151,6 +156,7 @@ class FurnaceEffectFactory:
             0x08: StereoPanEffect,
             0x0A: lambda v: VolumeSlideEffect(v, False),
             0x0B: JumpToOrderEffect,
+            0x0D: JumpToNextPatternEffect,
             0x80: PanEffect,
             0x83: PanSlideEffect,
             0xE1: lambda v: NoteSlideEffect(v, True),

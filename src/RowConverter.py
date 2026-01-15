@@ -52,16 +52,80 @@ class RowConverter:
             self.logger.warning("Furnace ticks not cleanly convertible to amk ticks.")
         self.logger.info(f"One Furnace tick is {self.tick_ratio:.2g} AMK ticks.")
 
-    def convert_loop_marker(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> Optional[int]:
-        # iterate all rows for command 0Bxx (jump to order)
-        # This will be interpreted as the intro marker position
-        intro_order = None
-        for row in flat_rows:
-            if effect := row.get_effect(JumpToOrderEffect):
-                intro_order = effect.order_number
-                return intro_order * module.PatternLength * self.amk_ticks_per_row
+    def analyze_pattern_lengths(self, module: FurnaceModule) -> tuple[List[int], List[int], Optional[int]]:
+        """
+        Analyze patterns to determine effective lengths considering jump commands.
+        Also detects the loop point (0B command).
 
-        return None
+        Returns:
+            - pattern_lengths: [order] -> row count for that pattern
+            - pattern_start_offsets: [order] -> starting row offset
+            - loop_tick: tick position where loop starts (destination of 0B jump, None if no loop)
+        """
+        num_orders = len(module.OrdersPerChannel[0]) if module.OrdersPerChannel else 0
+        pattern_lengths = []
+        pattern_start_offsets = []
+        loop_target_order = None  # Track which order the loop jumps to
+        next_start_row = 0
+        accumulated_ticks = 0  # Track total ticks for loop calculation
+
+        for order_idx in range(num_orders):
+            pattern_start_offsets.append(next_start_row)
+
+            # Default: pattern runs from start_row to end
+            effective_length = module.PatternLength - next_start_row
+            next_start_row = 0  # Reset for next pattern
+            jump_found = False
+
+            # Scan all channels for jump commands at this order
+            for ch in range(module.NumChannels):
+                orders = module.OrdersPerChannel[ch] if ch < len(module.OrdersPerChannel) else []
+                if order_idx >= len(orders):
+                    continue
+
+                pat_id = orders[order_idx]
+                patmap = module.PatternsByChannel[ch] if ch < len(module.PatternsByChannel) else {}
+                rows = patmap.get(pat_id, [])
+
+                current_start = pattern_start_offsets[-1]
+
+                # Check for jump commands in this pattern
+                for row_idx in range(current_start, len(rows)):
+                    row = rows[row_idx]
+
+                    # 0D: Jump to next pattern at specific row
+                    if effect := row.get_effect(JumpToNextPatternEffect):
+                        effective_length = (row_idx - current_start) + 1
+                        next_start_row = effect.row_number
+                        jump_found = True
+                        break
+
+                    # 0B: Jump to order (also ends pattern and marks loop point)
+                    if effect := row.get_effect(JumpToOrderEffect):
+                        effective_length = (row_idx - current_start) + 1
+                        next_start_row = 0
+                        jump_found = True
+                        # Store the target order for loop tick calculation
+                        loop_target_order = effect.order_number
+                        break
+
+                # If we found a jump command, stop scanning other channels
+                if jump_found:
+                    break
+
+            pattern_lengths.append(effective_length)
+            # Accumulate ticks for next iteration
+            accumulated_ticks += effective_length * self.amk_ticks_per_row
+
+        # Calculate loop tick based on the target order
+        loop_tick = None
+        if loop_target_order is not None:
+            loop_tick = 0
+            for i in range(loop_target_order):
+                if i < len(pattern_lengths):
+                    loop_tick += pattern_lengths[i] * self.amk_ticks_per_row
+
+        return pattern_lengths, pattern_start_offsets, loop_tick
 
     def get_pre_note_commands(self, fur_ins: FurnaceInstrument, ins_info: Dict[int, InstrumentInfo], state: FurnaceState, note_tick: int) -> List[MMLCommand]:
         # instrument echo
