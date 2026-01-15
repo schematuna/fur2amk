@@ -92,7 +92,7 @@ class BRRConverter:
                 pass
             
         # summary only
-        self.logger.debug(f"brr_created={created}")
+        self.logger.info(f"Wrote {created} BRR files to {out_dir}")
 
     def validate_and_fix_brr_data(self, data: BRRData, loop_end: int, name: str) -> None:
         is_looped = loop_end is not None and loop_end > 0

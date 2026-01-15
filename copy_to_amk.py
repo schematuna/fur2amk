@@ -7,9 +7,6 @@ Copy fur2amk outputs (MML and BRR samples) into an AddmusicK directory.
 - Copies the MML into <amk_dir>/music/<song>.txt
 - Copies the BRRs into <amk_dir>/samples/<path>/
 
-Usage examples (PowerShell):
-  python .\copy_to_amk.py --amk-dir ..\AddmusicK_1.0.11 --song "Sunken Lights"
-  python .\copy_to_amk.py --amk-dir ..\AddmusicK_1.0.11
 """
 import argparse
 import os
