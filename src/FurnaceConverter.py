@@ -159,7 +159,7 @@ class FurnaceConverter:
         # lengths are in ticks
         mml_data.measure_length = module.HighlightB * self.row_converter.amk_ticks_per_row
 
-        # Analyze pattern lengths and detect loop point (returns rows)
+        # Analyze pattern lengths and detect loop point
         pattern_lengths_rows, pattern_offsets, loop_tick = self.row_converter.analyze_pattern_lengths(module)
 
         # Convert to ticks and store

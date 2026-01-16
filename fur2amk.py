@@ -23,7 +23,6 @@ from copy_to_amk import main as copy_to_amk_main
 # TODO: support mid-sample loop points in BRR validation/writing
 #       get game name from Furnace module metadata if available
 #       support global tuning
-#       support 0D, skip to next order command
 #       preserve furnace channel names
 #       look into alternative ADSR handling (Furnace has more options than AMK)
 #       "Divider" BPM control
