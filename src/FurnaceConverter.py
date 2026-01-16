@@ -170,8 +170,8 @@ class FurnaceConverter:
 
         for ch in range(module.NumChannels):
             flat_rows: List[FurnaceRow] = []
-            patmap = module.PatternsByChannel[ch] if ch < len(module.PatternsByChannel) else {}
-            orders = module.OrdersPerChannel[ch] if ch < len(module.OrdersPerChannel) else []
+            patmap = module.PatternsByChannel[ch]
+            orders = module.OrdersPerChannel[ch]
 
             for order_idx, pat in enumerate(orders):
                 rows = patmap.get(pat)

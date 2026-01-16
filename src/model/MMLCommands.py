@@ -31,14 +31,19 @@ class MMLCommand:
 
 
 @dataclass
-class EchoToggle(MMLCommand):
-    def to_mml(self, mml_state: 'MMLState' = None) -> str:
-        return f"$F4$03"
-
-@dataclass
 class LegatoToggle(MMLCommand):
     def to_mml(self, mml_state: 'MMLState' = None) -> str:
         return f"$F4$01"
+
+@dataclass
+class LightStaccatoToggle(MMLCommand):
+    def to_mml(self, mml_state: 'MMLState' = None) -> str:
+        return f"$F4$02"
+
+@dataclass
+class EchoToggle(MMLCommand):
+    def to_mml(self, mml_state: 'MMLState' = None) -> str:
+        return f"$F4$03"
 
 @dataclass
 class InstrumentChange(MMLCommand):
