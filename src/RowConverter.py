@@ -212,7 +212,6 @@ class RowConverter:
 
     def convert_notes(self, flat_rows: List[FurnaceRow], ins_info: Dict[int, InstrumentInfo], instruments: List[FurnaceInstrument]) -> List[MMLNote]:
         notes: List[MMLNote] = []
-        commands: List[MMLCommand] = []
         tick = 0
         state = FurnaceState()
         slide_helper = PitchSlider(self.tick_ratio, tick)
@@ -230,7 +229,10 @@ class RowConverter:
                 if row.kind() == FurnaceRow.NoteKind.NOTE:
                     active_note, portamento_command = self.convert_portamento(tick, active_note, row.Note, effect.speed)
                     if portamento_command is not None:
-                        commands.append(portamento_command)
+                        if cur_dur is not None:
+                            cur_dur.pitch_bends.append(portamento_command)
+                        else:
+                            self.logger.warning("no active note to portamento from, ignoring portamento command.")
                 else:
                     self.logger.warning("Portamento effect found on non-note row, ignoring.")
 
@@ -261,24 +263,37 @@ class RowConverter:
                 if note_to_play is None or amk_ins_idx is None:
                     continue
 
+                pitch_command = None
                 if cur_dur is not None:
                     cur_dur.duration = note_tick - cur_dur.tick
+                    pitch_command = slide_helper.end_slide(None)
+                    if pitch_command is not None:
+                        cur_dur.pitch_bends.append(pitch_command)
                     notes.append(cur_dur)
                 cur_dur = MMLNote(note_tick, 0, note_to_play, amk_ins_idx, pre_note_commands)
                 active_note = note_to_play
+
                 slide_helper.set_target(active_note)
+                # if this note interrupted a pitch slide, start a new one
+                # unless there is a pitch slide effect on this row, in which case we'll let that handle it
+                if pitch_command is not None and not row.get_effect(PitchSlideEffect):
+                    slide_helper.start_slide()
 
             elif note_kind == FurnaceRow.NoteKind.OFF or note_kind == FurnaceRow.NoteKind.RELEASE:
                 # finish any pitch slides that are still active
                 pitch_command = slide_helper.end_slide(None)
-                if pitch_command is not None:
-                    commands.append(pitch_command)
                 if cur_dur is not None:
+                    if pitch_command is not None:
+                        cur_dur.pitch_bends.append(pitch_command)
                     if found_legato != state.is_legato:
                         cur_dur.pre_note_commands.append(LegatoToggle(note_tick))
                         state.is_legato = found_legato  
                     cur_dur.duration = note_tick - cur_dur.tick
                     notes.append(cur_dur)
+                else:
+                    self.logger.debug(f"Note off or release was found but no note was playing.")
+                    if pitch_command is not None:
+                        self.logger.warning("Lost pitch slide on note off.")
                 cur_dur = None
                 active_note = None
 
@@ -300,7 +315,8 @@ class RowConverter:
 
             # handle pitch slides after processing this row's note info
             active_note, pitch_commands = self.convert_slides(tick, row, slide_helper, active_note)
-            commands.extend(pitch_commands)
+            if cur_dur is not None:
+                cur_dur.pitch_bends.extend(pitch_commands)
 
             # increment tick before next row
             tick += self.amk_ticks_per_row
@@ -314,7 +330,7 @@ class RowConverter:
         if state.is_legato:
             notes[-1].pre_note_commands.append(LegatoToggle(tick))
 
-        return notes, commands
+        return notes
 
 
     def convert_volume_commands(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLCommand]:

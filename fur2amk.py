@@ -27,10 +27,12 @@ from copy_to_amk import main as copy_to_amk_main
 #       look into alternative ADSR handling (Furnace has more options than AMK)
 #       "Divider" BPM control
 #       Recommended furnace pre-emphasis settings?
-#       legato by default
+#       legato effect
 #       support virtual tempo (simple tempo multiplier)
 #       filter special characters in comments
 #       sample fine tune
+#       better automatic section/row reporting in log messages
+#       special classes for pre-note command and pitch commands that don't need absolute tick values
 
 # --------------------------------------------------------------------------------------
 

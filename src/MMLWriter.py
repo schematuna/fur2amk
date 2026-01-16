@@ -84,7 +84,7 @@ class MMLWord:
                 next_cmd = self.commands[command_idx]
                 next_cmd_tick = next_cmd.tick
                 if next_cmd_tick > cur_tick:
-                    # PitchBend requires raw tick notation without ties
+                    # PitchBend requires the prior duration to be a singular duration
                     no_ties = isinstance(next_cmd, PitchBend)
                     word_txt += DurationFormatter.format(next_cmd_tick - cur_tick, cont, no_ties)
                     if not isinstance(next_cmd, TieBreakCommand): # don't add space if next command is a tie break
@@ -265,6 +265,15 @@ class MMLWriter:
         # If tick is beyond all sections, return the last section
         return len(self.mml_data.section_lengths) - 1
 
+    def get_measure_num(self, tick: int) -> int:
+        """
+        Calculate which measure within a section a given tick falls into.
+        """
+        section_num = self.get_section_num(tick)
+        # Sum all ticks from previous sections
+        accumulated_ticks = sum(self.mml_data.section_lengths[:section_num])
+        return round((tick - accumulated_ticks) / self.mml_data.measure_length)
+
     def optimize_loops(self, lines: List[MMLLine], label_count: int) -> int:
         # Identify and label loops in the channel lines
         labels_assigned: Dict[int, MMLLine] = {}
@@ -330,23 +339,27 @@ class MMLWriter:
                 if duration.instrument != mml_state.ins:
                     word.commands.append(InstrumentChange(duration.tick, duration.instrument))
                     mml_state.ins = duration.instrument
+
+                for pitch_bend in duration.pitch_bends:
+                    # check that pitchbend is contained within this note
+                    if pitch_bend.tick < duration.tick:
+                        self.logger.warning(f"Pitchbend starts before the note. Ignoring. section: {self.get_section_num(pitch_bend.tick)}, measure: {self.get_measure_num(pitch_bend.tick)}")
+                        continue
+                    if pitch_bend.tick + pitch_bend.duration > duration.tick + duration.duration:
+                        self.logger.warning(f"Pitchbend duration exceeds the duration of the note. Trimming to fit.")
+                        pitch_bend.duration = duration.tick + duration.duration - pitch_bend.tick
+                    # special pitchbend handling
+                    if pitch_bend.tick > duration.tick:
+                        # place silent tiebreak command if pitchbend starts in the middle of a duration
+                        word.commands.append(TieBreakCommand(pitch_bend.tick))
+                    # Pitchbend commands are placed after the duration to be modulated
+                    pitch_bend.tick = pitch_bend.tick + pitch_bend.duration
+                    word.commands.append(pitch_bend)
+                    
             while cmd_idx < len(commands):
                 cmd_tick = commands[cmd_idx].tick
                 if cmd_tick >= duration.tick and cmd_tick < duration.tick + duration.duration:
-                    command = commands[cmd_idx]
-
-                    # special pitchbend handling
-                    if isinstance(commands[cmd_idx], PitchBend):
-                        if cmd_tick > duration.tick:
-                            # place silent tiebreak command if pitchbend starts in the middle of a duration
-                            word.commands.append(TieBreakCommand(cmd_tick))
-                        # Pitchbend commands are placed after the duration to be modulated
-                        new_tick = cmd_tick + command.duration
-                        if new_tick > duration.tick + duration.duration:
-                            self.logger.warning(f"Pitchbend duration {command.duration} exceeds the duration of the note. The command will be ignored.")
-                        command.tick = new_tick
-                        
-                    word.commands.append(command)
+                    word.commands.append(commands[cmd_idx])
                     cmd_idx += 1
                 else:
                     break

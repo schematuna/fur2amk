@@ -1,7 +1,7 @@
 from dataclasses import dataclass, field
 from typing import Dict, List, Optional
 
-from .MMLCommands import MMLCommand
+from .MMLCommands import *
 
 @dataclass
 class MMLNote:
@@ -13,6 +13,9 @@ class MMLNote:
     # commands that are qualities of the note
     # e.g. setting/resetting note state
     pre_note_commands: List[MMLCommand] = field(default_factory=lambda: [])
+
+    # pitchbends must occur within the duration of the note
+    pitch_bends: List[PitchBend] = field(default_factory=lambda: [])
 
 @dataclass
 class MMLData:
