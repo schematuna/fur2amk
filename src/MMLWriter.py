@@ -428,6 +428,14 @@ class MMLWriter:
             self.label_count = self.optimize_loops(lines, self.label_count)
 
             mml_state = MMLState()
+            # light staccato is a global toggle
+            # enable it by default for all ports to reduce unwanted space between notes from 2 ticks to 1 tick
+            # There is no good way to have no gap without spamming q commands everywhere.
+            if c == 0:
+                staccato_cmd = LightStaccatoToggle(0)
+                txt += "; enable light staccato\n"
+                txt += staccato_cmd.get_text(mml_state) + '\n'
+
             for line in lines:
                 if has_loop_point and line.tick() == self.mml_data.loop_tick:
                     word_txt += self.write_loop_point(self.channel_has_remote_commands(c))
