@@ -19,6 +19,3 @@ music/**
 *.wav
 *.spc
 modules/**
-
-# config
-fur2amk_config.json
