@@ -62,13 +62,13 @@ class RowConverter:
             - pattern_start_offsets: [order] -> starting row offset
             - loop_tick: tick position where loop starts (destination of 0B jump, None if no loop)
         """
-        num_orders = len(module.OrdersPerChannel[0]) if module.OrdersPerChannel else 0
+        num_orders = len(module.OrdersPerChannel[0])
         pattern_lengths = []
         pattern_start_offsets = []
         loop_target_order = None  # Track which order the loop jumps to
+
         next_start_row = 0
         accumulated_ticks = 0  # Track total ticks for loop calculation
-
         for order_idx in range(num_orders):
             pattern_start_offsets.append(next_start_row)
 
@@ -79,12 +79,10 @@ class RowConverter:
 
             # Scan all channels for jump commands at this order
             for ch in range(module.NumChannels):
-                orders = module.OrdersPerChannel[ch] if ch < len(module.OrdersPerChannel) else []
-                if order_idx >= len(orders):
-                    continue
+                orders = module.OrdersPerChannel[ch]
 
                 pat_id = orders[order_idx]
-                patmap = module.PatternsByChannel[ch] if ch < len(module.PatternsByChannel) else {}
+                patmap = module.PatternsByChannel[ch]
                 rows = patmap.get(pat_id, [])
 
                 current_start = pattern_start_offsets[-1]
