@@ -106,7 +106,13 @@ class SlideHelper:
             return None
         if duration is None:
             duration = self.cur_tick - self.slide_start
-        new_command = self._get_command(self.slide_start, duration, self._get_target_amk())
+
+        new_command = None
+        if duration != 0:
+            new_command = self._get_command(self.slide_start, duration, self._get_target_amk())
+        else:
+            print(f"Warning: Cannot have a slide command with duration 0.")
+
         self.is_sliding = False
         return new_command
 
@@ -191,7 +197,8 @@ class VolumeSlider(SlideHelper):
         return MMLUtil.find_v(round(self.target_val))
 
     def _limit_target_val(self, target_val: float) -> float:
-        return max(0, min(target_val, 0x7F))
+        # max in Furnace is 7F, stored in binary as val * 2
+        return max(0, min(target_val, 0xFE))
 
     def _get_command(self, tick: int, duration: int, target_volume: int) -> MMLCommand:
         return VolumeFade(tick, duration, target_volume)
