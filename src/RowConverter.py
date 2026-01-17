@@ -342,16 +342,20 @@ class RowConverter:
         slide_helper = VolumeSlider(self.tick_ratio, tick)
         for row in flat_rows:
             new_vol = row.Vol
+            slide_command = None
             if new_vol is not None:
+                slide_command = slide_helper.end_slide()
+                if slide_command is not None:
+                    commands.append(slide_command)
+                slide_helper.set_target(new_vol)
                 commands.append(VolumeChange(tick, MMLUtil.find_v(new_vol)))
 
             if effect := row.get_effect(VolumeSlideEffect) or row.get_effect(FineVolumeSlideEffect):
                 if new_command := slide_helper.handle_new_effect(effect):
                     commands.append(new_command)
-                    
-            # set row volume after ending previous command but before ticking new one
-            if new_vol is not None:
-                slide_helper.set_target(new_vol)
+            elif slide_command is not None:
+                # restart slide if it was interrupted by a volume command
+                slide_helper.start_slide()
                 
             if new_command := slide_helper.tick(self.amk_ticks_per_row):
                 commands.append(new_command)
@@ -383,7 +387,7 @@ class RowConverter:
                         
             if new_command := slide_helper.tick(self.amk_ticks_per_row):
                 commands.append(new_command)
-   
+
             tick += self.amk_ticks_per_row
 
         return commands

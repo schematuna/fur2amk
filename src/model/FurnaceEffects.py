@@ -45,14 +45,6 @@ class PanEffect(FurnaceEffect):
     def __init__(self, raw_value: int):
         self.pan_position = raw_value
 
-class VolumeSlideEffect(FurnaceEffect):
-    """Volume slide effect (0x0A). Value encodes up (upper nibble) and down (lower nibble) rates."""
-    
-    def __init__(self, raw_value: int):
-        self.up_rate = raw_value >> 4
-        self.down_rate = raw_value & 0x0F
-
-
 class PanSlideEffect(FurnaceEffect):
     """Pan slide effect (0x83). Value encodes left (upper nibble) and right (lower nibble) slide rates."""
     
