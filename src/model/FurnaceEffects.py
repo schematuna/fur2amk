@@ -94,14 +94,16 @@ class VolumeSlideEffect(FurnaceEffect):
             # fast volume slides are 4 times faster than normal volume slides
             rate_divisor = 1
 
-        up = raw_value >> 4
-        down = raw_value & 0x0F
+        # doubled because furnace speed internally operates on 0->7F volume range
+        # but the binary normalized volume to 0->FE, so in fur2amk we work with that range instead
+        up = 2 * (raw_value >> 4)
+        down = 2 * (raw_value & 0x0F)
         if down == 0 and up == 0:
             self.change_per_tick = None
         elif down == 0:
             self.change_per_tick = up / rate_divisor
         elif up == 0:
-            self.change_per_tick = -down / rate_divisor
+            self.change_per_tick = -(down / rate_divisor)
         else:
             print("Warning: Invalid volume slide effect value.")
 
@@ -111,12 +113,14 @@ class FineVolumeSlideEffect(FurnaceEffect):
     def __init__(self, raw_value: int, is_up: bool):
         # fine volume slides are 64 times slower than normal volume slides
         self.change_per_tick = None
+        # also doubled, same reason as normal volume slides
+        speed = 2 * raw_value
         if is_up:
             if raw_value > 0:
-                self.change_per_tick = raw_value / 256
+                self.change_per_tick = speed / 256
         else:
             if raw_value > 0:
-                self.change_per_tick = -raw_value / 256
+                self.change_per_tick = -(speed / 256)
 
 class VibratoEffect(FurnaceEffect):
     def __init__(self, raw_value: int):
