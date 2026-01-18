@@ -6,6 +6,8 @@ from .model.FurnaceEffects import *
 from .model.MMLCommands import *
 
 
+import logging
+
 class FurnaceUtil:
     PITCH_STEPS_PER_OCTAVE = 384
 
@@ -111,7 +113,7 @@ class SlideHelper:
         if duration != 0:
             new_command = self._get_command(self.slide_start, duration, self._get_target_amk())
         else:
-            print(f"Warning: Cannot have a slide command with duration 0.")
+            logging.info(f"Ignoring slide command with duration 0, target {self._get_target_amk()}")
 
         self.is_sliding = False
         return new_command
