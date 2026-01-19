@@ -7,7 +7,7 @@ from typing import Dict, Optional, Tuple
 from .model.AMKData import AMKData
 
 from .MMLWriter import MMLWriter
-from .MMLUtil import *
+from .util import *
 
 class AMKWriter:
     def __init__(self, amk_data: AMKData, module_path: str) -> None:

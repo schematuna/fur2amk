@@ -10,6 +10,7 @@ from .model.FurnaceData import FurnaceModule, FurnaceRow, SustainMode
 from .model.AMKData import *
 from .model.MMLCommands import *
 from .RowConverter import *
+from .util import *
 
 class FurnaceConverter:
     def __init__(self) -> None:
@@ -188,8 +189,8 @@ class FurnaceConverter:
                     self.logger.warning(f"Channel {ch} references missing pattern {pat}. Inserting empty pattern.")
                     flat_rows.extend([FurnaceRow() for _ in range(pattern_lengths_rows[order_idx])])
 
-            mml_data.notes[ch]    = self.row_converter.convert_notes(flat_rows, self.instrument_info, module.Instruments)
-            mml_data.commands[ch] = self.row_converter.convert_commands(flat_rows, module)
+            mml_data.notes[ch], mml_data.commands[ch] = self.row_converter.convert_notes(flat_rows, self.instrument_info, module.Instruments)
+            mml_data.commands[ch].extend(self.row_converter.convert_commands(flat_rows, module))
 
         return mml_data
 

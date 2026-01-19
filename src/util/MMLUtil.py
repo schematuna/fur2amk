@@ -2,7 +2,6 @@ from typing import List, Tuple, Optional
 from dataclasses import dataclass
 import logging
 
-
 class MMLUtil:
     AMK_TICKS_PER_BEAT = 48
     TICK_TO_DURATION = {
