@@ -4,6 +4,7 @@ from enum import Enum
 import logging
 
 from .FurnaceEffects import *
+from ..util.MusicUtil import *
 
 
 class GainMode(Enum):
@@ -25,9 +26,9 @@ class SustainMode(Enum):
     Modes 1-3 use 'd2' as the decay rate during sustain, and 'r' controls release behavior.
     """
     DIRECT = 0       # No sustain - key off sends hardware KOFF (fast release)
-    DEC_LINEAR = 1   # Sustain with d2; key-off switches to GAIN linear decay at rate r
-    DEC_LOG = 2      # Sustain with d2; key-off switches to GAIN exponential decay at rate r
-    RELEASE = 3      # Sustain with d2; key-off updates ADSR R field to r (no KOFF sent)
+    EFF_LINEAR = 1   # Sustain with d2; key-off switches to GAIN linear decay at rate r
+    EFF_EXP = 2      # Sustain with d2; key-off switches to GAIN exponential decay at rate r
+    DELAYED = 3      # Sustain with d2; key-off updates ADSR R field to r
 
 
 @dataclass
@@ -121,6 +122,13 @@ class FurnaceInstrument:
                 default_noise_freq = 29
                 self.logger.debug(f"Instrument {self.index:02X} is noise but has no noise_freq set; defaulting to {default_noise_freq}.")
                 self.snes_macro_data.noise_freq = default_noise_freq
+
+    def get_initial_adsr(self) -> ADSR:
+        # For sustain modes 1-3, use decay2 as the release value during note-on
+        # (sn_release is only used for DIRECT mode, or when note-off happens in DELAYED mode)
+        release = self.sn_release if self.sustain_mode == SustainMode.DIRECT else self.decay2
+        return ADSR(self.sn_attack, self.sn_decay, self.sn_sustain, release)
+
 @dataclass
 class FurnaceMacro:
     # Representation of a single macro as parsed from INS2 'MA'

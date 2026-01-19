@@ -3,12 +3,11 @@ from dataclasses import dataclass, field
 import sys
 import logging
 
-from .model.FurnaceData import FurnaceInstrument, FurnaceModule, FurnaceRow
+from .model.FurnaceData import *
 from .model.AMKData import *
 from .model.MMLCommands import *
 from .model.FurnaceEffects import *
-from .MMLUtil import *
-from .FurnaceUtil import *
+from .util import *
 
 # persistent channel state
 @dataclass
@@ -17,6 +16,7 @@ class FurnaceState:
     fur_ins_idx: int = None
     echo: bool = True
     is_legato: bool = False
+    adsr: ADSR = None
 
 @dataclass
 class MappingInfo:
@@ -145,6 +145,17 @@ class RowConverter:
             pre_note_commands.append(RemoteCommand(note_tick, 99, RemoteCommandTiming.DISABLE))
             state.gain_remote = None
 
+        # check if we have to set adsr manually
+        adsr = fur_ins.get_initial_adsr()
+        if adsr != state.adsr and fur_ins.sn_envelope_on:
+            state.adsr = adsr
+            # need to explicitly set adsr if we previously modified it for this instrument
+            if fur_ins.index == state.fur_ins_idx:
+                pre_note_commands.append(CustomADSR(note_tick, adsr))
+
+        # update the current instrument index
+        state.fur_ins_idx = fur_ins.index
+
         return pre_note_commands
 
     def get_note_info(self, fur_ins_idx: int, note: int, ins_info: Dict[int, InstrumentInfo], use_sample_map: bool) -> Tuple[int, int]:
@@ -210,8 +221,9 @@ class RowConverter:
 
         return new_active_note, commands
 
-    def convert_notes(self, flat_rows: List[FurnaceRow], ins_info: Dict[int, InstrumentInfo], instruments: List[FurnaceInstrument]) -> List[MMLNote]:
+    def convert_notes(self, flat_rows: List[FurnaceRow], ins_info: Dict[int, InstrumentInfo], instruments: List[FurnaceInstrument]) -> Tuple[List[MMLNote], List[MMLCommand]]:
         notes: List[MMLNote] = []
+        commands: List[MMLCommand] = []
         tick = 0
         state = FurnaceState()
         slide_helper = PitchSlider(self.tick_ratio, tick)
@@ -253,12 +265,13 @@ class RowConverter:
                     if ins.index == row.Ins:
                         fur_ins = ins
                         break
+
                 pre_note_commands = self.get_pre_note_commands(fur_ins, ins_info, state, note_tick)
 
                 if found_legato != state.is_legato:
                     pre_note_commands.append(LegatoToggle(note_tick))
                     state.is_legato = found_legato
-                    
+
                 note_to_play, amk_ins_idx = self.get_note_info(row.Ins, row.Note, ins_info, fur_ins.use_sample_map)
                 if note_to_play is None or amk_ins_idx is None:
                     continue
@@ -280,22 +293,28 @@ class RowConverter:
                     slide_helper.start_slide()
 
             elif note_kind == FurnaceRow.NoteKind.OFF or note_kind == FurnaceRow.NoteKind.RELEASE:
-                # finish any pitch slides that are still active
-                pitch_command = slide_helper.end_slide(None)
-                if cur_dur is not None:
-                    if pitch_command is not None:
-                        cur_dur.pitch_bends.append(pitch_command)
-                    if found_legato != state.is_legato:
-                        cur_dur.pre_note_commands.append(LegatoToggle(note_tick))
-                        state.is_legato = found_legato  
-                    cur_dur.duration = note_tick - cur_dur.tick
-                    notes.append(cur_dur)
+                if fur_ins.sn_envelope_on and fur_ins.sustain_mode == SustainMode.DELAYED:
+                    # the delayed adsr mode sets the release time to the release value on key off
+                    adsr = ADSR(fur_ins.sn_attack, fur_ins.sn_decay, fur_ins.sn_sustain, fur_ins.sn_release)
+                    commands.append(CustomADSR(tick, adsr))
+                    state.adsr = adsr
                 else:
-                    self.logger.debug(f"Note off or release was found but no note was playing.")
-                    if pitch_command is not None:
-                        self.logger.warning("Lost pitch slide on note off.")
-                cur_dur = None
-                active_note = None
+                    # finish any pitch slides that are still active
+                    pitch_command = slide_helper.end_slide(None)
+                    if cur_dur is not None:
+                        if pitch_command is not None:
+                            cur_dur.pitch_bends.append(pitch_command)
+                        if found_legato != state.is_legato:
+                            cur_dur.pre_note_commands.append(LegatoToggle(note_tick))
+                            state.is_legato = found_legato  
+                        cur_dur.duration = note_tick - cur_dur.tick
+                        notes.append(cur_dur)
+                    else:
+                        self.logger.debug(f"Note off or release was found but no note was playing.")
+                        if pitch_command is not None:
+                            self.logger.warning("Lost pitch slide on note off.")
+                    cur_dur = None
+                    active_note = None
 
             # check for quick legato, make a new note if found
             if effect := row.get_effect(QuickLegatoEffect):
@@ -330,7 +349,7 @@ class RowConverter:
         if state.is_legato:
             notes[-1].pre_note_commands.append(LegatoToggle(tick))
 
-        return notes
+        return notes, commands
 
 
     def convert_volume_commands(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLCommand]:

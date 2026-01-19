@@ -2,8 +2,8 @@ from typing import Optional
 
 from .MMLUtil import MMLUtil
 
-from .model.FurnaceEffects import *
-from .model.MMLCommands import *
+from ..model.FurnaceEffects import *
+from ..model.MMLCommands import *
 
 
 import logging

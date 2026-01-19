@@ -2,8 +2,8 @@ from typing import Optional
 from enum import Enum
 from dataclasses import dataclass, field
 
-from ..MMLUtil import MMLUtil, MMLState
-
+from ..util.MusicUtil import *
+from ..util.MMLUtil import *
 
 class RemoteCommandTiming(Enum):
     DISABLE = 0
@@ -17,6 +17,7 @@ class RemoteCommandTiming(Enum):
 
 @dataclass
 class MMLCommand:
+    # can be relative to song start or relative to the note start, depending on the command
     tick: int = field(compare=False)
 
     # override to remove spaces from the command text
@@ -133,3 +134,15 @@ class Vibrato(MMLCommand):
 class DisableVibrato(MMLCommand):
     def to_mml(self, mml_state: 'MMLState' = None) -> str:
         return "$DF"
+
+@dataclass
+class CustomADSR(MMLCommand):
+    adsr: ADSR
+
+    def to_mml(self, mml_state: 'MMLState' = None) -> str:
+        # $ED $DA $SR
+        # $DA = %0dddaaaa (decay 3 bits, attack 4 bits)
+        # $SR = %sssrrrrr (sustain 3 bits, release 5 bits)
+        da_byte = ((self.adsr.decay & 0x07) << 4) | (self.adsr.attack & 0x0F)
+        sr_byte = ((self.adsr.sustain & 0x07) << 5) | (self.adsr.release & 0x1F)
+        return f"$ED${MMLUtil.to_hex(da_byte)}${MMLUtil.to_hex(sr_byte)}"

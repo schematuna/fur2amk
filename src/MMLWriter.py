@@ -5,7 +5,7 @@ import logging
 from .model.MMLData import *
 from .model.MMLCommands import *
 
-from .MMLUtil import *
+from .util import *
 
 
 ################################
