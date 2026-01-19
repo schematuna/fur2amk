@@ -4,19 +4,7 @@ from enum import Enum
 import logging
 
 from .FurnaceEffects import *
-from ..util.MusicUtil import *
-
-
-class GainMode(Enum):
-    """SNES GAIN register modes from Furnace.
-
-    When useEnv is False, the GAIN register controls the envelope instead of ADSR.
-    """
-    DIRECT = 0       # Direct volume level (0-127)
-    DEC_LINEAR = 4   # Linear decrease (0-31 rate)
-    DEC_LOG = 5      # Exponential/logarithmic decrease (0-31 rate)
-    INC_LINEAR = 6   # Linear increase (0-31 rate)
-    INC_INVLOG = 7   # Bent/inverse-log increase (0-31 rate)
+from ..util.SNESUtil import *
 
 
 class SustainMode(Enum):
@@ -128,6 +116,9 @@ class FurnaceInstrument:
         # (sn_release is only used for DIRECT mode, or when note-off happens in DELAYED mode)
         release = self.sn_release if self.sustain_mode == SustainMode.DIRECT else self.decay2
         return ADSR(self.sn_attack, self.sn_decay, self.sn_sustain, release)
+
+    def get_initial_gain(self) -> SnesGain:
+        return SnesGain(self.gain_mode, self.sn_gain)
 
 @dataclass
 class FurnaceMacro:

@@ -1,3 +1,3 @@
 from .MMLUtil import *
 from .FurnaceUtil import *
-from .MusicUtil import *
+from .SNESUtil import *
