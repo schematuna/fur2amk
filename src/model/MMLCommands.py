@@ -46,6 +46,11 @@ class EchoToggle(MMLCommand):
         return f"$F4$03"
 
 @dataclass
+class VolumeTableToggle(MMLCommand):
+    def to_mml(self, mml_state: 'MMLState' = None) -> str:
+        return f"$F4$08"
+
+@dataclass
 class InstrumentChange(MMLCommand):
     instrument_index: int
 
