@@ -85,8 +85,9 @@ class AMKWriter:
             # Default: no envelope -> $00 $00
             da = 0x00
             sr = 0x00
-            # Default to no GAIN
-            ga = 0x00
+            # Default to 80 in case we switch to gain mode mid-note
+            # the hardware reads this value before setting the new gain
+            ga = 0x80
             if amk_ins.uses_envelope:
                 # ADSR on: build ADSR values
                 d = int(amk_ins.envelope.decay or 0)

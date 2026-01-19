@@ -40,6 +40,9 @@ class AMKRemoteDef():
     amk_command: MMLCommand
     comment: str = ""
 
+    timing: RemoteCommandTiming = RemoteCommandTiming.AFTER_START
+    wait_ticks: Optional[int] = None
+
 @dataclass
 class SPCInfo:
     title: str = ""

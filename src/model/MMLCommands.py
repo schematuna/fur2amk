@@ -2,7 +2,7 @@ from typing import Optional
 from enum import Enum
 from dataclasses import dataclass, field
 
-from ..util.MusicUtil import *
+from ..util.SNESUtil import *
 from ..util.MMLUtil import *
 
 class RemoteCommandTiming(Enum):
@@ -104,10 +104,10 @@ class PanFade(MMLCommand):
 
 @dataclass
 class EnableGainCommand(MMLCommand):
-    gain: int
+    gain: SnesGain
 
     def to_mml(self, mml_state: 'MMLState' = None) -> str:
-        return f"$FA$01${MMLUtil.to_hex(self.gain)}"
+        return f"$FA$01${MMLUtil.to_hex(self.gain.to_byte())}"
 
 @dataclass
 class RemoteCommand(MMLCommand):

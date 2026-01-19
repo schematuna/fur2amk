@@ -12,7 +12,7 @@ from .util import *
 # persistent channel state
 @dataclass
 class FurnaceState:
-    gain_remote: RemoteCommand = None
+    remote_commands: List[RemoteCommand] = field(default_factory=list)
     fur_ins_idx: int = None
     echo: bool = True
     is_legato: bool = False
@@ -33,7 +33,7 @@ class InstrumentInfo:
     # note -> mapping_info
     ins_map: Dict[int, MappingInfo] = field(default_factory=dict)
     # list of remote command indices associated with this instrument
-    remote_commands: List[int] = field(default_factory=list)
+    remote_commands: List[AMKRemoteDef] = field(default_factory=list)
 
 class RowConverter:
     def __init__(self, fur_ticks_per_row: int) -> None:
@@ -132,29 +132,28 @@ class RowConverter:
             pre_note_commands.append(EchoToggle(note_tick))
             state.echo = fur_ins.snes_macro_data.is_echo
 
-        # mid-note gain change, handled by remote command
-        if fur_ins.index in ins_info and len(ins_info[fur_ins.index].remote_commands) > 0:
-            gain_speed = fur_ins.snes_macro_data.gain_speed
-            # just assume first remote command is gain for now
-            remote_comand_idx = ins_info[fur_ins.index].remote_commands[0]
-            gain_remote = RemoteCommand(note_tick, remote_comand_idx, RemoteCommandTiming.AFTER_START, gain_speed)
-            if gain_remote is not state.gain_remote:
-                pre_note_commands.append(gain_remote)
-                state.gain_remote = gain_remote
-        elif state.gain_remote is not None: # turn off remote commands when gain is disabled
-            pre_note_commands.append(RemoteCommand(note_tick, 99, RemoteCommandTiming.DISABLE))
-            state.gain_remote = None
+        # if new instrument, set up remote commands for this instrument
+        remote_commands = []
+        if fur_ins.index in ins_info:
+            for remote_cmd in ins_info[fur_ins.index].remote_commands:
+                if remote_cmd.wait_ticks is not None:
+                    remote_commands.append(RemoteCommand(note_tick, remote_cmd.command_idx, remote_cmd.timing, remote_cmd.wait_ticks))
+                else:
+                    remote_commands.append(RemoteCommand(note_tick, remote_cmd.command_idx, remote_cmd.timing))
 
-        # check if we have to set adsr manually
-        adsr = fur_ins.get_initial_adsr()
-        if adsr != state.adsr and fur_ins.sn_envelope_on:
-            state.adsr = adsr
-            # need to explicitly set adsr if we previously modified it for this instrument
-            if fur_ins.index == state.fur_ins_idx:
-                pre_note_commands.append(CustomADSR(note_tick, adsr))
+        if len(remote_commands) > 2:
+            self.logger.warning(f"Too many remote commands for Furnace instrument {fur_ins.index}, only 2 can be active at a time (one key on and one other)")
 
-        # update the current instrument index
-        state.fur_ins_idx = fur_ins.index
+        # TODO: use (!!) syntax and only stop events that need to be stopped
+        stop_remote_command = RemoteCommand(note_tick, 99, RemoteCommandTiming.DISABLE)
+        # Only emit remote command if it changed
+        if remote_commands != state.remote_commands and len(state.remote_commands) > 0:
+            pre_note_commands.append(stop_remote_command)
+
+        if len(remote_commands) > 0:
+            pre_note_commands.extend(remote_commands)
+
+        state.remote_commands = remote_commands
 
         return pre_note_commands
 
@@ -232,6 +231,8 @@ class RowConverter:
         cur_dur: Optional[MMLNote] = None
         # the current active pitch, considering both pitch commands and explicit notes
         active_note = None
+        # active furnace instrument
+        fur_ins = None
         # process notes and pitch commands
         for row in flat_rows:
             # handle portamento before reading this row's note info
@@ -266,7 +267,11 @@ class RowConverter:
                         fur_ins = ins
                         break
 
-                pre_note_commands = self.get_pre_note_commands(fur_ins, ins_info, state, note_tick)
+                pre_note_commands = []
+                # we only have to set up pre-note commands for new instruments
+                if fur_ins.index != state.fur_ins_idx:
+                    pre_note_commands = self.get_pre_note_commands(fur_ins, ins_info, state, note_tick)
+                    state.fur_ins_idx = fur_ins.index   
 
                 if found_legato != state.is_legato:
                     pre_note_commands.append(LegatoToggle(note_tick))
@@ -293,7 +298,7 @@ class RowConverter:
                     slide_helper.start_slide()
 
             elif note_kind == FurnaceRow.NoteKind.OFF or note_kind == FurnaceRow.NoteKind.RELEASE:
-                if fur_ins.sn_envelope_on and fur_ins.sustain_mode == SustainMode.DELAYED:
+                if fur_ins is not None and fur_ins.sn_envelope_on and fur_ins.sustain_mode == SustainMode.DELAYED:
                     # the delayed adsr mode sets the release time to the release value on key off
                     adsr = ADSR(fur_ins.sn_attack, fur_ins.sn_decay, fur_ins.sn_sustain, fur_ins.sn_release)
                     commands.append(CustomADSR(tick, adsr))

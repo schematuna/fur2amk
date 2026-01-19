@@ -118,11 +118,38 @@ class FurnaceConverter:
             gmacro = fur_ins.snes_macro_data.gain_values
             if gmacro and len(gmacro) > 1:
                 # just support one gain change for now.
-                # I think amk would allow no more than 2 remote commands at once anyways
+                # If we want to support more we;ll have to set gain manually throughout the note.
                 comment = "Gain toggle for Furnace instrument " + str(fur_ins.index)+ ": " + fur_ins.name
-                remote_def = AMKRemoteDef(command_num, EnableGainCommand(None, gmacro[1]), comment)
+                command = EnableGainCommand(None, SnesGain.from_byte(gmacro[1]))
+                remote_def = AMKRemoteDef(command_num, command, comment, RemoteCommandTiming.AFTER_START, fur_ins.snes_macro_data.gain_speed)
                 amk_data.remote_defs.append(remote_def)
-                self.instrument_info[fur_ins.index].remote_commands.append(command_num)
+                self.instrument_info[fur_ins.index].remote_commands.append(remote_def)
+                command_num += 1
+
+            if fur_ins.sn_envelope_on and (fur_ins.sustain_mode == SustainMode.EFF_LINEAR or fur_ins.sustain_mode == SustainMode.EFF_EXP):
+                gain_mode = GainMode.DEC_LINEAR if fur_ins.sustain_mode == SustainMode.EFF_LINEAR else GainMode.DEC_LOG
+                gain = SnesGain(gain_mode, fur_ins.sn_release)
+                comment = "Remote gain command for Furnace instrument " + str(fur_ins.index)+ ": " + fur_ins.name
+                command = EnableGainCommand(None, gain)
+                remote_def = AMKRemoteDef(command_num, command, comment, RemoteCommandTiming.KEY_OFF)
+                amk_data.remote_defs.append(remote_def)
+                self.instrument_info[fur_ins.index].remote_commands.append(remote_def)
+                command_num += 1
+                # and create the key on command to undo the changes
+                comment = "Restore ADSR for Furnace instrument " + str(fur_ins.index)+ ": " + fur_ins.name
+                command = CustomADSR(None, ADSR(fur_ins.sn_attack, fur_ins.sn_decay, fur_ins.sn_sustain, fur_ins.decay2)) # TODO: just enable adsr directly thru register?
+                remote_def = AMKRemoteDef(command_num, command, comment, RemoteCommandTiming.KEY_ON)
+                amk_data.remote_defs.append(remote_def)
+                self.instrument_info[fur_ins.index].remote_commands.append(remote_def)
+                command_num += 1
+
+            # for delayed release, ADSR changes on note off. Have to restore it on key on.
+            if fur_ins.sn_envelope_on and fur_ins.sustain_mode == SustainMode.DELAYED:
+                comment = "Restore ADSR for Furnace instrument " + str(fur_ins.index)+ ": " + fur_ins.name
+                command = CustomADSR(None, ADSR(fur_ins.sn_attack, fur_ins.sn_decay, fur_ins.sn_sustain, fur_ins.decay2)) # TODO: modify release directly thru register?
+                remote_def = AMKRemoteDef(command_num, command, comment, RemoteCommandTiming.KEY_ON)
+                amk_data.remote_defs.append(remote_def)
+                self.instrument_info[fur_ins.index].remote_commands.append(remote_def)
                 command_num += 1
 
         # need to indicate where to pick up with labels
