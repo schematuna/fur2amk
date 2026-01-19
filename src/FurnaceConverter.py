@@ -6,7 +6,7 @@ import sys
 import logging
 from typing import Dict, List, Tuple
 
-from .model.FurnaceData import FurnaceModule, FurnaceRow
+from .model.FurnaceData import FurnaceModule, FurnaceRow, SustainMode
 from .model.AMKData import *
 from .model.MMLCommands import *
 from .RowConverter import *
@@ -92,7 +92,12 @@ class FurnaceConverter:
                     env.attack = ins.sn_attack
                     env.decay = ins.sn_decay
                     env.sustain = ins.sn_sustain
-                    env.release = ins.sn_release
+                    # For sustain modes 1-3, d2 is used as the effective release rate during sustain
+                    # For mode 0 (DIRECT), use the standard release value
+                    if ins.sustain_mode != SustainMode.DIRECT:
+                        env.release = ins.decay2
+                    else:
+                        env.release = ins.sn_release
                     amk_ins.envelope = env
                 else:
                     amk_ins.gain_values = ins.snes_macro_data.gain_values
