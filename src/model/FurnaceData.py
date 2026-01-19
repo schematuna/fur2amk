@@ -5,6 +5,31 @@ import logging
 
 from .FurnaceEffects import *
 
+
+class GainMode(Enum):
+    """SNES GAIN register modes from Furnace.
+
+    When useEnv is False, the GAIN register controls the envelope instead of ADSR.
+    """
+    DIRECT = 0       # Direct volume level (0-127)
+    DEC_LINEAR = 4   # Linear decrease (0-31 rate)
+    DEC_LOG = 5      # Exponential/logarithmic decrease (0-31 rate)
+    INC_LINEAR = 6   # Linear increase (0-31 rate)
+    INC_INVLOG = 7   # Bent/inverse-log increase (0-31 rate)
+
+
+class SustainMode(Enum):
+    """SNES sustain/release modes from Furnace.
+
+    Controls how the envelope behaves during sustain and on key-off.
+    Modes 1-3 use 'd2' as the decay rate during sustain, and 'r' controls release behavior.
+    """
+    DIRECT = 0       # No sustain - key off sends hardware KOFF (fast release)
+    DEC_LINEAR = 1   # Sustain with d2; key-off switches to GAIN linear decay at rate r
+    DEC_LOG = 2      # Sustain with d2; key-off switches to GAIN exponential decay at rate r
+    RELEASE = 3      # Sustain with d2; key-off updates ADSR R field to r (no KOFF sent)
+
+
 @dataclass
 class FurnaceSNESFlags:
     antiClick: Optional[bool] = None
@@ -57,12 +82,12 @@ class FurnaceInstrument:
     sn_decay: Optional[int] = 7      # 0..7
     sn_sustain: Optional[int] = 7    # 0..7
     sn_release: Optional[int] = 0    # 0..31
-    decay2: Optional[int] = 0        # 0..31, special decay for some sustain modes
-    sustain_mode: Optional[int] = 0  # 0: direct, 1: sustain (release with dec), 2: sustain (release with exp), 3: sustain (release with rel)
+    decay2: Optional[int] = 0        # 0..31, used as R during sustain in modes 1-3
+    sustain_mode: SustainMode = SustainMode.DIRECT  # Controls key-off behavior
 
     # SNES gain fields
-    gain_mode: Optional[int] = None  # 0: direct, 4: dec, 5: exp, 6: inc, 7: bent
-    sn_gain: Optional[int] = None    # 0..127 for direct, 0..31 for others
+    gain_mode: GainMode = GainMode.DIRECT  # GAIN register mode when useEnv is False
+    sn_gain: Optional[int] = None    # 0..127 for DIRECT, 0..31 for others
 
     # Sample mapping from INS2 'SM'
     initial_sample: Optional[int] = 0  # sample 0 by default

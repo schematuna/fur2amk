@@ -250,14 +250,14 @@ class FurnaceParser:
                     ins.sn_envelope_on = bool(sn_flags & 0x10)
                     # only in versions <137
                     sn_sustain_effective = bool(sn_flags & 0x08)
-                    ins.gain_mode = sn_flags & 0x07
+                    ins.gain_mode = GainMode(sn_flags & 0x07)
                 if length >= 4:
                     ins.sn_gain = self._ru8(ds)
                 if length >= 5:
                     val = self._ru8(ds)
                     # bits 5-6: sustain mode, bits 0-4: decay 2
-                    ins.decay2 = val & 0x1F,  # bits 0-4
-                    ins.sustain_mode = (val >> 5) & 0x03  # bits 5-6
+                    ins.decay2 = val & 0x1F  # bits 0-4
+                    ins.sustain_mode = SustainMode((val >> 5) & 0x03)  # bits 5-6
             elif code == 'SM':
                 # Sample instrument data: initial sample, flags, waveform len, sample map
                 ds = io.BytesIO(data)
