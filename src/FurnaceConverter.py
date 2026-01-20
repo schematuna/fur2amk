@@ -44,7 +44,7 @@ class FurnaceConverter:
 
         return sample_dict
     
-    def convert_instruments(self, module: FurnaceModule) -> List[AMKInstrument]:
+    def convert_instruments(self, module: FurnaceModule, num_samples: int) -> List[AMKInstrument]:
         instruments: List[AMKInstrument] = []
 
         amk_ins_index = 0
@@ -68,7 +68,11 @@ class FurnaceConverter:
                         idx = mapping[1]
                         if idx != 65535:
                             amk_ins = AMKInstrument()
-                            amk_ins.sample_index = mapping[1]
+                            sample_index = mapping[1]
+                            if sample_index >= num_samples:
+                                sample_index = 0
+                                self.logger.warning(f"Instrument {ins.index} has sample index {sample_index} which is greater than the number of samples {num_samples}. Using sample index 0 instead. Please check your sample index in Furnace.")
+                            amk_ins.sample_index = sample_index
                             amk_instruments.append(amk_ins)
                             # Store the note -> AMK instrument mapping
                             # Convert from 0:C-(-5) for furnace note to 0:C-0 for sample map
@@ -78,7 +82,11 @@ class FurnaceConverter:
                             amk_ins_index += 1
                 else:
                     amk_ins = AMKInstrument()
-                    amk_ins.sample_index = int(ins.initial_sample)
+                    sample_index = int(ins.initial_sample)
+                    if sample_index >= num_samples:
+                        sample_index = 0
+                        self.logger.warning(f"Instrument {ins.index} has initial sample index {sample_index} which is greater than the number of samples {num_samples}. Using sample index 0 instead. Please check your sample index in Furnace.")
+                    amk_ins.sample_index = sample_index
                     amk_instruments.append(amk_ins)
                     ins_info.amk_ins = amk_ins_index
                     amk_ins_index += 1
@@ -227,7 +235,7 @@ class FurnaceConverter:
         amk_data = AMKData()
         amk_data.spc_info     = self.convert_spc_info(module)
         amk_data.samples      = self.convert_samples(module)
-        amk_data.instruments  = self.convert_instruments(module)
+        amk_data.instruments  = self.convert_instruments(module, len(amk_data.samples))
         amk_data.label_start  = self.convert_remote_commands(module, amk_data)
         amk_data.tempo        = self.convert_tempo(module)
         amk_data.volume       = self.convert_volume(module)

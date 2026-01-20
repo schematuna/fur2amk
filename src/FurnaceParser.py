@@ -265,7 +265,11 @@ class FurnaceParser:
                     ins.initial_sample = self._ru16(ds)
                     flags = self._ru8(ds)
                     ins.use_sample_map = bool(flags & 0x01)
-                    _wav_len = self._ru8(ds)  # unused
+                    ins.use_sample = bool(flags & 0x02)
+                    ins.use_wave = bool(flags & 0x04)
+                    ins.waveform_length = self._ru8(ds)
+                    if ins.use_wave:
+                        self.logger.warning(f"Instrument {ins.index} uses wavetables, which is not supported. Using sample instead.")
                     # Sample map 120 entries if enabled
                     if ins.use_sample_map:
                         table: List[Tuple[int, int]] = []
