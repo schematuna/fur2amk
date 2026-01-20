@@ -81,6 +81,9 @@ class FurnaceInstrument:
     # Sample mapping from INS2 'SM'
     initial_sample: Optional[int] = 0  # sample 0 by default
     use_sample_map: bool = False
+    use_sample: bool = False  # bit 1 of SM flags
+    use_wave: bool = False    # bit 2 of SM flags
+    waveform_length: int = 0  # from SM block
     sample_table: List[Tuple[int, int]] = field(default_factory=lambda: [(0, 1)] * 120)
     
     # Instrument macros (INS2 'MA'): code -> macro definition

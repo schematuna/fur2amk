@@ -24,7 +24,6 @@ from copy_to_amk import main as copy_to_amk_main
 #       get game name from Furnace module metadata if available
 #       support global tuning
 #       preserve furnace channel names
-#       look into alternative ADSR handling (Furnace has more options than AMK)
 #       "Divider" BPM control
 #       Recommended furnace pre-emphasis settings?
 #       legato effect
@@ -32,7 +31,6 @@ from copy_to_amk import main as copy_to_amk_main
 #       filter special characters in comments
 #       sample fine tune
 #       better automatic section/row reporting in log messages
-#       special classes for pre-note command and pitch commands that don't need absolute tick values
 
 # --------------------------------------------------------------------------------------
 
