@@ -241,13 +241,6 @@ class MMLWriter:
         self.mml_data = mml_data
         self.label_count = label_start
 
-    def channel_has_remote_commands(self, channel: int) -> bool:
-        for note in self.mml_data.notes[channel]:
-            for command in note.pre_note_commands:
-                if isinstance(command, RemoteCommand):
-                    return True
-        return False
-
     def get_section_num(self, tick: int) -> int:
         """
         Calculate which section (order) a given tick falls into.
@@ -350,29 +343,21 @@ class MMLWriter:
         notes = sorted(notes, key=lambda note : note.tick)
         commands = sorted(commands, key=lambda cmd : cmd.tick)
 
-        mml_state = MMLState()
+        cur_ins = None
         cmd_idx = 0
         rests = self.get_rests(notes)
         durations = sorted(notes + rests, key=lambda dur : dur.tick)
         # can't have the loop point in the middle of a duration
         durations = self.split_durations_at_loop(durations)
-        loop_state_handled = False
         for duration in durations:
             if isinstance(duration, MMLRest):
                 word = MMLWord(duration.tick, duration.duration, None)
             else:
                 word = MMLWord(duration.tick, duration.duration, duration.note, duration.pre_note_commands)
-                # need to explicitly handle instrument change at loop point, so it's correct on loop
-                first_note_after_loop = (
-                    self.mml_data.loop_tick is not None
-                    and duration.tick >= self.mml_data.loop_tick
-                    and not loop_state_handled
-                )
-                if duration.instrument != mml_state.ins or first_note_after_loop:
+
+                if duration.instrument != cur_ins:
                     word.commands.append(InstrumentChange(duration.tick, duration.instrument))
-                    mml_state.ins = duration.instrument
-                    if first_note_after_loop:
-                        loop_state_handled = True
+                    cur_ins = duration.instrument
 
                 for pitch_bend in duration.pitch_bends:
                     # check that pitchbend is contained within this note
@@ -401,11 +386,56 @@ class MMLWriter:
             words.append(word)
         return words
 
-    def write_loop_point(self, has_remote_commands: bool) -> str:
-        loop_txt = '/\n'
-        if has_remote_commands:
-            loop_txt += "(!99, 0) ; reset remote state for loop\n"
-        return loop_txt
+    def get_loop_state_commands(self, words: List[MMLWord]) -> List[MMLCommand]:
+        # If there are remote commands after the loop point, we need to reset them at the loop point
+        has_remote_commands_after_loop = False
+        for word in words:
+            for cmd in word.commands:
+                if isinstance(cmd, RemoteCommand):
+                    is_post_loop = self.mml_data.loop_tick is None or cmd.tick >= self.mml_data.loop_tick
+                    if is_post_loop:
+                        has_remote_commands_after_loop = True
+                        break
+
+        loop_state_commands = []
+
+        # state tracking
+        cur_ins = None
+        cur_remote_commands = []
+        for word in words:
+            is_post_loop = self.mml_data.loop_tick is None or word.tick >= self.mml_data.loop_tick
+            first_note_after_loop = is_post_loop and word.note is not None
+
+            # need to explicitly handle instrument change at loop point, so it's correct on loop
+            if first_note_after_loop:
+                if cur_ins is not None:
+                    loop_state_commands.append(InstrumentChange(word.tick, cur_ins))
+
+            # also handle remote command state for loop
+            if first_note_after_loop and has_remote_commands_after_loop:
+                # could filter these out if they're already in the word, but will let it be simple for now
+                loop_state_commands.insert(0, RemoteCommand(word.tick, 99, RemoteCommandTiming.DISABLE))
+                for cmd in cur_remote_commands:
+                    loop_state_commands.append(replace(cmd, tick=word.tick))
+
+            if first_note_after_loop:
+                break
+
+            # track remote command state
+            for command in word.commands:
+                if isinstance(command, RemoteCommand):
+                    if command.timing is RemoteCommandTiming.DISABLE:
+                        cur_remote_commands = []
+                    else:
+                        cur_remote_commands.append(command)
+
+            # track instrument state
+            for command in word.commands:
+                if isinstance(command, InstrumentChange):
+                    cur_ins = command.instrument_index
+
+        return loop_state_commands
+
 
     def write(self) -> None:
         has_loop_point = self.mml_data.loop_tick is not None
@@ -421,6 +451,8 @@ class MMLWriter:
             words = self.make_words(self.mml_data.notes[c], self.mml_data.commands[c])
             # sort again for good measure
             words = sorted(words, key=lambda words : words.tick)
+
+            loop_state_commands = self.get_loop_state_commands(words)
 
             lines: List[MMLLine] = []
             line_words: List[MMLWord] = []
@@ -448,9 +480,21 @@ class MMLWriter:
                 txt += "; enable light staccato\n"
                 txt += staccato_cmd.get_text(mml_state) + '\n'
 
-            for line in lines:
-                if has_loop_point and line.tick() == self.mml_data.loop_tick:
-                    word_txt += self.write_loop_point(self.channel_has_remote_commands(c))
+            def get_state_reset_text(loop_state_commands: List[MMLCommand]) -> str:
+                txt = ''
+                if len(loop_state_commands) > 0:
+                    txt += '; reset state on loop\n'
+                    for cmd in loop_state_commands:
+                        txt += cmd.get_text(mml_state) + ' '
+                    txt += '\n'
+                return txt
+
+            for i, line in enumerate(lines):
+                if not has_loop_point and i == 0:
+                    word_txt += get_state_reset_text(loop_state_commands)
+                elif has_loop_point and line.tick() == self.mml_data.loop_tick:
+                    word_txt += '/\n'
+                    word_txt += get_state_reset_text(loop_state_commands)
                 word_txt += f"; section {MMLUtil.to_hex(line.section_num)}\n"
                 word_txt += line.to_mml(mml_state) + '\n'
 

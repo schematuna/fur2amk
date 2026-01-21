@@ -111,8 +111,7 @@ class MMLUtil:
 
 @dataclass
 class MMLState:
-    octave: Optional[int]       = None
-    ins: Optional[int]          = None
+    octave: Optional[int]                 = None
 
 class DurationFormatter:
     # a "beat" is a quarter note, and the song is assumed to be in 4/4

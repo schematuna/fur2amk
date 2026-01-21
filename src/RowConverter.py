@@ -145,10 +145,9 @@ class RowConverter:
             self.logger.warning(f"Too many remote commands for Furnace instrument {fur_ins.index}, only 2 can be active at a time (one key on and one other)")
 
         # TODO: use (!!) syntax and only stop events that need to be stopped
-        stop_remote_command = RemoteCommand(note_tick, 99, RemoteCommandTiming.DISABLE)
         # Only emit remote command if it changed
         if remote_commands != state.remote_commands and len(state.remote_commands) > 0:
-            pre_note_commands.append(stop_remote_command)
+            pre_note_commands.append(RemoteCommand(note_tick, 99, RemoteCommandTiming.DISABLE))
 
         if len(remote_commands) > 0:
             pre_note_commands.extend(remote_commands)
