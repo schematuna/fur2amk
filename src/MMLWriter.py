@@ -305,8 +305,14 @@ class MMLWriter:
     # get rests between notes
     def get_rests(self, notes: List[MMLNote]) -> List[MMLRest]:
         rests: List[MMLRest] = []
+        # special case for no notes
+        if len(notes) == 0:
+            rests.append(MMLRest(0, self.mml_data.song_length))
+            return rests
+        # add initial rest if there is one
         if notes[0].tick > 0:
             rests.append(MMLRest(0, notes[0].tick))
+        # add rests between notes
         for i, note in enumerate(notes):
             if i + 1 < len(notes) and notes[i+1].tick > note.tick + note.duration:
                 rest_duration = notes[i+1].tick - (note.tick + note.duration)
@@ -322,10 +328,6 @@ class MMLWriter:
         # sort before iterating
         notes = sorted(notes, key=lambda note : note.tick)
         commands = sorted(commands, key=lambda cmd : cmd.tick)
-        
-        if not notes:
-            self.logger.debug("Channel has no notes.")
-            return []
 
         mml_state = MMLState()
         cmd_idx = 0
@@ -412,6 +414,8 @@ class MMLWriter:
 
         txt = ''
         for c in range(self.mml_data.num_channels):
+            if len(self.mml_data.notes[c]) == 0 and len(self.mml_data.commands[c]) == 0:
+                continue
             word_txt = ''
             txt += f'#{c}\n'
 
