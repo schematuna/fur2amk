@@ -302,6 +302,27 @@ class MMLWriter:
                         break
         return label_count
 
+    def split_durations_at_loop(self, durations: List) -> List:
+        """Split any duration that spans the loop point into two parts."""
+        loop_point = self.mml_data.loop_tick
+        if loop_point is None:
+            return durations
+
+        result = []
+        for dur in durations:
+            if dur.tick < loop_point < dur.tick + dur.duration:
+                first_len = loop_point - dur.tick
+                second_len = dur.tick + dur.duration - loop_point
+                if isinstance(dur, MMLRest):
+                    result.append(MMLRest(dur.tick, first_len))
+                    result.append(MMLRest(loop_point, second_len))
+                else:
+                    result.append(replace(dur, duration=first_len))
+                    result.append(MMLRest(loop_point, second_len))
+            else:
+                result.append(dur)
+        return result
+
     # get rests between notes
     def get_rests(self, notes: List[MMLNote]) -> List[MMLRest]:
         rests: List[MMLRest] = []
@@ -333,14 +354,25 @@ class MMLWriter:
         cmd_idx = 0
         rests = self.get_rests(notes)
         durations = sorted(notes + rests, key=lambda dur : dur.tick)
+        # can't have the loop point in the middle of a duration
+        durations = self.split_durations_at_loop(durations)
+        loop_state_handled = False
         for duration in durations:
             if isinstance(duration, MMLRest):
                 word = MMLWord(duration.tick, duration.duration, None)
             else:
                 word = MMLWord(duration.tick, duration.duration, duration.note, duration.pre_note_commands)
-                if duration.instrument != mml_state.ins:
+                # need to explicitly handle instrument change at loop point, so it's correct on loop
+                first_note_after_loop = (
+                    self.mml_data.loop_tick is not None
+                    and duration.tick >= self.mml_data.loop_tick
+                    and not loop_state_handled
+                )
+                if duration.instrument != mml_state.ins or first_note_after_loop:
                     word.commands.append(InstrumentChange(duration.tick, duration.instrument))
                     mml_state.ins = duration.instrument
+                    if first_note_after_loop:
+                        loop_state_handled = True
 
                 for pitch_bend in duration.pitch_bends:
                     # check that pitchbend is contained within this note
@@ -369,40 +401,6 @@ class MMLWriter:
             words.append(word)
         return words
 
-    def split_at_loop_point(self, words: List[MMLWord]) -> List[MMLWord]:
-        loop_point = self.mml_data.loop_tick
-        if loop_point is None:
-            return words
-        
-        result: List[MMLWord] = []
-        for word in words:
-            word_start = word.tick
-            word_end = word.tick + word.duration
-            
-            # Check if loop point falls in the middle of this word
-            if word_start < loop_point < word_end:
-                # Categorize commands upfront to avoid confusion
-                pre_note_commands = [cmd for cmd in word.commands if cmd.tick == word_start]
-                mid_note_commands = [cmd for cmd in word.commands if word_start < cmd.tick < loop_point]
-                post_loop_commands = [cmd for cmd in word.commands if cmd.tick >= loop_point]
-                
-                # First word: note or rest from start to loop point
-                first_commands = pre_note_commands + mid_note_commands
-                first_duration = loop_point - word_start
-                first_word = MMLWord(word_start, first_duration, word.note, first_commands)
-                result.append(first_word)
-                
-                # Second word: rest from loop point to end
-                second_commands = post_loop_commands
-                second_duration = word_end - loop_point
-                second_word = MMLWord(loop_point, second_duration, None, second_commands)
-                result.append(second_word)
-            else:
-                # Keep the word as-is
-                result.append(word)
-        
-        return result
-
     def write_loop_point(self, has_remote_commands: bool) -> str:
         loop_txt = '/\n'
         if has_remote_commands:
@@ -421,9 +419,6 @@ class MMLWriter:
 
             # A "word" is a note or rest with its commands
             words = self.make_words(self.mml_data.notes[c], self.mml_data.commands[c])
-            # Cannot have the loop point mid-word
-            if has_loop_point:
-                words = self.split_at_loop_point(words)
             # sort again for good measure
             words = sorted(words, key=lambda words : words.tick)
 
