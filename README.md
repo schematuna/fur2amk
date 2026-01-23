@@ -14,8 +14,8 @@ This tool must be run at the command line!
   - Download from [python.org](https://www.python.org/downloads/)
   - **Important:** During installation, check "Add Python to PATH" to use the `python` command
   - Verify installation: `python --version` should show Python 3.9 or higher
-- **Furnace 0.6 or later**
-- **AddmusicK 1.0.11**
+- **Furnace 0.6 or later** : https://tildearrow.org/furnace/
+- **AddmusicK 1.0.11** : https://www.smwcentral.net/?p=section&a=details&id=37906
 
 
 ### Usage
