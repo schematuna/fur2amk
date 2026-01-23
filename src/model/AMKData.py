@@ -51,6 +51,31 @@ class SPCInfo:
     length: int = 0
     comment: str = ""
 
+    @staticmethod
+    def sanitize_for_amk(s: str) -> str:
+        """Sanitize a string for use in AMK #spc info fields.
+
+        AMK's preprocessor treats ';' as a comment delimiter and erases
+        everything from ';' to end of line, even inside quoted strings.
+        Backslash is only valid as '\"' escape sequence.
+        """
+        # Remove semicolons (would be treated as comment start)
+        # Remove backslashes (only valid escape is \" which we don't need)
+        # Quotes could be escaped as \" but simpler to just remove them
+        return s.translate(str.maketrans('', '', ';\\"'))
+
+    def get_title(self) -> str:
+        return self.sanitize_for_amk(self.title)
+
+    def get_author(self) -> str:
+        return self.sanitize_for_amk(self.author)
+
+    def get_game(self) -> str:
+        return self.sanitize_for_amk(self.game)
+
+    def get_comment(self) -> str:
+        return self.sanitize_for_amk(self.comment)
+
 @dataclass
 class AMKData:
     version: int = 2
