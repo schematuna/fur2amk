@@ -2,7 +2,11 @@
 
 Converts a Furnace SNES module to an AddMusicK txt file and corresponding BRR sample files.
 
-## Quick Start (PowerShell)
+See ADVANCED.md for detailed support and usage documentation.
+
+This tool must be run at the command line!
+
+## Quick Start
 
 ### Prerequisites
 

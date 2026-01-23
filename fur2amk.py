@@ -28,7 +28,6 @@ from copy_to_amk import main as copy_to_amk_main
 #       Recommended furnace pre-emphasis settings?
 #       legato effect
 #       support virtual tempo (simple tempo multiplier)
-#       filter special characters in comments
 #       sample fine tune
 #       better automatic section/row reporting in log messages
 

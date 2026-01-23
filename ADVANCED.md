@@ -3,6 +3,7 @@
 ## Requirements
 
 - Requires furnace files saved in Furnace 0.6pre5 or later
+- Must be built on Furnace's SNES system
 - Requires all samples to be converted to BRR format prior to use
 
 ## ARAM Optimization
@@ -13,6 +14,34 @@ Furnace projects may require optimization if AMK throws an error about ARAM. The
 2. Reduce sample sizes by downsampling or trimming
    - Need to switch to 8 or 16 bit PCM first, edit, then back to BRR
 3. Replace interpolated commands with slide commands
+
+## Supported Features
+
+- BBR samples
+- Echo Settings (Song -> Chip Manager)
+- Noise & Noise Freq (via instrument macros)
+- Sample Maps
+- All instrument envelope and gain types
+
+## Supported Effects
+
+01: Pitch Slide Up
+02: Pitch Slide Down
+03: Portamento
+04: Vibrato
+08: Stereo Pan
+0A: Volume Slide
+0B: Jump to Order (1 occurrence allowed)
+0D: Jump to Next Pattern
+80: Pan
+83: Pan Slide
+E1: Note Slide Up
+E2: Note Slide Down
+E6: Quick Legato
+ED: Note Delay
+F3: Fine Volume Slide Up
+F4: Fine Volume Slide Down
+FA: Fast Volume Slide
 
 ## Gain Handling
 
