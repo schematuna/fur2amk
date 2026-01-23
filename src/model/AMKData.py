@@ -52,7 +52,7 @@ class SPCInfo:
     comment: str = ""
 
     @staticmethod
-    def sanitize_for_amk(s: str) -> str:
+    def sanitize(s: str) -> str:
         """Sanitize a string for use in AMK #spc info fields.
 
         AMK's preprocessor treats ';' as a comment delimiter and erases
@@ -65,16 +65,16 @@ class SPCInfo:
         return s.translate(str.maketrans('', '', ';\\"'))
 
     def get_title(self) -> str:
-        return self.sanitize_for_amk(self.title)
+        return self.sanitize(self.title)
 
     def get_author(self) -> str:
-        return self.sanitize_for_amk(self.author)
+        return self.sanitize(self.author)
 
     def get_game(self) -> str:
-        return self.sanitize_for_amk(self.game)
+        return self.sanitize(self.game)
 
     def get_comment(self) -> str:
-        return self.sanitize_for_amk(self.comment)
+        return self.sanitize(self.comment)
 
 @dataclass
 class AMKData:
