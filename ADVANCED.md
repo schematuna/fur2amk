@@ -25,23 +25,23 @@ Furnace projects may require optimization if AMK throws an error about ARAM. The
 
 ## Supported Effects
 
-01: Pitch Slide Up
-02: Pitch Slide Down
-03: Portamento
-04: Vibrato
-08: Stereo Pan
-0A: Volume Slide
-0B: Jump to Order (1 occurrence allowed)
-0D: Jump to Next Pattern
-80: Pan
-83: Pan Slide
-E1: Note Slide Up
-E2: Note Slide Down
-E6: Quick Legato
-ED: Note Delay
-F3: Fine Volume Slide Up
-F4: Fine Volume Slide Down
-FA: Fast Volume Slide
+- 01: Pitch Slide Up
+- 02: Pitch Slide Down
+- 03: Portamento
+- 04: Vibrato
+- 08: Stereo Pan
+- 0A: Volume Slide
+- 0B: Jump to Order (1 occurrence allowed)
+- 0D: Jump to Next Pattern
+- 80: Pan
+- 83: Pan Slide
+- E1: Note Slide Up
+- E2: Note Slide Down
+- E6: Quick Legato
+- ED: Note Delay
+- F3: Fine Volume Slide Up
+- F4: Fine Volume Slide Down
+- FA: Fast Volume Slide
 
 ## Gain Handling
 
