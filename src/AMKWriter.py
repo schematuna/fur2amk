@@ -5,6 +5,7 @@ import sys
 from typing import Dict, Optional, Tuple
 
 from .model.AMKData import AMKData
+from .version import VERSION
 
 from .MMLWriter import MMLWriter
 from .util import *
@@ -19,12 +20,16 @@ class AMKWriter:
         self.add_spc_info()
         self.add_sample_info(module_path)
         self.add_ins_info()
+        self.add_fur2amk_header()
         self.add_volume_tempo_info()
         self.add_echo_info()
         self.add_remote_commands()
         self.convert_mml()
 
     # Sections
+    def add_fur2amk_header(self) -> None:
+        self.txt += f'; created with fur2amk {VERSION}\n\n'
+
     def add_amk_header(self) -> None:
         self.txt += f'#amk {self.amk_data.version}\n\n'
 
