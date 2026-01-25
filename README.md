@@ -21,7 +21,7 @@ This tool must be run at the command line!
 ### Usage
 
 1. **Prepare your Furnace file:**
-   - Must be a SNES module
+   - Must use the SNES system
    - Must have only BRR samples (convert all samples to BRR format in Furnace)
    - Should be fairly optimized (see [ADVANCED.md](ADVANCED.md) for optimization methods)
 

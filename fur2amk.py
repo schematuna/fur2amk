@@ -30,6 +30,7 @@ from copy_to_amk import main as copy_to_amk_main
 #       support virtual tempo (simple tempo multiplier)
 #       sample fine tune
 #       better automatic section/row reporting in log messages
+#       print fur2amk version as comment in txt output
 
 # --------------------------------------------------------------------------------------
 

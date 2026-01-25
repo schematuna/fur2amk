@@ -5,9 +5,43 @@ Creates a distributable zip file with all necessary files.
 """
 
 import argparse
+import re
 import shutil
 import sys
 from pathlib import Path
+
+
+def read_version() -> tuple[int, int]:
+    """Read the current version from src/version.py."""
+    script_dir = Path(__file__).parent
+    version_file = script_dir / "src" / "version.py"
+
+    content = version_file.read_text()
+
+    major_match = re.search(r"VERSION_MAJOR\s*=\s*(\d+)", content)
+    minor_match = re.search(r"VERSION_MINOR\s*=\s*(\d+)", content)
+
+    if not major_match or not minor_match:
+        print("Error: Could not parse version from src/version.py")
+        sys.exit(1)
+
+    return int(major_match.group(1)), int(minor_match.group(1))
+
+
+def write_version(major: int, minor: int) -> None:
+    """Write the new version to src/version.py."""
+    script_dir = Path(__file__).parent
+    version_file = script_dir / "src" / "version.py"
+
+    lines = [
+        '"""Version information for fur2amk."""',
+        "",
+        f"VERSION_MAJOR = {major}",
+        f"VERSION_MINOR = {minor}",
+        "",
+        'VERSION = f"{VERSION_MAJOR}.{VERSION_MINOR}"',
+    ]
+    version_file.write_text("\n".join(lines) + "\n")
 
 
 def make_release(version: str) -> None:
@@ -74,10 +108,27 @@ def make_release(version: str) -> None:
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Create a fur2amk release package")
-    parser.add_argument("version", help="Version string (e.g., 1.0.0)")
+    parser.add_argument("--major", action="store_true", help="Increment major version (resets minor to 0)")
+    parser.add_argument("--minor", action="store_true", help="Increment minor version")
     args = parser.parse_args()
 
-    make_release(args.version)
+    major, minor = read_version()
+
+    if args.major:
+        major += 1
+        minor = 0
+        write_version(major, minor)
+        print(f"Version updated to {major}.{minor}")
+    elif args.minor:
+        minor += 1
+        write_version(major, minor)
+        print(f"Version updated to {major}.{minor}")
+    else:
+        print(f"Using current version {major}.{minor} (not incrementing)")
+
+    version = f"{major}.{minor}"
+
+    make_release(version)
 
 
 if __name__ == "__main__":
