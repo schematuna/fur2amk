@@ -14,10 +14,10 @@ from typing import List, Optional
 import argparse
 
 
-from src.FurnaceParser import FurnaceParser
-from src.FurnaceConverter import FurnaceConverter
-from src.AMKWriter import AMKWriter
-from src.BRRHandler import BRRConverter, BRRSample
+from src.reader.FurnaceParser import FurnaceParser
+from src.converter.FurnaceConverter import FurnaceConverter
+from src.writer.AMKWriter import AMKWriter
+from src.writer.BRRHandler import BRRConverter, BRRSample
 from copy_to_amk import main as copy_to_amk_main
 
 # TODO: support mid-sample loop points in BRR validation/writing
@@ -31,6 +31,8 @@ from copy_to_amk import main as copy_to_amk_main
 #       sample fine tune
 #       better automatic section/row reporting in log messages
 #       print fur2amk version as comment in txt output
+#       support vanilla samples
+#       Portuguese bug, missing SNESFlags, VolScaleL
 
 # --------------------------------------------------------------------------------------
 

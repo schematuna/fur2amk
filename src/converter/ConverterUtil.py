@@ -1,12 +1,24 @@
-from typing import Optional
+from typing import Optional, List
+from dataclasses import dataclass, field
 
-from .MMLUtil import MMLUtil
+from ..util.MMLUtil import MMLUtil
 
 from ..model.FurnaceEffects import *
 from ..model.MMLCommands import *
-
+from ..model.MMLData import *
+from ..model.FurnaceData import *
 
 import logging
+
+# persistent channel state for conversion process
+@dataclass
+class FurnaceState:
+    remote_commands: List[RemoteCommand] = field(default_factory=list)
+    is_echo: bool = True
+    quick_legato: bool = False         # is legato active 
+    global_legato: bool = False  # is global legato active (i.e. not quick legato)
+    adsr: ADSR = None
+    fur_ins_idx: int = None
 
 class FurnaceUtil:
     PITCH_STEPS_PER_OCTAVE = 384

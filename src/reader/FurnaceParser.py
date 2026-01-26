@@ -6,8 +6,8 @@ import zlib
 from typing import List, Tuple
 import logging
 
-from .model.FurnaceData import *
-from .model.FurnaceEffects import FurnaceEffectFactory
+from ..model.FurnaceData import *
+from ..model.FurnaceEffects import FurnaceEffectFactory
 
 
 class CompileErrorException(Exception):

@@ -62,6 +62,11 @@ class PanSlideEffect(FurnaceEffect):
         else:
             print(f"Warning: Invalid pan slide effect value {raw_value}.")
 
+class LegatoEffect(FurnaceEffect):
+    """Legato effect (0xEA). Value is legato on/off."""
+    
+    def __init__(self, raw_value: int):
+        self.legato_on = bool(raw_value)
 
 class QuickLegatoEffect(FurnaceEffect):
     """Quick legato effect (0xE6). Value encodes semitones and delay."""
@@ -158,6 +163,7 @@ class FurnaceEffectFactory:
             0xE1: lambda v: NoteSlideEffect(v, True),
             0xE2: lambda v: NoteSlideEffect(v, False),
             0xE6: QuickLegatoEffect,
+            0xEA: LegatoEffect,
             0xED: NoteDelayEffect,
             0xF3: lambda v: FineVolumeSlideEffect(v, True),
             0xF4: lambda v: FineVolumeSlideEffect(v, False),
