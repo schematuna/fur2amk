@@ -1,22 +1,12 @@
-from typing import List, Optional
-from dataclasses import dataclass, field
-import sys
+from typing import List, Optional, Tuple
 import logging
 
-from .model.FurnaceData import *
-from .model.AMKData import *
-from .model.MMLCommands import *
-from .model.FurnaceEffects import *
-from .util import *
-
-# persistent channel state
-@dataclass
-class FurnaceState:
-    remote_commands: List[RemoteCommand] = field(default_factory=list)
-    fur_ins_idx: int = None
-    echo: bool = True
-    is_legato: bool = False
-    adsr: ADSR = None
+from ..model.FurnaceData import *
+from ..model.MMLCommands import *
+from ..model.MMLData import *
+from ..model.AMKData import *
+from .ConverterUtil import *
+from ..util.MMLUtil import *
 
 @dataclass
 class MappingInfo:
@@ -35,102 +25,24 @@ class InstrumentInfo:
     # list of remote command indices associated with this instrument
     remote_commands: List[AMKRemoteDef] = field(default_factory=list)
 
-class RowConverter:
-    def __init__(self, fur_ticks_per_row: int) -> None:
+# Convert notes and tightly-coupled commands
+# This includes:
+# - pitch slides, which must be contained within a note
+# - envelope-related remote commands
+class NoteConverter():
+    def __init__(self, tick_ratio: float, amk_ticks_per_row: int) -> None:
+        self.amk_ticks_per_row = amk_ticks_per_row
+        self.tick_ratio = tick_ratio
+        self.pitch_slider = PitchSlider(tick_ratio, 0)
+        #init logger
         self.logger = logging.getLogger(__name__)
-        # determine musical duration to map to a furnace row
-        # find first AMK tick value that is greater than or equal to the furnace tick rate
-        self.amk_ticks_per_row = 12
-        for tick_value in MMLUtil.TICK_TO_DURATION.keys():
-            if tick_value >= fur_ticks_per_row:
-                self.amk_ticks_per_row = tick_value
-                break
-
-        # ratio of amk ticks to furnace ticks
-        self.tick_ratio = self.amk_ticks_per_row / fur_ticks_per_row
-        if self.tick_ratio != round(self.tick_ratio):
-            self.logger.warning("Furnace ticks not cleanly convertible to amk ticks.")
-        self.logger.info(f"One Furnace tick is {self.tick_ratio:.2g} AMK ticks.")
-
-    def analyze_pattern_lengths(self, module: FurnaceModule) -> tuple[List[int], List[int], Optional[int]]:
-        """
-        Analyze patterns to determine effective lengths considering jump commands.
-        Also detects the loop point (0B command).
-
-        Returns:
-            - pattern_lengths: [order] -> row count for that pattern
-            - pattern_start_offsets: [order] -> starting row offset
-            - loop_tick: tick position where loop starts (destination of 0B jump, None if no loop)
-        """
-        num_orders = len(module.OrdersPerChannel[0])
-        pattern_lengths = []
-        pattern_start_offsets = []
-        loop_target_order = None  # Track which order the loop jumps to
-
-        next_start_row = 0
-        accumulated_ticks = 0  # Track total ticks for loop calculation
-        for order_idx in range(num_orders):
-            pattern_start_offsets.append(next_start_row)
-
-            # Default: pattern runs from start_row to end
-            effective_length = module.PatternLength - next_start_row
-            next_start_row = 0  # Reset for next pattern
-            jump_found = False
-
-            # Scan all channels for jump commands at this order
-            for ch in range(module.NumChannels):
-                orders = module.OrdersPerChannel[ch]
-
-                pat_id = orders[order_idx]
-                patmap = module.PatternsByChannel[ch]
-                rows = patmap.get(pat_id, [])
-
-                current_start = pattern_start_offsets[-1]
-
-                # Check for jump commands in this pattern
-                for row_idx in range(current_start, len(rows)):
-                    row = rows[row_idx]
-
-                    # 0D: Jump to next pattern at specific row
-                    if effect := row.get_effect(JumpToNextPatternEffect):
-                        effective_length = (row_idx - current_start) + 1
-                        next_start_row = effect.row_number
-                        jump_found = True
-                        break
-
-                    # 0B: Jump to order (also ends pattern and marks loop point)
-                    if effect := row.get_effect(JumpToOrderEffect):
-                        effective_length = (row_idx - current_start) + 1
-                        next_start_row = 0
-                        jump_found = True
-                        # Store the target order for loop tick calculation
-                        loop_target_order = effect.order_number
-                        break
-
-                # If we found a jump command, stop scanning other channels
-                if jump_found:
-                    break
-
-            pattern_lengths.append(effective_length)
-            # Accumulate ticks for next iteration
-            accumulated_ticks += effective_length * self.amk_ticks_per_row
-
-        # Calculate loop tick based on the target order
-        loop_tick = None
-        if loop_target_order is not None:
-            loop_tick = 0
-            for i in range(loop_target_order):
-                if i < len(pattern_lengths):
-                    loop_tick += pattern_lengths[i] * self.amk_ticks_per_row
-
-        return pattern_lengths, pattern_start_offsets, loop_tick
 
     def get_pre_note_commands(self, fur_ins: FurnaceInstrument, ins_info: Dict[int, InstrumentInfo], state: FurnaceState, note_tick: int) -> List[MMLCommand]:
         # instrument echo
         pre_note_commands = []
-        if fur_ins.snes_macro_data.is_echo != state.echo:
+        if fur_ins.snes_macro_data.is_echo != state.is_echo:
             pre_note_commands.append(EchoToggle(note_tick))
-            state.echo = fur_ins.snes_macro_data.is_echo
+            state.is_echo = fur_ins.snes_macro_data.is_echo
 
         # if new instrument, set up remote commands for this instrument
         remote_commands = []
@@ -189,7 +101,7 @@ class RowConverter:
 
         return target_note, command
 
-    def convert_slides(self, tick: int, row: FurnaceRow, slide_helper: PitchSlider, active_note: Optional[int]) -> Tuple[Optional[int], List[MMLCommand]]:
+    def convert_pitch_slides(self, tick: int, row: FurnaceRow, slide_helper: PitchSlider, active_note: Optional[int]) -> Tuple[Optional[int], List[MMLCommand]]:
         commands: List[MMLCommand] = []
         new_active_note = active_note
         if effect := row.get_effect(NoteSlideEffect):
@@ -219,7 +131,8 @@ class RowConverter:
 
         return new_active_note, commands
 
-    def convert_notes(self, flat_rows: List[FurnaceRow], ins_info: Dict[int, InstrumentInfo], instruments: List[FurnaceInstrument]) -> Tuple[List[MMLNote], List[MMLCommand]]:
+    # get notes and pitch-related commands
+    def convert(self, flat_rows: List[FurnaceRow], ins_info: Dict[int, InstrumentInfo], instruments: List[FurnaceInstrument]) -> Tuple[List[MMLNote], List[MMLCommand]]:
         notes: List[MMLNote] = []
         commands: List[MMLCommand] = []
         tick = 0
@@ -252,10 +165,6 @@ class RowConverter:
             note_tick = tick
             if effect := row.get_effect(NoteDelayEffect):
                 note_tick += int(effect.delay_ticks * self.tick_ratio)
-
-            found_legato = False
-            if effect := row.get_effect(QuickLegatoEffect):
-                found_legato = True
                 
             # don't make a new note for portamento rows, pitchbend will handle that
             note_kind = row.kind()
@@ -271,10 +180,6 @@ class RowConverter:
                 if fur_ins.index != state.fur_ins_idx:
                     pre_note_commands = self.get_pre_note_commands(fur_ins, ins_info, state, note_tick)
                     state.fur_ins_idx = fur_ins.index   
-
-                if found_legato != state.is_legato:
-                    pre_note_commands.append(LegatoToggle(note_tick))
-                    state.is_legato = found_legato
 
                 note_to_play, amk_ins_idx = self.get_note_info(row.Ins, row.Note, ins_info, fur_ins.use_sample_map)
                 if note_to_play is None or amk_ins_idx is None:
@@ -308,9 +213,6 @@ class RowConverter:
                     if cur_dur is not None:
                         if pitch_command is not None:
                             cur_dur.pitch_bends.append(pitch_command)
-                        if found_legato != state.is_legato:
-                            cur_dur.pre_note_commands.append(LegatoToggle(note_tick))
-                            state.is_legato = found_legato  
                         cur_dur.duration = note_tick - cur_dur.tick
                         notes.append(cur_dur)
                     else:
@@ -324,9 +226,6 @@ class RowConverter:
             if effect := row.get_effect(QuickLegatoEffect):
                 pre_note_commands = []
                 new_note_onset = note_tick + int(effect.delay * self.tick_ratio)
-                if not state.is_legato:
-                    pre_note_commands.append(LegatoToggle(note_tick))
-                    state.is_legato = True
                 if cur_dur is not None:
                     cur_dur.duration = new_note_onset - cur_dur.tick
                     notes.append(cur_dur)
@@ -337,7 +236,7 @@ class RowConverter:
                 slide_helper.set_target(active_note)
 
             # handle pitch slides after processing this row's note info
-            active_note, pitch_commands = self.convert_slides(tick, row, slide_helper, active_note)
+            active_note, pitch_commands = self.convert_pitch_slides(tick, row, slide_helper, active_note)
             if cur_dur is not None:
                 cur_dur.pitch_bends.extend(pitch_commands)
 
@@ -349,112 +248,4 @@ class RowConverter:
             cur_dur.duration = tick - cur_dur.tick
             notes.append(cur_dur)
 
-        # if necessary, toggle legato off before looping
-        if state.is_legato:
-            notes[-1].pre_note_commands.append(LegatoToggle(tick))
-
         return notes, commands
-
-
-    def convert_volume_commands(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLCommand]:
-        commands: List[MMLCommand] = []
-        # amk ticks
-        tick = 0
-        new_vol = None
-        # furnace volume units per furnace tick
-        slide_helper = VolumeSlider(self.tick_ratio, tick)
-        for row in flat_rows:
-            new_vol = row.Vol
-            slide_command = None
-            if new_vol is not None:
-                slide_command = slide_helper.end_slide()
-                if slide_command is not None:
-                    commands.append(slide_command)
-                slide_helper.set_target(new_vol)
-                commands.append(VolumeChange(tick, MMLUtil.find_v(new_vol)))
-
-            if effect := row.get_effect(VolumeSlideEffect) or row.get_effect(FineVolumeSlideEffect):
-                if new_command := slide_helper.handle_new_effect(effect):
-                    commands.append(new_command)
-            elif slide_command is not None:
-                # restart slide if it was interrupted by a volume command
-                slide_helper.start_slide()
-                
-            if new_command := slide_helper.tick(self.amk_ticks_per_row):
-                commands.append(new_command)
-   
-            tick += self.amk_ticks_per_row
-
-        return commands
-
-    def convert_pan_commands(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLCommand]:
-        commands: List[MMLCommand] = []
-        # amk ticks
-        tick = 0
-        slide_helper = PanSlider(self.tick_ratio, tick)
-        for row in flat_rows:
-            if effect := row.get_effect(PanEffect):
-                slide_helper.set_target(effect.pan_position)
-                amk_pan = FurnaceUtil.unity_to_amk_pan(effect.pan_position)
-                commands.append(PanChange(tick, amk_pan))
-            
-            if effect := row.get_effect(StereoPanEffect):
-                cur_pan = FurnaceUtil.stereo_to_unity_pan(effect.left_volume, effect.right_volume)
-                slide_helper.set_target(cur_pan)
-                amk_pan = FurnaceUtil.stereo_to_amk_pan(effect.left_volume, effect.right_volume)
-                commands.append(PanChange(tick, amk_pan))
-            
-            if effect := row.get_effect(PanSlideEffect):
-                if new_command := slide_helper.handle_new_effect(effect):
-                    commands.append(new_command)
-                        
-            if new_command := slide_helper.tick(self.amk_ticks_per_row):
-                commands.append(new_command)
-
-            tick += self.amk_ticks_per_row
-
-        return commands
-
-    def convert_other_commands(self, flat_rows: List[FurnaceRow]) -> List[MMLCommand]:
-        commands: List[MMLCommand] = []
-        tick = 0
-
-        for row in flat_rows:
-            if effect := row.get_effect(VibratoEffect):
-                # Vibrato off when both speed and depth are 0
-                if effect.speed == 0 and effect.depth == 0:
-                    commands.append(DisableVibrato(tick))
-                else:
-                    if effect.speed > 0:
-                        # Furnace speed (vibratoRate) controls how many positions in the 64-entry sine table
-                        # to advance per tick. One complete cycle = 64 positions.
-                        amk_ticks_per_cycle = (64 * self.tick_ratio) / effect.speed
-                        # 256 scalar seems to make it sounds closer to Furnace vibrato rates
-                        amk_speed = 256 / amk_ticks_per_cycle
-                        # Clamp to valid range (1-255)
-                        speed = max(1, min(255, int(round(amk_speed))))
-                    else:
-                        speed = 0
-
-                    # Furnace depth (0-15) represents vibrato depth where 15 = ±1 semitone
-                    # Map linearly: 15 in Furnace -> 0xC0 in AMK, which sounds about right
-                    amplitude = (effect.depth * 0xC0) // 15
-
-                    commands.append(Vibrato(tick, speed, amplitude))
-
-            tick += self.amk_ticks_per_row
-
-        return commands
-
-    def convert_commands(self, flat_rows: List[FurnaceRow], module: FurnaceModule) -> List[MMLCommand]:
-        # process rows into commands
-        commands: List[MMLCommand] = []
-
-        commands.extend(self.convert_volume_commands(flat_rows, module))
-        commands.extend(self.convert_pan_commands(flat_rows, module))
-        commands.extend(self.convert_other_commands(flat_rows))
-
-        # sort commands by tick
-        sorted_commands = sorted(commands, key=lambda x: x.tick)
-
-        return sorted_commands

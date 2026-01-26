@@ -2,10 +2,10 @@ from typing import Dict, List, Optional
 from dataclasses import dataclass, replace
 import logging
 
-from .model.MMLData import *
-from .model.MMLCommands import *
+from ..model.MMLData import *
+from ..model.MMLCommands import *
 
-from .util import *
+from ..util import *
 
 
 ################################
