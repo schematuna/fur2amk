@@ -33,6 +33,7 @@ from copy_to_amk import main as copy_to_amk_main
 #       print fur2amk version as comment in txt output
 #       support vanilla samples
 #       Portuguese bug, missing SNESFlags, VolScaleL
+#       legato loop state
 
 # --------------------------------------------------------------------------------------
 
