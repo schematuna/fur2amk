@@ -38,6 +38,7 @@ Furnace projects may require optimization if AMK throws an error about ARAM. The
 - E1: Note Slide Up
 - E2: Note Slide Down
 - E6: Quick Legato
+- EA: Toggle Legato
 - ED: Note Delay
 - F3: Fine Volume Slide Up
 - F4: Fine Volume Slide Down

@@ -116,61 +116,32 @@ class LegatoConverter:
         """
         Build a list of tick ranges where legato should be active.
 
-        Global legato (LegatoEffect): Simple on/off that persists.
-        Quick legato (QuickLegatoEffect): Temporary, covers transition from current note to next.
-            - Starts at the quick legato command tick
-            - Ends when: another note starts (not via quick legato) or note ends,
-              unless another quick legato extends it.
+        Builds global and quick legato regions separately, then merges them.
         """
-        regions: List[LegatoRegion] = []
+        global_regions = self._build_global_legato_regions(flat_rows)
+        quick_regions = self._build_quick_legato_regions(flat_rows, notes)
 
-        # State tracking
-        global_legato = False           # Persistent legato from LegatoEffect
-        quick_legato_active = False     # Quick legato is active (waiting to resolve)
+        # Combine and merge overlapping regions
+        all_regions = sorted(global_regions + quick_regions, key=lambda r: r.start_tick)
+        return self._merge_adjacent_regions(all_regions)
+
+    def _build_global_legato_regions(self, flat_rows: List[FurnaceRow]) -> List[LegatoRegion]:
+        """Build regions from LegatoEffect (simple on/off that persists)."""
+        regions: List[LegatoRegion] = []
         current_region: LegatoRegion = None
+        legato_on = False
 
         tick = 0
         for row in flat_rows:
-            row_end = tick + self.amk_ticks_per_row
-
-            # Check for effects
-            legato_effect = row.get_effect(LegatoEffect)
-            quick_legato_effect = row.get_effect(QuickLegatoEffect)
-
-            # Find note that starts within this row (notes can start mid-row)
-            note_in_row = self._get_note_starting_in_range(tick, row_end, notes)
-
-            # Handle LegatoEffect (global on/off)
-            if legato_effect:
-                if legato_effect.legato_on and not global_legato:
-                    # Global legato turning ON
-                    global_legato = True
-                    if current_region is None:
-                        current_region = LegatoRegion(start_tick=tick)
-                elif not legato_effect.legato_on and global_legato:
-                    # Global legato turning OFF
-                    global_legato = False
-                    if current_region and not quick_legato_active:
-                        # Close the region
-                        current_region.end_tick = tick
-                        regions.append(current_region)
-                        current_region = None
-
-            # Handle QuickLegatoEffect
-            # A row with quick legato is guaranteed to have a note
-            if quick_legato_effect:
-                quick_legato_active = True
-                if current_region is None:
+            if legato_effect := row.get_effect(LegatoEffect):
+                if legato_effect.legato_on and not legato_on:
+                    # Legato turning ON
+                    legato_on = True
                     current_region = LegatoRegion(start_tick=tick)
-
-            # Check if quick legato should end
-            elif note_in_row and quick_legato_active:
-                # This note is the destination of the quick legato chain
-                quick_legato_active = False
-
-                # If global legato is off, end the region at this note's start
-                if not global_legato and current_region:
-                    current_region.end_tick = note_in_row.tick
+                elif not legato_effect.legato_on and legato_on:
+                    # Legato turning OFF
+                    legato_on = False
+                    current_region.end_tick = tick
                     regions.append(current_region)
                     current_region = None
 
@@ -181,7 +152,43 @@ class LegatoConverter:
             current_region.end_tick = tick
             regions.append(current_region)
 
-        return self._merge_adjacent_regions(regions)
+        return regions
+
+    def _build_quick_legato_regions(self, flat_rows: List[FurnaceRow], notes: List[MMLNote]) -> List[LegatoRegion]:
+        """
+        Build regions from QuickLegatoEffect.
+
+        Quick legato starts at the effect and ends at the start of the destination note
+        (the first note after the quick legato chain that doesn't have a quick legato effect).
+        """
+        regions: List[LegatoRegion] = []
+        current_region: LegatoRegion = None
+
+        tick = 0
+        for row in flat_rows:
+            row_end = tick + self.amk_ticks_per_row
+            quick_legato_effect = row.get_effect(QuickLegatoEffect)
+            note_in_row = self._get_note_starting_in_range(tick, row_end, notes)
+
+            if quick_legato_effect:
+                # Start a new region if not already in one
+                if current_region is None:
+                    current_region = LegatoRegion(start_tick=tick)
+            elif current_region is not None and note_in_row:
+                # No quick legato on this row, but we're in a region and a note starts here
+                # This note is the destination - end the region at its start
+                current_region.end_tick = note_in_row.tick
+                regions.append(current_region)
+                current_region = None
+
+            tick += self.amk_ticks_per_row
+
+        # Close any open region at end of song
+        if current_region:
+            current_region.end_tick = tick
+            regions.append(current_region)
+
+        return regions
 
     def _merge_adjacent_regions(self, regions: List[LegatoRegion]) -> List[LegatoRegion]:
         """Merge regions that are adjacent or overlapping."""
@@ -217,17 +224,16 @@ class LegatoConverter:
                 # No note active, emit as standalone command
                 commands.append(LegatoToggle(region.start_tick))
 
-            # Find note active at region end and add OFF toggle
+            # Find note that starts at region end and add OFF toggle to its pre_note_commands
+            # AMK docs say we have to turn legato off in the middle of the previous note, but that
+            # doesn't seem to be necessary.
             if region.end_tick is not None:
-                end_note = self._get_note_active_at(region.end_tick - 1, notes)
+                end_note = self._get_note_starting_at(region.end_tick, notes)
                 if end_note:
-                    # Place toggle one tick before the note ends
-                    off_tick = end_note.tick + end_note.duration - 1 if end_note.duration else region.end_tick - 1
-                    commands.append(LegatoToggle(off_tick))
+                    end_note.pre_note_commands.append(LegatoToggle(end_note.tick))
                 else:
-                    # No note active, emit at region end - 1
-                    off_tick = max(0, region.end_tick - 1)
-                    commands.append(LegatoToggle(off_tick))
+                    # No note starts at end_tick, emit as standalone command
+                    commands.append(LegatoToggle(region.end_tick))
 
         return commands
 
@@ -244,5 +250,12 @@ class LegatoConverter:
         """Find the first note that starts within the given tick range [start_tick, end_tick)."""
         for note in notes:
             if start_tick <= note.tick < end_tick:
+                return note
+        return None
+
+    def _get_note_starting_at(self, tick: int, notes: List[MMLNote]) -> Optional[MMLNote]:
+        """Find the note that starts at the given tick."""
+        for note in notes:
+            if note.tick == tick:
                 return note
         return None
