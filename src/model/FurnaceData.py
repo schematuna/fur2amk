@@ -21,16 +21,16 @@ class SustainMode(Enum):
 
 @dataclass
 class FurnaceSNESFlags:
-    antiClick: Optional[bool] = None
-    echo: Optional[bool] = None
-    echoDelay: Optional[int] = None
-    echoFeedback: Optional[int] = None
-    echoFilterCoeffs: Optional[List[int]] = None
-    echoMask: Optional[int] = None
-    echoVolL: Optional[int] = None
-    echoVolR: Optional[int] = None
-    volScaleL: Optional[int] = None
-    volScaleR: Optional[int] = None
+    antiClick: bool = True
+    echo: bool = True
+    echoDelay: int = 0
+    echoFeedback: int = 0
+    echoFilterCoeffs: List[int] = field(default_factory=lambda: [127, 0, 0, 0, 0, 0, 0, 0])
+    echoMask: int = 0
+    echoVolL: int = 127
+    echoVolR: int = 127
+    volScaleL: int = 0
+    volScaleR: int = 0
 
 
 @dataclass
