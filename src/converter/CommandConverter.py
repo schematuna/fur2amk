@@ -149,7 +149,7 @@ class LegatoConverter:
 
         # Close any open region at end of song
         if current_region:
-            current_region.end_tick = tick
+            current_region.end_tick = tick - 1
             regions.append(current_region)
 
         return regions
@@ -185,7 +185,7 @@ class LegatoConverter:
 
         # Close any open region at end of song
         if current_region:
-            current_region.end_tick = tick
+            current_region.end_tick = tick - 1
             regions.append(current_region)
 
         return regions

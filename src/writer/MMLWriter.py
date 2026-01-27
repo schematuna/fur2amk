@@ -125,6 +125,7 @@ class MMLLine:
         self.MIN_CHARS_PER_LINE = 10
         self.sentences: List[MMLSentence] = []
         self.make_sentences(words, measure_length)
+        self.logger = logging.getLogger(__name__)
     
     def __eq__(self, other) -> bool:
         if not isinstance(other, MMLLine):
@@ -132,6 +133,12 @@ class MMLLine:
         return self.sentences == other.sentences
 
     def tick(self) -> int:
+        if len(self.sentences) == 0:
+            self.logger.warning(f"Line has no sentences. section: {self.section_num}")
+            return 0
+        if len(self.sentences[0].words) == 0:
+            self.logger.warning(f"Line has no words. section: {self.section_num}")
+            return 0
         return self.sentences[0].words[0].tick
 
     def convert_sentences(self, mml_state: MMLState) -> List[str]:
@@ -386,7 +393,15 @@ class MMLWriter:
             words.append(word)
         return words
 
-    def get_loop_state_commands(self, words: List[MMLWord]) -> List[MMLCommand]:
+    def get_loop_state_commands(self, words: List[MMLWord]) -> tuple[List[MMLCommand], List[MMLCommand]]:
+        """
+        Get commands needed to handle state at the loop point.
+
+        Returns:
+            Tuple of (pre_loop_commands, post_loop_commands)
+            - pre_loop_commands: Commands to emit just before the loop point
+            - post_loop_commands: Commands to emit just after the loop point
+        """
         # If there are remote commands after the loop point, we need to reset them at the loop point
         has_remote_commands_after_loop = False
         for word in words:
@@ -397,26 +412,39 @@ class MMLWriter:
                         has_remote_commands_after_loop = True
                         break
 
-        loop_state_commands = []
+        pre_loop_commands = []
+        post_loop_commands = []
 
         # state tracking
         cur_ins = None
         cur_remote_commands = []
+        legato_on = False
+        legato_on_at_loop = False  # was legato on when we crossed the loop point?
+
         for word in words:
             is_post_loop = self.mml_data.loop_tick is None or word.tick >= self.mml_data.loop_tick
             first_note_after_loop = is_post_loop and word.note is not None
 
+            # Track legato state from LegatoToggle commands
+            for command in word.commands:
+                if isinstance(command, LegatoToggle):
+                    legato_on = not legato_on
+
+            # Capture legato state at first word after loop
+            if first_note_after_loop:
+                legato_on_at_loop = legato_on
+
             # need to explicitly handle instrument change at loop point, so it's correct on loop
             if first_note_after_loop:
                 if cur_ins is not None:
-                    loop_state_commands.append(InstrumentChange(word.tick, cur_ins))
+                    post_loop_commands.append(InstrumentChange(word.tick, cur_ins))
 
             # also handle remote command state for loop
             if first_note_after_loop and has_remote_commands_after_loop:
                 # could filter these out if they're already in the word, but will let it be simple for now
-                loop_state_commands.insert(0, RemoteCommand(word.tick, 99, RemoteCommandTiming.DISABLE))
+                post_loop_commands.insert(0, RemoteCommand(word.tick, 99, RemoteCommandTiming.DISABLE))
                 for cmd in cur_remote_commands:
-                    loop_state_commands.append(replace(cmd, tick=word.tick))
+                    post_loop_commands.append(replace(cmd, tick=word.tick))
 
             if first_note_after_loop:
                 break
@@ -434,7 +462,15 @@ class MMLWriter:
                 if isinstance(command, InstrumentChange):
                     cur_ins = command.instrument_index
 
-        return loop_state_commands
+        # Handle legato state at loop point
+        # If legato is on in the intro as it passes the loop point, we need to:
+        # 1. Turn it off before the loop point (pre_loop_commands)
+        # 2. Turn it back on after the loop point (post_loop_commands)
+        if legato_on_at_loop and self.mml_data.loop_tick is not None:
+            pre_loop_commands.append(LegatoToggle(self.mml_data.loop_tick - 1))
+            post_loop_commands.insert(0, LegatoToggle(self.mml_data.loop_tick))
+
+        return pre_loop_commands, post_loop_commands
 
 
     def write(self) -> None:
@@ -452,7 +488,7 @@ class MMLWriter:
             # sort again for good measure
             words = sorted(words, key=lambda words : words.tick)
 
-            loop_state_commands = self.get_loop_state_commands(words)
+            pre_loop_commands, post_loop_commands = self.get_loop_state_commands(words)
 
             lines: List[MMLLine] = []
             line_words: List[MMLWord] = []
@@ -480,21 +516,22 @@ class MMLWriter:
                 txt += "; enable light staccato\n"
                 txt += staccato_cmd.get_text(mml_state) + '\n'
 
-            def get_state_reset_text(loop_state_commands: List[MMLCommand]) -> str:
+            def get_commands_text(commands: List[MMLCommand], comment: str) -> str:
                 txt = ''
-                if len(loop_state_commands) > 0:
-                    txt += '; reset state on loop\n'
-                    for cmd in loop_state_commands:
+                if len(commands) > 0:
+                    txt += f'; {comment}\n'
+                    for cmd in commands:
                         txt += cmd.get_text(mml_state) + ' '
                     txt += '\n'
                 return txt
 
             for i, line in enumerate(lines):
                 if not has_loop_point and i == 0:
-                    word_txt += get_state_reset_text(loop_state_commands)
+                    word_txt += get_commands_text(post_loop_commands, 'reset state on loop')
                 elif has_loop_point and line.tick() == self.mml_data.loop_tick:
+                    word_txt += get_commands_text(pre_loop_commands, 'reset state before loop')
                     word_txt += '/\n'
-                    word_txt += get_state_reset_text(loop_state_commands)
+                    word_txt += get_commands_text(post_loop_commands, 'reset state on loop')
                 word_txt += f"; section {MMLUtil.to_hex(line.section_num)}\n"
                 word_txt += line.to_mml(mml_state) + '\n'
 
