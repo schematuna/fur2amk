@@ -39,18 +39,18 @@ class AMKWriter:
         info_align_width = 8
         info = self.amk_data.spc_info
         if info.title:
-            lines.append(f'    {'#title':<{info_align_width}} "{info.get_title()}"')
+            lines.append(f'    {"#title":<{info_align_width}} "{info.get_title()}"')
         if info.game:
-            lines.append(f'    {'#game':<{info_align_width}} "{info.get_game()}"')
+            lines.append(f'    {"#game":<{info_align_width}} "{info.get_game()}"')
         if info.author:
-            lines.append(f'    {'#author':<{info_align_width}} "{info.get_author()}"')
+            lines.append(f'    {"#author":<{info_align_width}} "{info.get_author()}"')
         if info.length:
-            lines.append(f'    {'#length':<{info_align_width}} "{info.length}"')
+            lines.append(f'    {"#length":<{info_align_width}} "{info.length}"')
         # Optional comment: use first line of Message if present
         msg = info.get_comment().strip()
         if msg:
             first_line = msg.splitlines()[0]
-            lines.append(f'    {'#comment':<{info_align_width}} "{first_line}"')
+            lines.append(f'    {"#comment":<{info_align_width}} "{first_line}"')
         lines.append('}')
         self.txt += '\n'.join(lines) + '\n\n'
 
