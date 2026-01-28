@@ -16,10 +16,25 @@ class CompileErrorException(Exception):
 class FurnaceParser:
     """
     Reader for Furnace .fur (INFO/SMP2/INS2/PATN).
+    Supports both old format (INFO, version < 240) and new format (INF2, version >= 240).
     """
+
+    # Element type enum values for version >= 240
+    DIV_ELEMENT_END = 0
+    DIV_ELEMENT_SUBSONG = 1
+    DIV_ELEMENT_CHIP_FLAGS = 2
+    DIV_ELEMENT_ASSET_DIR = 3
+    DIV_ELEMENT_INSTRUMENT = 4
+    DIV_ELEMENT_WAVETABLE = 5
+    DIV_ELEMENT_SAMPLE = 6
+    DIV_ELEMENT_PATTERN = 7
+    DIV_ELEMENT_COMPAT_FLAGS = 8
+    DIV_ELEMENT_COMMENTS = 9
+    DIV_ELEMENT_GROOVE = 10
 
     def __init__(self):
         self.logger = logging.getLogger(__name__)
+        self.version = 0
 
     def parse(self, filename: str) -> FurnaceModule:
         self.logger.debug(f"Parsing {filename}")
@@ -43,29 +58,42 @@ class FurnaceParser:
         bio = io.BytesIO(data)
         # Header (32 bytes)
         _ = bio.read(16)  # magic
-        version = self._ru16(bio)
+        self.version = self._ru16(bio)
+        print(f"Furnace version: {self.version}")
         # patterns require version 157+
         # instruments require version 127+
         # sound chip flags require version 118+
         # samples require version 102+
-        if version < 157:
-            raise CompileErrorException(f"Unsupported Furnace version {version}, cannot read patterns")
+        if self.version < 157:
+            raise CompileErrorException(f"Unsupported Furnace version {self.version}, cannot read patterns")
         bio.read(2)  # reserved
         info_ptr = self._ru32(bio)
         bio.read(8)  # reserved
 
-        # First, try to read INFO at info_ptr
+        # First, try to read header at info_ptr
         inst_ptrs: List[int] = []
         samp_ptrs: List[int] = []
         patn_ptrs: List[int] = []
+        subsong_ptrs: List[int] = []
+        chip_flags_ptrs: List[Tuple[int, int]] = []
+
         try:
             if 0 < info_ptr < len(data) - 8:
                 tag = data[info_ptr:info_ptr+4]
                 size = int.from_bytes(data[info_ptr+4:info_ptr+8], 'little')
-                if tag == b'INFO' and (info_ptr+8+size) <= len(data):
-                    payload = data[info_ptr+8:info_ptr+8+size]
-                    inst_ptrs, samp_ptrs, patn_ptrs, chip_flags_ptrs = self._parse_INFO(mod, io.BytesIO(payload))
-        except Exception:
+
+                if self.version >= 240:
+                    # New format: INF2 header
+                    if tag == b'INF2' and (info_ptr+8+size) <= len(data):
+                        payload = data[info_ptr+8:info_ptr+8+size]
+                        inst_ptrs, samp_ptrs, patn_ptrs, chip_flags_ptrs, subsong_ptrs = self._parse_INF2(mod, io.BytesIO(payload))
+                else:
+                    # Old format: INFO header
+                    if tag == b'INFO' and (info_ptr+8+size) <= len(data):
+                        payload = data[info_ptr+8:info_ptr+8+size]
+                        inst_ptrs, samp_ptrs, patn_ptrs, chip_flags_ptrs = self._parse_INFO(mod, io.BytesIO(payload))
+        except Exception as e:
+            self.logger.error(f"Error parsing header: {e}")
             # Fall back to scanning for INFO in the stream
             pass
 
@@ -82,20 +110,32 @@ class FurnaceParser:
                 size = int.from_bytes(data[off+4:off+8], 'little')
                 if tag == b'INS2' and off+8+size <= len(data):
                     self._parse_INS2(mod, io.BytesIO(data[off+8:off+8+size]))
+
         for off in patn_ptrs:
             if 0 < off+8 <= len(data):
                 tag = data[off:off+4]
                 size = int.from_bytes(data[off+4:off+8], 'little')
                 if tag == b'PATN' and off+8+size <= len(data):
                     self._parse_PATN(mod, io.BytesIO(data[off+8:off+8+size]))
-        # Associate chip type bytes with chip flag pointers; capture SNES (0x87) if present
+        # Associate chip type bytes with chip flag pointers; capture SNES (0x87 or 0x0087) if present
         for chip_byte, off in chip_flags_ptrs:
-            if chip_byte == 0x87 and 0 < off + 8 < len(data):
-                tag = data[off:off+4] # FLAG tag
+            # SNES chip ID is 0x87 (old format) or could be 0x0087 (new format short)
+            if chip_byte in (0x87, 0x0087) and 0 < off + 8 < len(data):
+                tag = data[off:off+4]  # FLAG tag
                 size = int.from_bytes(data[off+4:off+8], 'little')
                 if tag == b'FLAG' and off+8+size <= len(data):
                     flag_data = data[off+8:off+8+size]
                     self._parse_FLAG(mod, flag_data)
+
+        # Parse subsong blocks (SNG2) for version >= 240 to get timing/order data
+        if subsong_ptrs:
+            # Only parse first subsong for now (main song)
+            off = subsong_ptrs[0]
+            if 0 < off + 8 <= len(data):
+                tag = data[off:off+4]
+                size = int.from_bytes(data[off+4:off+8], 'little')
+                if tag == b'SNG2' and off+8+size <= len(data):
+                    self._parse_SNG2(mod, io.BytesIO(data[off+8:off+8+size]))
 
         return mod
 
@@ -176,6 +216,138 @@ class FurnaceParser:
             chip_pairs.append((int(chip_bytes[i]), int(chip_flags_ptrs[i])))
 
         return inst_ptrs, samp_ptrs, patn_ptrs, chip_pairs
+
+    def _parse_INF2(self, mod: FurnaceModule, s: io.BytesIO) -> Tuple[List[int], List[int], List[int], List[Tuple[int, int]], List[int]]:
+        """Parse INF2 header block for Furnace version >= 240."""
+        # Song information (strings)
+        name = self._rstr(s)
+        author = self._rstr(s)
+        _system_name = self._rstr(s)
+        _category = self._rstr(s)
+        _name_j = self._rstr(s)
+        _author_j = self._rstr(s)
+        _system_name_j = self._rstr(s)
+        _category_j = self._rstr(s)
+
+        if name:
+            mod.SongName = name.replace('/', '-').replace('\\', '-')
+        if author:
+            mod.Author = author.replace('/', '-').replace('\\', '-')
+
+        # Tuning and autoSystem
+        _tuning = self._rf32(s)
+        _auto_system = self._ru8(s)
+
+        # System definition
+        _master_vol = self._rf32(s)
+        mod.GV = float(_master_vol) if _master_vol else 1.0
+        num_chans = self._ru16(s)
+        system_len = self._ru16(s)
+
+        # For SNES, we expect 8 channels
+        mod.NumChannels = num_chans if num_chans > 0 else 8
+
+        # Ensure containers sized by channels
+        if not mod.OrdersPerChannel or len(mod.OrdersPerChannel) != mod.NumChannels:
+            mod.OrdersPerChannel = [[] for _ in range(mod.NumChannels)]
+        if not mod.PatternsByChannel or len(mod.PatternsByChannel) != mod.NumChannels:
+            mod.PatternsByChannel = [dict() for _ in range(mod.NumChannels)]
+
+        # Read system data for each chip
+        chip_types: List[int] = []
+        for _ in range(system_len):
+            sys_id = self._ru16(s)
+            chip_types.append(sys_id)
+            _sys_chans = self._ru16(s)
+            _sys_vol = self._rf32(s)
+            _sys_pan = self._rf32(s)
+            _sys_pan_fr = self._rf32(s)
+
+        # Patchbay
+        num_conns = self._ru32(s)
+        for _ in range(num_conns):
+            _conn = self._ru32(s)
+        _patchbay_auto = self._ru8(s)
+
+        # Read elements until DIV_ELEMENT_END
+        inst_ptrs: List[int] = []
+        samp_ptrs: List[int] = []
+        patn_ptrs: List[int] = []
+        subsong_ptrs: List[int] = []
+        chip_flags_ptrs: List[int] = []
+
+        while True:
+            element_type = self._ru8(s)
+            if element_type == self.DIV_ELEMENT_END:
+                break
+            elif element_type == self.DIV_ELEMENT_SUBSONG:
+                subsong_ptrs = list(self._read_element_ptrs(s))
+            elif element_type == self.DIV_ELEMENT_CHIP_FLAGS:
+                chip_flags_ptrs = list(self._read_element_ptrs(s))
+            elif element_type == self.DIV_ELEMENT_INSTRUMENT:
+                inst_ptrs = list(self._read_element_ptrs(s))
+            elif element_type == self.DIV_ELEMENT_SAMPLE:
+                samp_ptrs = list(self._read_element_ptrs(s))
+            elif element_type == self.DIV_ELEMENT_PATTERN:
+                patn_ptrs = list(self._read_element_ptrs(s))
+            else:
+                # Skip unknown element types (ASSET_DIR, WAVETABLE, COMPAT_FLAGS, COMMENTS, GROOVE, etc.)
+                num_elements = self._ru32(s)
+                for _ in range(num_elements):
+                    self._ru32(s)
+
+        # Pair chip types with chip flags pointers
+        chip_pairs: List[Tuple[int, int]] = []
+        for i in range(min(len(chip_types), len(chip_flags_ptrs))):
+            chip_pairs.append((chip_types[i], chip_flags_ptrs[i]))
+
+        return inst_ptrs, samp_ptrs, patn_ptrs, chip_pairs, subsong_ptrs
+
+    def _read_element_ptrs(self, s: io.BytesIO) -> List[int]:
+        """Read element pointer array: count (u32) followed by count pointers (u32 each)."""
+        num_elements = self._ru32(s)
+        ptrs = []
+        for _ in range(num_elements):
+            ptrs.append(self._ru32(s))
+        return ptrs
+
+    def _parse_SNG2(self, mod: FurnaceModule, s: io.BytesIO) -> None:
+        """Parse SNG2 subsong block for Furnace version >= 240 to extract timing data."""
+        hz = self._rf32(s)
+        _arp_len = self._ru8(s)
+        _effect_divider = self._ru8(s)
+
+        pat_len = self._ru16(s)
+        ord_len = self._ru16(s)
+
+        hl_a = self._ru8(s)
+        hl_b = self._ru8(s)
+
+        _virtual_tempo_n = self._ru16(s)
+        _virtual_tempo_d = self._ru16(s)
+
+        speeds_len = self._ru8(s)
+        speeds = []
+        for _ in range(16):
+            speeds.append(self._ru16(s))
+
+        _subsong_name = self._rstr(s)
+        _subsong_notes = self._rstr(s)
+
+        # Store timing data in module (use first subsong's data)
+        mod.PatternLength = max(1, int(pat_len) or 64)
+        mod.HighlightA = int(hl_a) or 4
+        mod.HighlightB = int(hl_b) or 16
+        mod.TicksPerSecond = float(hz)
+        mod.Speed1 = int(speeds[0]) if speeds_len > 0 else 6
+        mod.Speed2 = int(speeds[1]) if speeds_len > 1 else 0
+
+        # Read orders for each channel
+        for ch in range(mod.NumChannels):
+            col = []
+            for _ in range(ord_len):
+                col.append(self._ru8(s))
+            mod.OrdersPerChannel[ch] = col
 
     def _parse_SMP2(self, mod: FurnaceModule, s: io.BytesIO) -> None:
         name = self._rstr(s)
@@ -365,7 +537,6 @@ class FurnaceParser:
         mod.Instruments.append(ins)
 
     def _parse_PATN(self, mod: FurnaceModule, s: io.BytesIO) -> None:
-        # Decode Furnace PATN block minimally (based on fur2tad logic)
         _song_index = self._ru8(s)
         channel = self._ru8(s)
         pat_index = self._ru16(s)
