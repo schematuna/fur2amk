@@ -97,7 +97,15 @@ class FurnaceParser:
             # Fall back to scanning for INFO in the stream
             pass
 
-        # Pointer-driven parse of SMP2, INS2, and PATN blocks
+        # Pointer-driven parse of SNG2, SMP2, INS2, and PATN blocks
+        if subsong_ptrs: # only for version >= 240
+            # Only parse first subsong for now (main song)
+            off = subsong_ptrs[0]
+            if 0 < off + 8 <= len(data):
+                tag = data[off:off+4]
+                size = int.from_bytes(data[off+4:off+8], 'little')
+                if tag == b'SNG2' and off+8+size <= len(data):
+                    self._parse_SNG2(mod, io.BytesIO(data[off+8:off+8+size]))
         for off in samp_ptrs:
             if 0 < off+8 <= len(data):
                 tag = data[off:off+4]
@@ -126,16 +134,6 @@ class FurnaceParser:
                 if tag == b'FLAG' and off+8+size <= len(data):
                     flag_data = data[off+8:off+8+size]
                     self._parse_FLAG(mod, flag_data)
-
-        # Parse subsong blocks (SNG2) for version >= 240 to get timing/order data
-        if subsong_ptrs:
-            # Only parse first subsong for now (main song)
-            off = subsong_ptrs[0]
-            if 0 < off + 8 <= len(data):
-                tag = data[off:off+4]
-                size = int.from_bytes(data[off+4:off+8], 'little')
-                if tag == b'SNG2' and off+8+size <= len(data):
-                    self._parse_SNG2(mod, io.BytesIO(data[off+8:off+8+size]))
 
         return mod
 
