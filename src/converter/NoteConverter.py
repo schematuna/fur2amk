@@ -168,12 +168,19 @@ class NoteConverter():
                 
             # don't make a new note for portamento rows, pitchbend will handle that
             note_kind = row.kind()
-            if note_kind == FurnaceRow.NoteKind.NOTE and not has_portamento:
-                fur_ins = None
+            if note_kind == FurnaceRow.NoteKind.NOTE and not has_portamento:                    
+                new_fur_ins = None
                 for ins in instruments:
                     if ins.index == row.Ins:
-                        fur_ins = ins
+                        new_fur_ins = ins
                         break
+
+                if new_fur_ins is not None:
+                    fur_ins = new_fur_ins
+
+                if fur_ins is None:
+                    self.logger.error(f"No furnace instrument active in row with Note {row.Note}.")
+                    continue
 
                 pre_note_commands = []
                 # we only have to set up pre-note commands for new instruments
@@ -181,8 +188,9 @@ class NoteConverter():
                     pre_note_commands = self.get_pre_note_commands(fur_ins, ins_info, state, note_tick)
                     state.fur_ins_idx = fur_ins.index   
 
-                note_to_play, amk_ins_idx = self.get_note_info(row.Ins, row.Note, ins_info, fur_ins.use_sample_map)
+                note_to_play, amk_ins_idx = self.get_note_info(fur_ins.index, row.Note, ins_info, fur_ins.use_sample_map)
                 if note_to_play is None or amk_ins_idx is None:
+                    self.logger.error(f"No note to play or AMK instrument index found for Furnace instrument {fur_ins.index}, note {row.Note}.")
                     continue
 
                 pitch_command = None
