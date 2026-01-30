@@ -122,7 +122,7 @@ class RowConverter:
         
         volume_converter    = VolumeConverter(self.tick_ratio, self.amk_ticks_per_row)
         pan_converter       = PanConverter(self.tick_ratio, self.amk_ticks_per_row)
-        vibrato_converter   = VibratoConverter()
+        vibrato_converter   = VibratoConverter(self.tick_ratio)
         state = FurnaceState()
         for row in flat_rows:
             # commands.extend(legato_converter.convert_row(row, tick, state))
