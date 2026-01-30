@@ -59,7 +59,7 @@ class FurnaceParser:
         # Header (32 bytes)
         _ = bio.read(16)  # magic
         self.version = self._ru16(bio)
-        print(f"Furnace version: {self.version}")
+        self.logger.info(f"Furnace version: {self.version}")
         # patterns require version 157+
         # instruments require version 127+
         # sound chip flags require version 118+
