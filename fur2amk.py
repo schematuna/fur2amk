@@ -26,14 +26,9 @@ from copy_to_amk import main as copy_to_amk_main
 #       preserve furnace channel names
 #       "Divider" BPM control
 #       Recommended furnace pre-emphasis settings?
-#       legato effect
 #       support virtual tempo (simple tempo multiplier)
-#       sample fine tune
 #       better automatic section/row reporting in log messages
-#       print fur2amk version as comment in txt output
 #       support vanilla samples
-#       Portuguese bug, missing SNESFlags, VolScaleL
-#       legato loop state
 
 # --------------------------------------------------------------------------------------
 
