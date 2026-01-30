@@ -34,7 +34,7 @@ You can optionally edit `fur2amk_config.json` to set the AddmusicK directory pat
 
 ```json
 {
-    "amk_dir": "..\\AddmusicK_1.0.11"
+    "amk_dir": "../AddmusicK_1.0.11"
 }
 ```
 
