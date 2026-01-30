@@ -64,6 +64,9 @@ class PanConverter():
         return commands
 
 class VibratoConverter():
+    def __init__(self, tick_ratio: float) -> None:
+        self.tick_ratio = tick_ratio
+        
     def convert_row(self, row: FurnaceRow, tick: int, state: FurnaceState) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
         if effect := row.get_effect(VibratoEffect):
