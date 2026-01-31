@@ -7,9 +7,6 @@ on:
   # Allow manual trigger for testing
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   nightly:
     runs-on: ubuntu-latest
@@ -46,16 +43,10 @@ jobs:
         if: steps.check_commits.outputs.commits != '0'
         run: python make_release.py --nightly
 
-      - name: Upload to nightly release
+      - name: Upload artifact
         if: steps.check_commits.outputs.commits != '0'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Delete existing nightly release if it exists
-          gh release delete nightly --yes || true
-          git push origin :refs/tags/nightly || true
-          # Create new nightly release
-          gh release create nightly releases/*.zip \
-            --title "Nightly Build" \
-            --notes "Automated nightly build from $(date -u +%Y-%m-%d)" \
-            --prerelease
+        uses: actions/upload-artifact@v4
+        with:
+          name: fur2amk-nightly
+          path: releases/*.zip
+          retention-days: 30
