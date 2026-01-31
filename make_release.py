@@ -7,6 +7,7 @@ Creates a distributable zip file with all necessary files.
 import argparse
 import re
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 
@@ -44,6 +45,20 @@ def write_version(major: int, minor: int, build: int) -> None:
         'VERSION = f"{VERSION_MAJOR}.{VERSION_MINOR}.{VERSION_BUILD}"',
     ]
     version_file.write_text("\n".join(lines) + "\n")
+
+
+def run_tests() -> bool:
+    """Run the test suite. Returns True if all tests pass."""
+    script_dir = Path(__file__).parent
+    test_script = script_dir / "run_tests.py"
+
+    if not test_script.exists():
+        print("Warning: run_tests.py not found, skipping tests")
+        return True
+
+    print("Running tests...")
+    result = subprocess.run([sys.executable, str(test_script)], cwd=script_dir)
+    return result.returncode == 0
 
 
 def make_release(version: str) -> None:
@@ -137,6 +152,11 @@ def main() -> None:
 
     version = f"{major}.{minor}.{build}"
 
+    if not run_tests():
+        print("\nTests failed. Aborting release.")
+        sys.exit(1)
+
+    print()  # blank line after test output
     make_release(version)
 
 
