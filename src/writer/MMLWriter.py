@@ -32,6 +32,16 @@ class MMLWord:
     note: Optional[int] = None
     commands: List[MMLCommand] = field(default_factory=list)
 
+    def _format_duration_to_cmd(self, duration_ticks: int, cont: bool, next_cmd: MMLCommand) -> str:
+        """Format a duration segment before a command."""
+        # PitchBend requires the prior duration to be a singular duration
+        no_ties = isinstance(next_cmd, PitchBend)
+        result = DurationFormatter.format(duration_ticks, cont, no_ties)
+        # don't add space if next command is a tie break
+        if not isinstance(next_cmd, TieBreakCommand):
+            result += ' '
+        return result
+
     def to_mml(self, mml_state: MMLState) -> str:
         word_txt = ''
         command_idx = 0
@@ -63,12 +73,10 @@ class MMLWord:
             first_cmd = self.commands[command_idx]
             first_cmd_tick = first_cmd.tick
             if first_cmd_tick > cur_tick:
-                word_txt += DurationFormatter.format(first_cmd_tick - cur_tick, cont)
-                if not isinstance(first_cmd, TieBreakCommand): # don't add space if first command is a tie break
-                    word_txt += ' '
+                word_txt += self._format_duration_to_cmd(first_cmd_tick - cur_tick, cont, first_cmd)
                 cur_tick = first_cmd_tick
                 cont = True
-        
+
         # Interleave commands with duration
         while command_idx < len(self.commands):
             command = self.commands[command_idx]
@@ -84,11 +92,7 @@ class MMLWord:
                 next_cmd = self.commands[command_idx]
                 next_cmd_tick = next_cmd.tick
                 if next_cmd_tick > cur_tick:
-                    # PitchBend requires the prior duration to be a singular duration
-                    no_ties = isinstance(next_cmd, PitchBend)
-                    word_txt += DurationFormatter.format(next_cmd_tick - cur_tick, cont, no_ties)
-                    if not isinstance(next_cmd, TieBreakCommand): # don't add space if next command is a tie break
-                        word_txt += ' '
+                    word_txt += self._format_duration_to_cmd(next_cmd_tick - cur_tick, cont, next_cmd)
                     cur_tick = next_cmd_tick
                     cont = True
 
@@ -353,7 +357,7 @@ class MMLWriter:
         cur_ins = None
         cmd_idx = 0
         rests = self.get_rests(notes)
-        durations = sorted(notes + rests, key=lambda dur : dur.tick)
+        durations: List[MMLNote | MMLRest] = sorted(notes + rests, key=lambda dur : dur.tick)
         # can't have the loop point in the middle of a duration
         durations = self.split_durations_at_loop(durations)
         for duration in durations:
