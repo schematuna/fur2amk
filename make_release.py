@@ -9,6 +9,7 @@ import re
 import shutil
 import subprocess
 import sys
+from datetime import date
 from pathlib import Path
 
 
@@ -128,29 +129,35 @@ def main() -> None:
     parser.add_argument("--major", action="store_true", help="Increment major version (resets minor and build to 0)")
     parser.add_argument("--minor", action="store_true", help="Increment minor version (resets build to 0)")
     parser.add_argument("--build", action="store_true", help="Increment build number")
+    parser.add_argument("--nightly", action="store_true", help="Create a nightly build (appends date, doesn't modify version file)")
     args = parser.parse_args()
 
     major, minor, build = read_version()
 
-    if args.major:
+    if args.nightly:
+        version = f"{major}.{minor}.{build}-nightly.{date.today().strftime('%Y%m%d')}"
+        print(f"Creating nightly build: {version}")
+    elif args.major:
         major += 1
         minor = 0
         build = 0
         write_version(major, minor, build)
         print(f"Version updated to {major}.{minor}.{build}")
+        version = f"{major}.{minor}.{build}"
     elif args.minor:
         minor += 1
         build = 0
         write_version(major, minor, build)
         print(f"Version updated to {major}.{minor}.{build}")
+        version = f"{major}.{minor}.{build}"
     elif args.build:
         build += 1
         write_version(major, minor, build)
         print(f"Version updated to {major}.{minor}.{build}")
+        version = f"{major}.{minor}.{build}"
     else:
         print(f"Using current version {major}.{minor}.{build} (not incrementing)")
-
-    version = f"{major}.{minor}.{build}"
+        version = f"{major}.{minor}.{build}"
 
     if not run_tests():
         print("\nTests failed. Aborting release.")

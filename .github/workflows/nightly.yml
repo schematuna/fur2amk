@@ -1,0 +1,52 @@
+name: Nightly Build
+
+on:
+  schedule:
+    # Run at midnight UTC every day
+    - cron: '0 0 * * *'
+  # Allow manual trigger for testing
+  workflow_dispatch:
+
+jobs:
+  nightly:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Need full history to check for recent commits
+
+      - name: Check for recent commits
+        id: check_commits
+        run: |
+          # Check if there were commits in the last 24 hours
+          COMMITS=$(git log --oneline --since="24 hours ago" | wc -l)
+          echo "commits=$COMMITS" >> $GITHUB_OUTPUT
+          if [ "$COMMITS" -eq 0 ]; then
+            echo "No commits in the last 24 hours, skipping build"
+          else
+            echo "Found $COMMITS commit(s) in the last 24 hours"
+          fi
+
+      - name: Set up Python
+        if: steps.check_commits.outputs.commits != '0'
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Run tests
+        if: steps.check_commits.outputs.commits != '0'
+        run: python run_tests.py
+
+      - name: Build nightly release
+        if: steps.check_commits.outputs.commits != '0'
+        run: python make_release.py --nightly
+
+      - name: Upload artifact
+        if: steps.check_commits.outputs.commits != '0'
+        uses: actions/upload-artifact@v4
+        with:
+          name: fur2amk-nightly
+          path: releases/*.zip
+          retention-days: 30
