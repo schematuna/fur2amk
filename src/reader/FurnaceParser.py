@@ -675,8 +675,8 @@ class FurnaceParser:
             return ''
 
     def _sanitize_name(self, text: str) -> str:
-        # Keep alnum, space, underscore, dash; replace others with underscore.
-        return ''.join(ch if (ch.isalnum() or ch in ' _-') else '_' for ch in text).strip() or 'Sample'
+        # Keep alnum, space, underscore, dash, @; replace others with underscore.
+        return ''.join(ch if (ch.isalnum() or ch in ' _-@') else '_' for ch in text).strip() or 'Sample'
 
     def _read_u32_list(self, s: io.BytesIO, n: int):
         for _ in range(int(n)):
