@@ -44,6 +44,12 @@ Furnace projects may require optimization if AMK throws an error about ARAM. The
 - F4: Fine Volume Slide Down
 - FA: Fast Volume Slide
 
+## Vanilla Samples
+
+To use a vanilla SMW sample, put "@N" in the name of the sample in Furnace, where N is the stock SMW instrument whose sample you'd like to use. When the conversion runs, the original sample will be used rather than the Furnace sample data.
+
+In the `templates` folder of the fur2amk download, there is a "Default Unsampled SMW" Furnace project with all of the vanilla samples already inserted and properly named. There are also instruments set up for them with stock SMW ADSRs as well. I recommend using this as a starting point if you'd like to make a vanilla port.
+
 ## Gain Handling
 
 If the gain macro is used in Furnace, the first gain value is used as the primary gain setting for the instrument. The second gain value is handled via a remote command. Any more gain values will not be converted.

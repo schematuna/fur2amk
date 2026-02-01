@@ -28,7 +28,6 @@ from copy_to_amk import main as copy_to_amk_main
 #       Recommended furnace pre-emphasis settings?
 #       support virtual tempo (simple tempo multiplier)
 #       better automatic section/row reporting in log messages
-#       support vanilla samples
 #       use amk 4 instead of 2, so Fu doesn't get mad
 
 # --------------------------------------------------------------------------------------
