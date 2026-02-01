@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import logging
+import re
 import sys
 from typing import Dict, Optional, Tuple
 
@@ -57,6 +58,9 @@ class AMKWriter:
     def add_sample_info(self, path_name: str) -> None:
         sample_lines = [f'#path "{path_name}"', '', '#samples', '{', '    #optimized']
         for _, sample in self.amk_data.samples.items():
+            # Skip samples with @N pattern (references vanilla sample)
+            if re.search(r'@\d+', sample.filename):
+                continue
             brr_rel = f'{sample.filename}'
             sample_lines.append(f'    "{brr_rel}"')
         sample_lines.append('}')
@@ -70,22 +74,40 @@ class AMKWriter:
         # Map of (instrument_index, sample_index) -> AMK instrument number
         self.insnum_map: Dict[Tuple[int, Optional[int]], int] = {}
         next_num = 30
-        name_col = max(len(sample.filename) for sample in self.amk_data.samples.values())
-        # get max sample name length for alignment
-        name_field_width = name_col + 2  # account for quotes
+
+        samp_names = [''] * len(self.amk_data.instruments)
         for idx, amk_ins in enumerate(self.amk_data.instruments):
             if amk_ins.is_noise:
                 # Noise instrument
-                samp_name = f'n{(amk_ins.noise_freq):02X}'
-                self.logger.debug(f"Emitting noise instrument {samp_name} for instrument {MMLUtil.to_hex(idx)}.")
+                samp_names[idx] = f'n{(amk_ins.noise_freq):02X}'
+                self.logger.debug(f"Emitting noise instrument {samp_names[idx]} for instrument {MMLUtil.to_hex(idx)}.")
             else:
                 # Resolve sample filename and tuning
                 samp_entry = self.amk_data.samples[amk_ins.sample_index]
                 if not samp_entry:
                     # Fallback to first sample
                     samp_entry = next(iter(self.amk_data.samples.values()), AMKSample(filename="Sample1.brr", tuning="$01 $00"))
-                samp_name = f'"{samp_entry.filename}"'
+                
+                # Check for @N pattern (indicates a vanilla sample)
+                at_match = re.search(r'@\d+', samp_entry.filename)
+                if at_match:
+                    samp_names[idx] = at_match.group()
+                else:
+                    samp_names[idx] = f'"{samp_entry.filename}"'
+
+        # get max sample name length for alignment
+        name_field_width = max(len(name) for name in samp_names) + 1
+        for idx, amk_ins in enumerate(self.amk_data.instruments):
+            if not amk_ins.is_noise:
+                # Resolve sample filename and tuning
+                samp_entry = self.amk_data.samples[amk_ins.sample_index]
+                if not samp_entry:
+                    # Fallback to first sample
+                    samp_entry = next(iter(self.amk_data.samples.values()), AMKSample(filename="Sample1.brr", tuning="$01 $00"))
+                
                 samp_tuning = samp_entry.tuning
+            else:
+                samp_tuning = "$00 $00"  # tuning not used for noise
             # ADSR/GAIN
             # Default: no envelope -> $00 $00
             da = 0x00
@@ -110,7 +132,7 @@ class AMKWriter:
                 else:
                     self.logger.debug(f"Instrument {idx:02X} uses gain mode but has no SNES gain set; defaulting to 0.")
                     ga = 0x00
-            lines.append(f'    {samp_name:<{name_field_width}} ${da:02X} ${sr:02X} ${ga:02X} {samp_tuning} ;@{next_num}')
+            lines.append(f'    {samp_names[idx]:<{name_field_width}} ${da:02X} ${sr:02X} ${ga:02X} {samp_tuning} ;@{next_num}')
             next_num += 1
         lines.append('}')
         self.txt += '\n'.join(lines) + '\n\n'
