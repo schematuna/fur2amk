@@ -102,7 +102,7 @@ def make_release(version: str) -> None:
         print("Warning: fur2amk_config.json.template not found")
 
     # Copy directories (excluding __pycache__)
-    dirs_to_copy = ["src", "examples"]
+    dirs_to_copy = ["src", "examples", "templates"]
     for dirname in dirs_to_copy:
         src = script_dir / dirname
         if not src.exists():
