@@ -91,6 +91,9 @@ class AMKWriter:
                 # Check for @N pattern (indicates a vanilla sample)
                 at_match = re.search(r'@\d+', samp_entry.filename)
                 if at_match:
+                    num = at_match.group()[1:]  # skip '@'
+                    if int(num) >= 30:
+                        self.logger.warning(f"Vanilla sample reference {at_match.group()} is too high. Vanilla instruments don't go higher than @29")
                     samp_names[idx] = at_match.group()
                 else:
                     samp_names[idx] = f'"{samp_entry.filename}"'
