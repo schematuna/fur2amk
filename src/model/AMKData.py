@@ -11,6 +11,11 @@ class AMKEnvelope:
     release: int = 0
 
 @dataclass
+class AMKSample:
+    filename: str
+    tuning: str
+
+@dataclass
 class AMKInstrument:
     sample_index: Optional[int] = None
 
@@ -84,7 +89,7 @@ class AMKData:
 
     sample_path: str = ""
     # index -> filename, tuning string
-    samples: Dict[int, Tuple[str, str]] = field(default_factory=dict)
+    samples: Dict[int, AMKSample] = field(default_factory=dict)
     instruments: List[AMKInstrument] = field(default_factory=list)
 
     tempo: int = 0

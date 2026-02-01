@@ -4,7 +4,7 @@ import logging
 import sys
 from typing import Dict, Optional, Tuple
 
-from ..model.AMKData import AMKData
+from ..model.AMKData import *
 from ..version import VERSION
 
 from .MMLWriter import MMLWriter
@@ -56,8 +56,8 @@ class AMKWriter:
 
     def add_sample_info(self, path_name: str) -> None:
         sample_lines = [f'#path "{path_name}"', '', '#samples', '{', '    #optimized']
-        for _, (samp_name, _) in self.amk_data.samples.items():
-            brr_rel = f'{samp_name}'
+        for _, sample in self.amk_data.samples.items():
+            brr_rel = f'{sample.filename}'
             sample_lines.append(f'    "{brr_rel}"')
         sample_lines.append('}')
         self.txt += '\n'.join(sample_lines) + '\n\n'
@@ -70,7 +70,7 @@ class AMKWriter:
         # Map of (instrument_index, sample_index) -> AMK instrument number
         self.insnum_map: Dict[Tuple[int, Optional[int]], int] = {}
         next_num = 30
-        name_col = max(len(name) for name, _ in self.amk_data.samples.values())
+        name_col = max(len(sample.filename) for sample in self.amk_data.samples.values())
         # get max sample name length for alignment
         name_field_width = name_col + 2  # account for quotes
         for idx, amk_ins in enumerate(self.amk_data.instruments):
@@ -83,9 +83,9 @@ class AMKWriter:
                 samp_entry = self.amk_data.samples[amk_ins.sample_index]
                 if not samp_entry:
                     # Fallback to first sample
-                    samp_entry = next(iter(self.amk_data.samples.values()), ("Sample1.brr", "$01 $00"))
-                samp_name, samp_tuning = samp_entry
-                samp_name = f'"{samp_name}"'
+                    samp_entry = next(iter(self.amk_data.samples.values()), AMKSample(filename="Sample1.brr", tuning="$01 $00"))
+                samp_name = f'"{samp_entry.filename}"'
+                samp_tuning = samp_entry.tuning
             # ADSR/GAIN
             # Default: no envelope -> $00 $00
             da = 0x00

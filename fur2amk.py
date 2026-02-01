@@ -29,8 +29,7 @@ from copy_to_amk import main as copy_to_amk_main
 #       support virtual tempo (simple tempo multiplier)
 #       better automatic section/row reporting in log messages
 #       support vanilla samples
-#       automatic units tests with make_release.py
-#       E1 not perfect, according to Yuzu
+#       use amk 4 instead of 2, so Fu doesn't get mad
 
 # --------------------------------------------------------------------------------------
 

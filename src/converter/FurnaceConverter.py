@@ -40,7 +40,7 @@ class FurnaceConverter:
                 val = int(round(float(s.c4_rate) * 768 / 12539))
                 tuning_word = max(0, min(0xFFFF, val))
             tune_str = f"${(tuning_word >> 8) & 0xFF:02X} ${(tuning_word & 0xFF):02X}"
-            sample_dict[s.index] = (fname, tune_str)
+            sample_dict[s.index] = AMKSample(filename=fname, tuning=tune_str)
 
         return sample_dict
     
