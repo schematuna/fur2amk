@@ -83,7 +83,7 @@ class SPCInfo:
 
 @dataclass
 class AMKData:
-    version: int = 2
+    version: int = 4
 
     spc_info: SPCInfo = field(default_factory=SPCInfo)
 

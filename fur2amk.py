@@ -27,8 +27,6 @@ from copy_to_amk import main as copy_to_amk_main
 #       "Divider" BPM control
 #       Recommended furnace pre-emphasis settings?
 #       support virtual tempo (simple tempo multiplier)
-#       better automatic section/row reporting in log messages
-#       use amk 4 instead of 2, so Fu doesn't get mad
 
 # --------------------------------------------------------------------------------------
 
