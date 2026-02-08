@@ -71,14 +71,20 @@ class LegatoEffect(FurnaceEffect):
 class QuickLegatoEffect(FurnaceEffect):
     """Quick legato effect (0xE6). Value encodes semitones and delay."""
     
-    def __init__(self, raw_value: int):
+    def __init__(self, raw_value: int, is_fami: True, is_up: True):
         x = raw_value >> 4
         semitones = raw_value & 0x0F
-        if x < 8:
-            self.delay = x
+        if is_fami: # famitracker-style command is a bit more complex to parse
+            if x < 8:
+                self.delay = x
+            else:
+                self.delay = x - 8
+                semitones = -semitones
         else:
-            self.delay = x - 8
-            semitones = -semitones
+            self.delay = x
+            if not is_up:
+                semitones = -semitones
+
         self.semitones = semitones
 
 
@@ -162,7 +168,9 @@ class FurnaceEffectFactory:
             0x83: PanSlideEffect,
             0xE1: lambda v: NoteSlideEffect(v, True),
             0xE2: lambda v: NoteSlideEffect(v, False),
-            0xE6: QuickLegatoEffect,
+            0xE6: lambda v: QuickLegatoEffect(v, True, None),   # quick legato
+            0xE8: lambda v: QuickLegatoEffect(v, False, True),  # quick legaato up
+            0xE9: lambda v: QuickLegatoEffect(v, False, False), # quick legato down
             0xEA: LegatoEffect,
             0xED: NoteDelayEffect,
             0xF3: lambda v: FineVolumeSlideEffect(v, True),

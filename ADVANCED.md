@@ -22,6 +22,7 @@ Furnace projects may require optimization if AMK throws an error about ARAM. The
 - Noise & Noise Freq (via instrument macros)
 - Sample Maps
 - All instrument envelope and gain types
+- Vanilla Samples/Instruments
 
 ## Supported Effects
 
