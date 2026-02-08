@@ -168,21 +168,29 @@ class LegatoConverter:
         current_region: LegatoRegion = None
 
         tick = 0
+        waiting_for_note = False
         for row in flat_rows:
             row_end = tick + self.amk_ticks_per_row
             quick_legato_effect = row.get_effect(QuickLegatoEffect)
+            if quick_legato_effect:
+                # sometimes the new note is not in the same row as quick legato
+                # since the quick legato delay can exceed the length of the row
+                waiting_for_note = True
+                
             note_in_row = self._get_note_starting_in_range(tick, row_end, notes)
-
             if quick_legato_effect:
                 # Start a new region if not already in one
                 if current_region is None:
                     current_region = LegatoRegion(start_tick=tick)
-            elif current_region is not None and note_in_row:
+            elif current_region is not None and note_in_row and not waiting_for_note:
                 # No quick legato on this row, but we're in a region and a note starts here
                 # This note is the destination - end the region at its start
                 current_region.end_tick = note_in_row.tick
                 regions.append(current_region)
                 current_region = None
+
+            if note_in_row:
+                waiting_for_note = False
 
             tick += self.amk_ticks_per_row
 
