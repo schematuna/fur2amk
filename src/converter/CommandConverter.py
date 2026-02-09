@@ -253,7 +253,8 @@ class LegatoConverter:
         for note in notes:
             if note.duration is None:
                 continue
-            if note.tick <= tick < note.tick + note.duration:
+            # at note boundaries, defer to the earlier note
+            if note.tick < tick <= note.tick + note.duration:
                 return note
         return None
 
