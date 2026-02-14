@@ -120,11 +120,30 @@ class MMLSentence:
             sentence_txt += word.to_mml(mml_state) + ' '
         return sentence_txt.rstrip()
 
-class MMLLine:
+# loop info for a group of sentences which may be:
+#   - an unlooped set of sentences
+#   - a looped set of sentences
+#   - a labelled set of sentences
+#   - a standalone loop label
+@dataclass
+class LoopInfo:
+    # indices of the sentences that are in this group
+    sentenceIndices: List[int]
+    # index of label if this group has a label
+    label: int = None
+    # whether this is a repeat of a previous loop, in which case only the label will be shown
+    isRepeat: int = False
+    # how many times this group is looped, if at all
+    numLoops: int = None
+
+# a segment of MML usually representing a musical section
+# the MMLSection will be labelled in the MML with the section number
+# loops cannot cross section boundaries
+class MMLSection:
     def __init__(self, words: List[MMLWord], section_num: int, measure_length: int) -> None:
         self.section_num = section_num
-        self.label: Optional[int] = None
-        self.isRepeat: bool = False
+        # metadata representing the looping structure of an MMLSection
+        self.loopInfo: List[LoopInfo] = []
         self.MAX_CHARS_PER_LINE = 80
         self.MIN_CHARS_PER_LINE = 10
         self.sentences: List[MMLSentence] = []
@@ -132,7 +151,7 @@ class MMLLine:
         self.logger = logging.getLogger(__name__)
     
     def __eq__(self, other) -> bool:
-        if not isinstance(other, MMLLine):
+        if not isinstance(other, MMLSection):
             return False
         return self.sentences == other.sentences
 
@@ -145,7 +164,9 @@ class MMLLine:
             return 0
         return self.sentences[0].words[0].tick
 
-    def convert_sentences(self, mml_state: MMLState) -> List[str]:
+    # convert all sentences without accounting for loops
+    # useful for pre-looped formatting logic
+    def convert_sentences_raw(self, mml_state: MMLState) -> List[str]:
         line_txt = ''
         for sentence in self.sentences:
             line_txt += sentence.to_mml(mml_state) + '\n'
@@ -156,7 +177,7 @@ class MMLLine:
     def make_sentences(self, words: List[MMLWord], measure_length: int) -> None:
         self.sentences: List[MMLSentence] = [MMLSentence(words)]
         mml_state = MMLState()
-        if len(self.convert_sentences(mml_state)) > self.MAX_CHARS_PER_LINE:
+        if len(self.convert_sentences_raw(mml_state)) > self.MAX_CHARS_PER_LINE:
             self.sentences: List[MMLSentence] = []
             cur_measure_num = words[0].tick // measure_length
             cur_words: List[MMLWord] = []
@@ -235,16 +256,21 @@ class MMLLine:
     
     def to_mml(self, mml_state: MMLState) -> str:
         line_txt = ''
-        if self.label is not None:
-            if self.isRepeat:
-                line_txt += f"({self.label})"
+        for info in self.loopInfo:
+            if info.label:
+                if info.isRepeat:
+                    line_txt += f"({info.label})"
+                else:
+                    line_txt += f"({info.label})[\n"
+                    for idx in info.sentenceIndices:
+                        line_txt += self.sentences[idx].to_mml(mml_state) + '\n'
+                    line_txt += "]"
             else:
-                line_txt += f"({self.label})[\n"
-                line_txt += self.convert_sentences(mml_state)
-                line_txt += "]"
-        else:
-            line_txt += self.convert_sentences(mml_state)
-        return line_txt
+                for idx in info.sentenceIndices:
+                    line_txt += self.sentences[idx].to_mml(mml_state) + '\n'
+
+        # don't want last newline, strip it
+        return line_txt.rstrip()
 
 class MMLWriter:
     def __init__(self, mml_data: MMLData, label_start: int) -> None:
@@ -278,31 +304,30 @@ class MMLWriter:
         accumulated_ticks = sum(self.mml_data.section_lengths[:section_num])
         return round((tick - accumulated_ticks) / self.mml_data.measure_length)
 
-    def optimize_loops(self, lines: List[MMLLine], label_count: int) -> int:
+    def optimize_loops(self, sections: List[MMLSection], label_count: int) -> int:
         # Identify and label loops in the channel lines
-        labels_assigned: Dict[int, MMLLine] = {}
-        unique_lines: Dict[int, MMLLine] = {}
-        for i, line in enumerate(lines):
+        labels_assigned: Dict[int, MMLSection] = {}
+        unique_sections: Dict[int, MMLSection] = {}
+        for i, section in enumerate(sections):
             # Check for repeated patterns
-            if line not in unique_lines.values():
-                unique_lines[i] = line
-            elif line not in labels_assigned.values():
+            if section not in unique_sections.values():
+                unique_sections[i] = section
+                section.loopInfo = [LoopInfo(range(len(section.sentences)))]
+            elif section not in labels_assigned.values():
                 # Assign a label to this repeated pattern
-                labels_assigned[label_count] = line
-                line.label = label_count
-                line.isRepeat = True
+                labels_assigned[label_count] = section
+                section.loopInfo = [LoopInfo(range(len(section.sentences)), label_count, True)]
                 # and mark the first occurrence
-                for order, line2 in unique_lines.items():
-                    if line2 == line:
-                        lines[order].label = label_count
+                for order, section2 in unique_sections.items():
+                    if section2 == section:
+                        sections[order].loopInfo[0].label = label_count
                         break
                 label_count += 1
             else:
                 # Find the existing label for this pattern
-                for lbl, line2 in labels_assigned.items():
-                    if line2 == line:
-                        line.label = lbl
-                        line.isRepeat = True
+                for lbl, section2 in labels_assigned.items():
+                    if section2 == section:
+                        section.loopInfo = [LoopInfo(range(len(section.sentences)), lbl, True)]
                         break
         return label_count
 
@@ -494,7 +519,7 @@ class MMLWriter:
 
             pre_loop_commands, post_loop_commands = self.get_loop_state_commands(words)
 
-            lines: List[MMLLine] = []
+            lines: List[MMLSection] = []
             line_words: List[MMLWord] = []
             cur_section_num = 0
             for word in words:
@@ -502,12 +527,12 @@ class MMLWriter:
                 # split line at loop point
                 is_loop_point = has_loop_point and word.tick == self.mml_data.loop_tick
                 if sectionNum != cur_section_num or is_loop_point:
-                    lines.append(MMLLine(line_words, cur_section_num, self.mml_data.measure_length))
+                    lines.append(MMLSection(line_words, cur_section_num, self.mml_data.measure_length))
                     cur_section_num = sectionNum
                     line_words = []
                 line_words.append(word)
 
-            lines.append(MMLLine(line_words, cur_section_num, self.mml_data.measure_length))
+            lines.append(MMLSection(line_words, cur_section_num, self.mml_data.measure_length))
 
             self.label_count = self.optimize_loops(lines, self.label_count)
 

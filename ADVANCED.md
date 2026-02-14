@@ -15,6 +15,12 @@ Furnace projects may require optimization if AMK throws an error about ARAM. The
    - Need to switch to 8 or 16 bit PCM first, edit, then back to BRR
 3. Replace interpolated commands with slide commands
 
+Additionally, fur2amk's MML loop optimization will never be as optimal or clean as what an experienced AMK porter 
+can do by hand. As a final step, you may find it useful to optimize the MML output yourself.
+
+This is an especially prudent step if you intend to submit the output to an archive like SMWCentral,
+which has high moderation standards.
+
 ## Supported Features
 
 - BBR samples
