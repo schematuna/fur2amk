@@ -1,5 +1,6 @@
 from dataclasses import dataclass
 from enum import Enum
+from typing import Dict, List, Tuple, Optional
 import logging
 
 # common music utilities
@@ -61,3 +62,14 @@ class SnesGain:
             return SnesGain(GainMode.INC_INVLOG, byte - 0xE0)
         else:
             return SnesGain(GainMode.DIRECT, byte)
+        
+
+@dataclass
+class SNESEchoData:
+    firIdx: Optional[int] = None
+    echoDelay: Optional[int] = None
+    echoFeedback: Optional[int] = None
+    echoMask: Optional[int] = None
+    echoVolL: Optional[int] = None
+    echoVolR: Optional[int] = None
+    echoFilterCoeffs: Optional[List[int]] = None

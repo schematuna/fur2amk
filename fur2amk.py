@@ -16,6 +16,7 @@ import argparse
 
 from src.reader.FurnaceParser import FurnaceParser
 from src.converter.FurnaceConverter import FurnaceConverter
+from src.converter.AMKConverter import AMKConverter
 from src.writer.AMKWriter import AMKWriter
 from src.writer.BRRHandler import BRRConverter, BRRSample
 from copy_to_amk import main as copy_to_amk_main
@@ -99,9 +100,13 @@ def main() -> None:
     parser = FurnaceParser()
     module = parser.parse(furnace_file)
 
+    # deconstruct Furnace object
+    furnace_converter = FurnaceConverter()
+    chiptune_data = furnace_converter.convert(module)
+
     # Build AMK object
-    converter = FurnaceConverter()
-    amk_data = converter.convert(module)
+    amk_converter = AMKConverter()
+    amk_data = amk_converter.convert(chiptune_data)
 
     amk_writer = AMKWriter(amk_data, path_name)
 

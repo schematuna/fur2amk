@@ -6,8 +6,8 @@ import logging
 from ..model.FurnaceData import *
 from ..model.AMKData import *
 from ..model.MMLCommands import *
+from ..model.ChiptuneData import *
 from ..model.FurnaceEffects import *
-from .Preprocessor import *
 from .CommandConverter import *
 from .NoteConverter import *
 from ..util import *
@@ -29,112 +29,35 @@ class RowConverter:
             self.logger.warning("Furnace ticks not cleanly convertible to amk ticks.")
         self.logger.info(f"One Furnace tick is {self.tick_ratio:.2g} AMK ticks.")
 
-    def analyze_pattern_lengths(self, module: FurnaceModule) -> tuple[List[int], List[int], Optional[int]]:
-        """
-        Analyze patterns to determine effective lengths considering jump commands.
-        Also detects the loop point (0B command).
-
-        Returns:
-            - pattern_lengths: [order] -> row count for that pattern
-            - pattern_start_offsets: [order] -> starting row offset
-            - loop_tick: tick position where loop starts (destination of 0B jump, None if no loop)
-        """
-        num_orders = len(module.OrdersPerChannel[0])
-        pattern_lengths = []
-        pattern_start_offsets = []
-        loop_target_order = None  # Track which order the loop jumps to
-
-        next_start_row = 0
-        accumulated_ticks = 0  # Track total ticks for loop calculation
-        for order_idx in range(num_orders):
-            pattern_start_offsets.append(next_start_row)
-
-            # Default: pattern runs from start_row to end
-            effective_length = module.PatternLength - next_start_row
-            next_start_row = 0  # Reset for next pattern
-            jump_found = False
-
-            # Scan all channels for jump commands at this order
-            for ch in range(module.NumChannels):
-                orders = module.OrdersPerChannel[ch]
-
-                pat_id = orders[order_idx]
-                patmap = module.PatternsByChannel[ch]
-                rows = patmap.get(pat_id, [])
-
-                current_start = pattern_start_offsets[-1]
-
-                # Check for jump commands in this pattern
-                for row_idx in range(current_start, len(rows)):
-                    row = rows[row_idx]
-
-                    # 0D: Jump to next pattern at specific row
-                    if effect := row.get_effect(JumpToNextPatternEffect):
-                        effective_length = (row_idx - current_start) + 1
-                        next_start_row = effect.row_number
-                        jump_found = True
-                        break
-
-                    # 0B: Jump to order (also ends pattern and marks loop point)
-                    if effect := row.get_effect(JumpToOrderEffect):
-                        effective_length = (row_idx - current_start) + 1
-                        next_start_row = 0
-                        jump_found = True
-                        # Store the target order for loop tick calculation
-                        loop_target_order = effect.order_number
-                        break
-
-                # If we found a jump command, stop scanning other channels
-                if jump_found:
-                    break
-
-            pattern_lengths.append(effective_length)
-            # Accumulate ticks for next iteration
-            accumulated_ticks += effective_length * self.amk_ticks_per_row
-
-        # Calculate loop tick based on the target order
-        loop_tick = None
-        if loop_target_order is not None:
-            loop_tick = 0
-            for i in range(loop_target_order):
-                if i < len(pattern_lengths):
-                    loop_tick += pattern_lengths[i] * self.amk_ticks_per_row
-
-        return pattern_lengths, pattern_start_offsets, loop_tick
-
-    def convert(self, flat_rows: List[FurnaceRow], module: FurnaceModule, ins_info: Dict[int, InstrumentInfo]) -> Tuple[List[MMLNote], List[MMLCommand]]:
+    def convert(self, ticks: List[TickData], chiptune_data: ChiptuneData, ins_info: Dict[int, InstrumentInfo]) -> Tuple[List[MMLNote], List[MMLCommand]]:
         # process rows into notes and commands
         notes: List[MMLNote] = []
         commands: List[MMLCommand] = []
 
         tick = 0
 
-        # iron out macros and other high-level commands before converting
-        preprocessor = RowPreprocessor()
-        processed_rows = preprocessor.convert(flat_rows, module.Instruments)
-
         # initialize converters
         note_converter = NoteConverter(self.tick_ratio, self.amk_ticks_per_row)
 
         # convert notes
-        new_notes, new_commands = note_converter.convert(processed_rows, ins_info, module.Instruments)
+        new_notes, new_commands = note_converter.convert(ticks, ins_info, chiptune_data.instruments)
         commands.extend(new_commands)
         notes.extend(new_notes)
 
         # convert commands
         legato_converter    = LegatoConverter(self.amk_ticks_per_row)
-        commands.extend(legato_converter.convert(processed_rows, notes))
+        commands.extend(legato_converter.convert(ticks, notes))
         
-        volume_converter    = VolumeConverter(self.tick_ratio, self.amk_ticks_per_row)
-        pan_converter       = PanConverter(self.tick_ratio, self.amk_ticks_per_row)
+        volume_converter    = VolumeConverter(self.tick_ratio)
+        pan_converter       = PanConverter(self.tick_ratio)
         vibrato_converter   = VibratoConverter(self.tick_ratio)
         state = FurnaceState()
-        for row in processed_rows:
+        for tick_data in ticks:
             # commands.extend(legato_converter.convert_row(row, tick, state))
-            commands.extend(volume_converter.convert_row(row, tick, state))
-            commands.extend(pan_converter.convert_row(row, tick, state))
-            commands.extend(vibrato_converter.convert_row(row, tick, state))
-            tick += self.amk_ticks_per_row
+            commands.extend(volume_converter.convert_row(tick_data, tick, state))
+            commands.extend(pan_converter.convert_row(tick_data, tick, state))
+            commands.extend(vibrato_converter.convert_row(tick_data, tick, state))
+            tick += 1
 
         # if necessary, toggle legato off before looping
         if state.quick_legato:
