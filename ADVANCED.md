@@ -76,7 +76,7 @@ AMK only supports C1 -> A6. If any notes are out of this range they will be octa
 ## Limitations
 
 - **Wavetables** are not supported. All instruments must use samples or noise.
-- **Most Macros** are not yet supported. Only 1 Noise Freq value, up to 2 Gain values, and the Special Echo and Noise flags are supported. 
+- **Most Macros** are not yet supported. Only 1 Volume value, 1 Noise Freq value, up to 2 Gain values, and the Special Echo and Noise flags are supported. 
 - **Alternating Speeds and Grooves** are not supported.
 - **Compatibility Flags** are not supported. Conversion assumes that all compatibility flags are disabled.
 - **Quick Legato** delays greater than the length of the row are not supported
