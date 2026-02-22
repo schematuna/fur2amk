@@ -1,178 +1,202 @@
-# Converts a furnace object to an AMK object
-
-from __future__ import annotations
-
-import sys
 import logging
-from typing import Dict, List, Tuple
 
-from ..model.FurnaceData import FurnaceModule, FurnaceRow, SustainMode
-from ..model.AMKData import *
-from ..model.MMLCommands import *
-from .RowConverter import *
+from ..model.FurnaceData import *
+from ..model.ChiptuneData import *
 from ..util import *
 
+# converts a Furnace module to a generic chiptune format
+# this class abstracts away lots of Furnace-specific stuff like:
+#   - quick legato
+#   - delayed commands
+#   - macros
+#   - sample maps
+
 class FurnaceConverter:
-    def __init__(self) -> None:
+    def __init__(self):
         self.logger = logging.getLogger(__name__)
-        self.row_converter = None
-        # mapping of furnace instrument index to conversion info
-        self.instrument_info : Dict[int, InstrumentInfo] = {}
 
-    def convert_spc_info(self, module: FurnaceModule) -> SPCInfo:
-        info = SPCInfo()
-        info.title = module.SongName
-        # info.game = module.Game
-        info.author = module.Author
-        # info.length = module.Length
-        info.comment = module.Comment
-        return info
+    def analyze_pattern_lengths(self, module: FurnaceModule) -> tuple[List[int], List[int], Optional[int]]:
+        """
+        Analyze patterns to determine effective lengths considering jump commands.
+        Also detects the loop point (0B command).
 
-    def convert_samples(self, module: FurnaceModule) -> Dict[int, Tuple[str, str]]:
-        sample_dict = {}
-        for s in module.Samples:
-            # Build sample filename and tuning string
-            fname = f"{s.index:02d}_" + (s.name or f"Sample{s.index}").replace(' ', '_') + '.brr'
-            tuning_word = 0x0100
-            if s.c4_rate and s.c4_rate > 0:
-                # MAGIC NUMBERS to convert from c4_rate to AMK instrument tuning value
-                # stolen from it2amk's SampConv
-                val = int(round(float(s.c4_rate) * 768 / 12539))
-                tuning_word = max(0, min(0xFFFF, val))
-            tune_str = f"${(tuning_word >> 8) & 0xFF:02X} ${(tuning_word & 0xFF):02X}"
-            sample_dict[s.index] = AMKSample(filename=fname, tuning=tune_str)
+        Returns:
+            - pattern_lengths: [order] -> row count for that pattern
+            - pattern_start_offsets: [order] -> starting row offset
+            - loop_tick: tick position where loop starts (destination of 0B jump, None if no loop)
+        """
+        num_orders = len(module.OrdersPerChannel[0])
+        pattern_lengths = []
+        pattern_start_offsets = []
+        loop_target_order = None  # Track which order the loop jumps to
 
-        return sample_dict
-    
-    def convert_instruments(self, module: FurnaceModule, num_samples: int) -> List[AMKInstrument]:
-        instruments: List[AMKInstrument] = []
+        next_start_row = 0
+        accumulated_ticks = 0  # Track total ticks for loop calculation
+        for order_idx in range(num_orders):
+            pattern_start_offsets.append(next_start_row)
 
-        amk_ins_index = 0
-        for ins in module.Instruments:
-            ins_info = InstrumentInfo()
-            amk_instruments: List[AMKInstrument] = []
-            # first, check if this is a noise instrument
-            if ins.snes_macro_data.is_noise:
-                amk_ins = AMKInstrument()
-                amk_ins.is_noise = True
-                amk_ins.noise_freq = ins.snes_macro_data.noise_freq
-                if amk_ins.noise_freq is None:
-                    amk_ins.noise_freq = 29  # default noise freq if unset
-                    self.logger.warning(f"Instrument {ins.index} is a noise instrument but has no noise frequency set; You should set it explicitly in Furnace.")
-                amk_instruments.append(amk_ins)
-                ins_info.amk_ins = amk_ins_index
-                amk_ins_index += 1
-            else:
-                if ins.use_sample_map:
-                    for i, mapping in enumerate(ins.sample_table):
-                        idx = mapping[1]
-                        if idx != 65535:
-                            amk_ins = AMKInstrument()
-                            sample_index = mapping[1]
-                            if sample_index >= num_samples:
-                                sample_index = 0
-                                self.logger.warning(f"Instrument {ins.index} has sample index {sample_index} which is greater than the number of samples {num_samples}. Using sample index 0 instead. Please check your sample index in Furnace.")
-                            amk_ins.sample_index = sample_index
-                            amk_instruments.append(amk_ins)
-                            # Store the note -> AMK instrument mapping
-                            # Convert from 0:C-(-5) for furnace note to 0:C-0 for sample map
-                            note = i + 60
-                            note_to_play = mapping[0] + 60
-                            ins_info.ins_map[note] = MappingInfo(amk_ins_index, note_to_play)
-                            amk_ins_index += 1
+            # Default: pattern runs from start_row to end
+            effective_length = module.PatternLength - next_start_row
+            next_start_row = 0  # Reset for next pattern
+            jump_found = False
+
+            # Scan all channels for jump commands at this order
+            for ch in range(module.NumChannels):
+                orders = module.OrdersPerChannel[ch]
+
+                pat_id = orders[order_idx]
+                patmap = module.PatternsByChannel[ch]
+                rows = patmap.get(pat_id, [])
+
+                current_start = pattern_start_offsets[-1]
+
+                # Check for jump commands in this pattern
+                for row_idx in range(current_start, len(rows)):
+                    row = rows[row_idx]
+
+                    # 0D: Jump to next pattern at specific row
+                    if effect := row.get_effect(JumpToNextPatternEffect):
+                        effective_length = (row_idx - current_start) + 1
+                        next_start_row = effect.row_number
+                        jump_found = True
+                        break
+
+                    # 0B: Jump to order (also ends pattern and marks loop point)
+                    if effect := row.get_effect(JumpToOrderEffect):
+                        effective_length = (row_idx - current_start) + 1
+                        next_start_row = 0
+                        jump_found = True
+                        # Store the target order for loop tick calculation
+                        loop_target_order = effect.order_number
+                        break
+
+                # If we found a jump command, stop scanning other channels
+                if jump_found:
+                    break
+
+            pattern_lengths.append(effective_length)
+            # Accumulate ticks for next iteration
+            accumulated_ticks += effective_length * module.Speed1
+
+        # Calculate loop tick based on the target order
+        loop_tick = None
+        if loop_target_order is not None:
+            loop_tick = 0
+            for i in range(loop_target_order):
+                if i < len(pattern_lengths):
+                    loop_tick += pattern_lengths[i] * module.Speed1
+
+        return pattern_lengths, pattern_start_offsets, loop_tick
+
+    def get_ticks(self, flat_rows: List[FurnaceRow], instruments: List[FurnaceInstrument], ticks_per_row: int):
+        # default starting volume is 7F
+        primary_vol = 127
+        macro_mult = 1
+        # currently active instrument
+        fur_ins = None 
+        furnace_ticks: List[TickData] = []
+        for row in flat_rows:
+            new_vol = row.Vol
+            if new_vol is not None:
+                primary_vol = new_vol
+
+            note_kind = row.kind()
+            if note_kind == FurnaceRow.NoteKind.NOTE:                    
+                new_fur_ins = None
+                for ins in instruments:
+                    if ins.index == row.Ins:
+                        new_fur_ins = ins
+                        break
+
+                if new_fur_ins is not None:
+                    fur_ins = new_fur_ins
+
+                if fur_ins is None:
+                    self.logger.error(f"No furnace instrument active in row with Note {row.Note}.")
+                    continue
+
+                # only consider first tick of volume macro for now
+                new_macro_mult = macro_mult
+                if fur_ins.snes_macro_data.vol_values:
+                    new_macro_mult = fur_ins.snes_macro_data.vol_values[0] / 127
                 else:
-                    amk_ins = AMKInstrument()
-                    sample_index = int(ins.initial_sample)
-                    if sample_index >= num_samples:
-                        sample_index = 0
-                        self.logger.warning(f"Instrument {ins.index} has initial sample index {sample_index} which is greater than the number of samples {num_samples}. Using sample index 0 instead. Please check your sample index in Furnace.")
-                    amk_ins.sample_index = sample_index
-                    amk_instruments.append(amk_ins)
-                    ins_info.amk_ins = amk_ins_index
-                    amk_ins_index += 1
+                    # mult resets to "normal" if no volume macro for this instrument
+                    new_macro_mult = 1
+
+                # note onsets with new macro mult trigger a volume change on this row
+                if new_macro_mult != macro_mult:
+                    macro_mult = new_macro_mult
+                    row.Vol = primary_vol * macro_mult
                 
-            self.instrument_info[ins.index] = ins_info
+            # all volume commands are affected by any active volue macros.
+            if new_vol is not None:
+                row.Vol = primary_vol * macro_mult
 
-            # Apply envelope/gain settings to all AMK instruments created from this Furnace instrument
-            for amk_ins in amk_instruments:
-                if ins.sn_envelope_on:
-                    amk_ins.uses_envelope = True
-                    env = AMKEnvelope()
-                    env.attack = ins.sn_attack
-                    env.decay = ins.sn_decay
-                    env.sustain = ins.sn_sustain
-                    # For sustain modes 1-3, d2 is used as the effective release rate during sustain
-                    # For mode 0 (DIRECT), use the standard release value
-                    if ins.sustain_mode != SustainMode.DIRECT:
-                        env.release = ins.decay2
-                    else:
-                        env.release = ins.sn_release
-                    amk_ins.envelope = env
-                else:
-                    amk_ins.gain_values = ins.snes_macro_data.gain_values
-                    amk_ins.gain = ins.sn_gain
-                    if amk_ins.gain_values is None or amk_ins.gain is None:
-                        self.logger.debug(f"Instrument {ins.index:02X} uses gain mode but does not have gain parameters set.")
+            tick = TickData()
+            tick.Note = row.Note
+            tick.Ins = row.Ins
+            tick.Vol = row.Vol
+            tick.Effects = row.Effects
 
-                instruments.append(amk_ins)
+            if row.kind() == FurnaceRow.NoteKind.OFF or row.kind() == FurnaceRow.NoteKind.RELEASE:
+                tick.Type = TickData.NoteKind.RELEASE
+            elif row.kind() == FurnaceRow.NoteKind.NOTE:
+                tick.Type = TickData.NoteKind.NOTE
+            else:
+                tick.Type = TickData.NoteKind.EMPTY
 
-        return instruments
+            furnace_ticks.append(tick)
+
+            # just fill out rest of row with empty ticks for now
+            i = 1
+            while i < ticks_per_row:
+                furnace_ticks.append(TickData())
+                i += 1
+
+        return furnace_ticks
     
-    def convert_remote_commands(self, module: FurnaceModule, amk_data: AMKData) -> int:
-        # start at 1, 0 will be reserved for stop remote commands
-        command_num = 1
 
-        for fur_ins in module.Instruments:
-            gmacro = fur_ins.snes_macro_data.gain_values
-            if gmacro and len(gmacro) > 1:
-                # just support one gain change for now.
-                # If we want to support more we;ll have to set gain manually throughout the note.
-                comment = "Gain toggle for Furnace instrument " + str(fur_ins.index)+ ": " + fur_ins.name
-                command = EnableGainCommand(None, SnesGain.from_byte(gmacro[1]))
-                remote_def = AMKRemoteDef(command_num, command, comment, RemoteCommandTiming.AFTER_START, fur_ins.snes_macro_data.gain_speed)
-                amk_data.remote_defs.append(remote_def)
-                self.instrument_info[fur_ins.index].remote_commands.append(remote_def)
-                command_num += 1
+    def get_song_info(self, module: FurnaceModule):
+        info = ChiptuneSongInfo()
 
-            if fur_ins.sn_envelope_on and (fur_ins.sustain_mode == SustainMode.EFF_LINEAR or fur_ins.sustain_mode == SustainMode.EFF_EXP):
-                gain_mode = GainMode.DEC_LINEAR if fur_ins.sustain_mode == SustainMode.EFF_LINEAR else GainMode.DEC_LOG
-                gain = SnesGain(gain_mode, fur_ins.sn_release)
-                comment = "Remote gain command for Furnace instrument " + str(fur_ins.index)+ ": " + fur_ins.name
-                command = EnableGainCommand(None, gain)
-                remote_def = AMKRemoteDef(command_num, command, comment, RemoteCommandTiming.KEY_OFF)
-                amk_data.remote_defs.append(remote_def)
-                self.instrument_info[fur_ins.index].remote_commands.append(remote_def)
-                command_num += 1
-                # and create the key on command to undo the changes
-                comment = "Restore ADSR for Furnace instrument " + str(fur_ins.index)+ ": " + fur_ins.name
-                command = CustomADSR(None, ADSR(fur_ins.sn_attack, fur_ins.sn_decay, fur_ins.sn_sustain, fur_ins.decay2)) # TODO: just enable adsr directly thru register?
-                remote_def = AMKRemoteDef(command_num, command, comment, RemoteCommandTiming.KEY_ON)
-                amk_data.remote_defs.append(remote_def)
-                self.instrument_info[fur_ins.index].remote_commands.append(remote_def)
-                command_num += 1
+        info.author = module.Author
+        info.comment = module.Comment
+        info.title = module.SongName
 
-            # for delayed release, ADSR changes on note off. Have to restore it on key on.
-            if fur_ins.sn_envelope_on and fur_ins.sustain_mode == SustainMode.DELAYED:
-                comment = "Restore ADSR for Furnace instrument " + str(fur_ins.index)+ ": " + fur_ins.name
-                command = CustomADSR(None, ADSR(fur_ins.sn_attack, fur_ins.sn_decay, fur_ins.sn_sustain, fur_ins.decay2)) # TODO: modify release directly thru register?
-                remote_def = AMKRemoteDef(command_num, command, comment, RemoteCommandTiming.KEY_ON)
-                amk_data.remote_defs.append(remote_def)
-                self.instrument_info[fur_ins.index].remote_commands.append(remote_def)
-                command_num += 1
+        return info
+    
+    def get_structure(self, module: FurnaceModule):
+        structure = ChiptuneStructure()
 
-        # need to indicate where to pick up with labels
-        # loop labels and remote command labels can't overlap
-        return command_num
+        structure.num_channels = module.NumChannels
 
-    def convert_tempo(self, module: FurnaceModule) -> int:
-        rows_per_beat = MMLUtil.AMK_TICKS_PER_BEAT / self.row_converter.amk_ticks_per_row
-        fur_ticks_per_beat = rows_per_beat * module.Speed1
-        beats_per_second = module.TicksPerSecond / fur_ticks_per_beat
-        bpm = int(round(60 * beats_per_second))
-        amk_tempo = int(round(bpm * 0.4096 - 1))
-        return amk_tempo
+        # Analyze pattern lengths and detect loop point
+        pattern_lengths_rows, pattern_offsets, loop_tick = self.analyze_pattern_lengths(module)
 
-    def convert_volume(self, module: FurnaceModule) -> int:
+        # for formatting and duration calculations
+        # lengths are in ticks
+        ticks_per_row = module.Speed1
+        structure.ticks_per_step = ticks_per_row
+        structure.measure_length = module.HighlightB * ticks_per_row
+        structure.section_lengths = [length * ticks_per_row
+                                    for length in pattern_lengths_rows]
+        structure.song_length = sum(structure.section_lengths)
+
+        # loop point
+        structure.loop_tick = loop_tick
+
+        return structure, pattern_offsets, pattern_lengths_rows
+
+    
+    def get_sample_info(self, module: FurnaceModule):
+        samps: List[ChiptuneSampleInfo] = []
+        for s in module.Samples:
+            fname = f"{s.index:02d}_" + (s.name or f"Sample{s.index}").replace(' ', '_') + '.brr'
+            samps.append(ChiptuneSampleInfo(s.index, fname, s.c4_rate))
+
+        return samps
+
+    def get_global_volume(self, module: FurnaceModule):
         # global volume is average of left/right furnace volumes
         # volumes also stored inversely for some reason.
         Lvol = 127 - module.SNESFlags.volScaleL
@@ -181,8 +205,8 @@ class FurnaceConverter:
         gvol = Lvol + Rvol
         return min(int(gvol), 255)
     
-    def convert_echo(self, module: FurnaceModule) -> AMKEchoData:
-        echo_data = AMKEchoData()
+    def get_echo_data(self, module: FurnaceModule) -> SNESEchoData:
+        echo_data = SNESEchoData()
         echoOn = module.SNESFlags.echo
         echo_data.firIdx = 0x01 if echoOn else 0x00
         echo_data.echoDelay = module.SNESFlags.echoDelay
@@ -193,22 +217,18 @@ class FurnaceConverter:
         echo_data.echoFilterCoeffs = module.SNESFlags.echoFilterCoeffs
         return echo_data
 
-    def convert_mml_data(self, module: FurnaceModule) -> MMLData:
-        mml_data = MMLData()
-        mml_data.num_channels = module.NumChannels
-        # for formatting and duration calculations
-        # lengths are in ticks
-        mml_data.measure_length = module.HighlightB * self.row_converter.amk_ticks_per_row
+    def convert(self, module: FurnaceModule):
+        chiptune_data = ChiptuneData()
 
-        # Analyze pattern lengths and detect loop point
-        pattern_lengths_rows, pattern_offsets, loop_tick = self.row_converter.analyze_pattern_lengths(module)
+        chiptune_data.song_info = self.get_song_info(module)
+        chiptune_data.structure, pattern_offsets, pattern_lengths_rows = self.get_structure(module)
+        chiptune_data.sample_info = self.get_sample_info(module)
+        chiptune_data.instruments = module.Instruments
+        chiptune_data.tick_rate = module.TicksPerSecond
+        chiptune_data.global_volume = self.get_global_volume(module)
+        chiptune_data.echo_data = self.get_echo_data(module)
 
-        # Convert to ticks and store
-        mml_data.section_lengths = [length * self.row_converter.amk_ticks_per_row
-                                     for length in pattern_lengths_rows]
-        mml_data.song_length = sum(mml_data.section_lengths)
-        mml_data.loop_tick = loop_tick
-
+        # process all rows into tick data
         for ch in range(module.NumChannels):
             flat_rows: List[FurnaceRow] = []
             patmap = module.PatternsByChannel[ch]
@@ -224,21 +244,6 @@ class FurnaceConverter:
                     self.logger.warning(f"Channel {ch} references missing pattern {pat}. Inserting empty pattern.")
                     flat_rows.extend([FurnaceRow() for _ in range(pattern_lengths_rows[order_idx])])
 
-            mml_data.notes[ch], mml_data.commands[ch] = self.row_converter.convert(flat_rows, module, self.instrument_info)
+            chiptune_data.tick_data.append(self.get_ticks(flat_rows, module.Instruments, chiptune_data.structure.ticks_per_step))
 
-        return mml_data
-
-    def convert(self, module: FurnaceModule) -> AMKData:
-        self.row_converter = RowConverter(module.Speed1)
-
-        amk_data = AMKData()
-        amk_data.spc_info     = self.convert_spc_info(module)
-        amk_data.samples      = self.convert_samples(module)
-        amk_data.instruments  = self.convert_instruments(module, len(amk_data.samples))
-        amk_data.label_start  = self.convert_remote_commands(module, amk_data)
-        amk_data.tempo        = self.convert_tempo(module)
-        amk_data.volume       = self.convert_volume(module)
-        amk_data.echo_data    = self.convert_echo(module)
-        amk_data.mml_data     = self.convert_mml_data(module)
-
-        return amk_data
+        return chiptune_data
