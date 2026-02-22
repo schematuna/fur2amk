@@ -7,6 +7,7 @@ from ..model.FurnaceData import *
 from ..model.AMKData import *
 from ..model.MMLCommands import *
 from ..model.FurnaceEffects import *
+from .Preprocessor import *
 from .CommandConverter import *
 from .NoteConverter import *
 from ..util import *
@@ -108,23 +109,27 @@ class RowConverter:
 
         tick = 0
 
+        # iron out macros and other high-level commands before converting
+        preprocessor = RowPreprocessor()
+        processed_rows = preprocessor.convert(flat_rows, module.Instruments)
+
         # initialize converters
         note_converter = NoteConverter(self.tick_ratio, self.amk_ticks_per_row)
 
         # convert notes
-        new_notes, new_commands = note_converter.convert(flat_rows, ins_info, module.Instruments)
+        new_notes, new_commands = note_converter.convert(processed_rows, ins_info, module.Instruments)
         commands.extend(new_commands)
         notes.extend(new_notes)
 
         # convert commands
         legato_converter    = LegatoConverter(self.amk_ticks_per_row)
-        commands.extend(legato_converter.convert(flat_rows, notes))
+        commands.extend(legato_converter.convert(processed_rows, notes))
         
         volume_converter    = VolumeConverter(self.tick_ratio, self.amk_ticks_per_row)
         pan_converter       = PanConverter(self.tick_ratio, self.amk_ticks_per_row)
         vibrato_converter   = VibratoConverter(self.tick_ratio)
         state = FurnaceState()
-        for row in flat_rows:
+        for row in processed_rows:
             # commands.extend(legato_converter.convert_row(row, tick, state))
             commands.extend(volume_converter.convert_row(row, tick, state))
             commands.extend(pan_converter.convert_row(row, tick, state))

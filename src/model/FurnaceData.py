@@ -57,6 +57,8 @@ class FurnaceSNESMacroData:
     noise_freq: Optional[int] = None # ranges 0 to 32
     gain_values: Optional[List[int]] = None  # snes gain values
     gain_speed: Optional[int] = None  # ticks between each gain change
+    vol_values: Optional[List[int]] = None # macro volume values
+    vol_speed: Optional[List[int]] = None # ticks between each volume change
 
 @dataclass
 class FurnaceInstrument:
@@ -96,6 +98,9 @@ class FurnaceInstrument:
     def parse_snes_macro_flags(self):
         self.logger = logging.getLogger(__name__)
         for macro in self.macros.values():
+            if macro.code == 0:  # code 0 is volume
+                self.snes_macro_data.vol_values = macro.values
+                self.snes_macro_data.vol_speed = macro.speed
             if macro.code == 2:  # code 2 corresponds to pitch freq
                 self.snes_macro_data.noise_freq = macro.values[0]
             if macro.code == 5:  # code 5 corresponds to extra1 macro
