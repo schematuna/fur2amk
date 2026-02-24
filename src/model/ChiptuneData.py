@@ -70,7 +70,7 @@ class ChiptuneData:
     instruments: List[FurnaceInstrument] = field(default_factory=list)
     echo_data: SNESEchoData = field(default_factory=list)
     # per-channel tick data
-    tick_data: List[TickData] = field(default_factory=list)
+    tick_data: List[List[TickData]] = field(default_factory=list)
     # ticks per second
     tick_rate: int = 60
     # song volume from 0 -> 255

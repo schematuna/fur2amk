@@ -177,18 +177,17 @@ class AMKConverter:
         mml_data.num_channels = chiptune_data.structure.num_channels
         # for formatting and duration calculations
         # lengths are in ticks
-        measure_length = chiptune_data.structure.measure_length * self.row_converter.tick_ratio
-        mml_data.measure_length = round(measure_length)
-        if (mml_data.measure_length != measure_length):
-            self.logger.warning("measure length didn't line up...")
+        mml_data.measure_length = self.row_converter.to_amk_ticks(chiptune_data.structure.measure_length)
 
         # Convert to ticks and store
-        mml_data.section_lengths = chiptune_data.structure.section_lengths
-        mml_data.song_length = chiptune_data.structure.song_length
-        mml_data.loop_tick = chiptune_data.structure.loop_tick
+        mml_data.section_lengths = [self.row_converter.to_amk_ticks(length) for length in chiptune_data.structure.section_lengths]
+        mml_data.song_length = self.row_converter.to_amk_ticks(chiptune_data.structure.song_length)
+        mml_data.loop_tick = self.row_converter.to_amk_ticks(chiptune_data.structure.loop_tick)
+
 
         for ch, ticks in enumerate(chiptune_data.tick_data):
-            mml_data.notes[ch], mml_data.commands[ch] = self.row_converter.convert(ticks, chiptune_data, self.instrument_info)
+            amk_ticks = self.row_converter.expand_ticks(ticks)
+            mml_data.notes[ch], mml_data.commands[ch] = self.row_converter.convert(amk_ticks, chiptune_data, self.instrument_info)
 
         return mml_data
 
