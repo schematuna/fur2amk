@@ -29,6 +29,33 @@ class RowConverter:
             self.logger.warning("Furnace ticks not cleanly convertible to amk ticks.")
         self.logger.info(f"One Furnace tick is {self.tick_ratio:.2g} AMK ticks.")
 
+    def to_amk_ticks(self, furnace_ticks: int):
+        if furnace_ticks is None:
+            return None
+        
+        amk_ticks = furnace_ticks * self.tick_ratio
+        rounded_amk_ticks = round(amk_ticks)
+        if (rounded_amk_ticks != amk_ticks):
+            self.logger.debug("furnace to amk tick conversion was not clean")
+
+        return rounded_amk_ticks
+
+    # expands a set of Furnace ticks out into AMK ticks
+    # there will (or at least should) always be the same or more AMK ticks than Furnace ticks per beat
+    # so we iterate over all Furnace ticks and place its notes and commands in the nearest AMK tick
+    def expand_ticks(self, ticks: List[TickData]):
+        song_length = self.to_amk_ticks(len(ticks))
+        amk_ticks = [TickData() for _ in range(song_length)]
+        for tick, tick_data in enumerate(ticks):
+            amk_tick = self.to_amk_ticks(tick)
+            # should never have to condense here - an AMK tick should always correspond to only one furnace tick
+            if amk_ticks[amk_tick] != TickData():
+                self.logger.warning("Two Furnace ticks round to one AMK tick. This should never happen.")
+                                    
+            amk_ticks[amk_tick] = tick_data
+        
+        return amk_ticks
+
     def convert(self, ticks: List[TickData], chiptune_data: ChiptuneData, ins_info: Dict[int, InstrumentInfo]) -> Tuple[List[MMLNote], List[MMLCommand]]:
         # process rows into notes and commands
         notes: List[MMLNote] = []
@@ -54,9 +81,9 @@ class RowConverter:
         state = FurnaceState()
         for tick_data in ticks:
             # commands.extend(legato_converter.convert_row(row, tick, state))
-            commands.extend(volume_converter.convert_row(tick_data, tick, state))
-            commands.extend(pan_converter.convert_row(tick_data, tick, state))
-            commands.extend(vibrato_converter.convert_row(tick_data, tick, state))
+            commands.extend(volume_converter.convert_tick(tick_data, tick, state))
+            commands.extend(pan_converter.convert_tick(tick_data, tick, state))
+            commands.extend(vibrato_converter.convert_tick(tick_data, tick, state))
             tick += 1
 
         # if necessary, toggle legato off before looping

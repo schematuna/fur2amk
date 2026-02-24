@@ -14,7 +14,7 @@ class VolumeConverter():
         self.tick_ratio = tick_ratio
         self.volume_slider = VolumeSlider(tick_ratio, 0)
 
-    def convert_row(self, tick_data: TickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
+    def convert_tick(self, tick_data: TickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
         new_vol = tick_data.Vol
         slide_command = None
@@ -32,7 +32,7 @@ class VolumeConverter():
             # restart slide if it was interrupted by a volume command
             self.volume_slider.start_slide()
             
-        if new_command := self.volume_slider.tick(self.tick_ratio):
+        if new_command := self.volume_slider.tick(1):
             commands.append(new_command)
 
         return commands
@@ -42,7 +42,7 @@ class PanConverter():
         self.tick_ratio = tick_ratio
         self.pan_slider = PanSlider(tick_ratio, 0)
 
-    def convert_row(self, tick_data: TickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
+    def convert_tick(self, tick_data: TickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
         if effect := tick_data.get_effect(PanEffect):
             self.pan_slider.set_target(effect.pan_position)
@@ -59,7 +59,7 @@ class PanConverter():
             if new_command := self.pan_slider.handle_new_effect(effect):
                 commands.append(new_command)
                     
-        if new_command := self.pan_slider.tick(self.tick_ratio):
+        if new_command := self.pan_slider.tick(1):
             commands.append(new_command)
 
         return commands
@@ -68,7 +68,7 @@ class VibratoConverter():
     def __init__(self, tick_ratio: float) -> None:
         self.tick_ratio = tick_ratio
         
-    def convert_row(self, tick_data: TickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
+    def convert_tick(self, tick_data: TickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
         if effect := tick_data.get_effect(VibratoEffect):
             # Vibrato off when both speed and depth are 0
@@ -171,10 +171,9 @@ class LegatoConverter:
 
         tick = 0
         for tick_data in ticks:
-            row_end = tick + self.amk_ticks_per_row
             quick_legato_effect = tick_data.get_effect(QuickLegatoEffect)
                 
-            note_in_row = self._get_note_starting_in_range(tick, row_end, notes)
+            note_in_row = self._get_note_starting_in_range(tick, tick+1, notes)
             if quick_legato_effect:
                 # Start a new region if not already in one
                 if current_region is None:
@@ -186,7 +185,7 @@ class LegatoConverter:
                 regions.append(current_region)
                 current_region = None
 
-            tick += self.amk_ticks_per_row
+            tick += 1
 
         # Close any open region at end of song
         if current_region:
