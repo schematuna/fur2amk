@@ -119,14 +119,11 @@ class LegatoConverter:
     def _build_legato_regions(self, ticks: List[TickData], notes: List[MMLNote]) -> List[LegatoRegion]:
         """
         Build a list of tick ranges where legato should be active.
-
-        Builds global and quick legato regions separately, then merges them.
         """
         global_regions = self._build_global_legato_regions(ticks)
-        quick_regions = self._build_quick_legato_regions(ticks, notes)
 
         # Combine and merge overlapping regions
-        all_regions = sorted(global_regions + quick_regions, key=lambda r: r.start_tick)
+        all_regions = sorted(global_regions, key=lambda r: r.start_tick)
         return self._merge_adjacent_regions(all_regions)
 
     def _build_global_legato_regions(self, ticks: List[TickData]) -> List[LegatoRegion]:
@@ -148,42 +145,6 @@ class LegatoConverter:
                     current_region.end_tick = tick
                     regions.append(current_region)
                     current_region = None
-
-            tick += 1
-
-        # Close any open region at end of song
-        if current_region:
-            current_region.end_tick = tick - 1
-            regions.append(current_region)
-
-        return regions
-
-    # TODO: abstract away quick legato
-    def _build_quick_legato_regions(self, ticks: List[TickData], notes: List[MMLNote]) -> List[LegatoRegion]:
-        """
-        Build regions from QuickLegatoEffect.
-
-        Quick legato starts at the effect and ends at the start of the destination note
-        (the first note after the quick legato chain that doesn't have a quick legato effect).
-        """
-        regions: List[LegatoRegion] = []
-        current_region: LegatoRegion = None
-
-        tick = 0
-        for tick_data in ticks:
-            quick_legato_effect = tick_data.get_effect(QuickLegatoEffect)
-                
-            note_in_row = self._get_note_starting_in_range(tick, tick+1, notes)
-            if quick_legato_effect:
-                # Start a new region if not already in one
-                if current_region is None:
-                    current_region = LegatoRegion(start_tick=tick)
-            elif current_region is not None and note_in_row:
-                # No quick legato on this row, but we're in a region and a note starts here
-                # This note is the destination - end the region at its start
-                current_region.end_tick = note_in_row.tick
-                regions.append(current_region)
-                current_region = None
 
             tick += 1
 

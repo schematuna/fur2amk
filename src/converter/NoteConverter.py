@@ -230,20 +230,6 @@ class NoteConverter():
                     cur_dur = None
                     active_note = None
 
-            # TODO: move to FurnaceParser
-            # check for quick legato, make a new note if found
-            if effect := tick_data.get_effect(QuickLegatoEffect):
-                pre_note_commands = []
-                new_note_onset = note_tick + int(effect.delay * self.tick_ratio)
-                if cur_dur is not None:
-                    cur_dur.duration = new_note_onset - cur_dur.tick
-                    notes.append(cur_dur)
-                new_note = active_note + effect.semitones
-                new_note = max(0,min(new_note, MMLUtil.AMK_MAX_PITCH))
-                cur_dur = MMLNote(new_note_onset, 0, new_note, cur_dur.instrument, pre_note_commands)
-                active_note = new_note
-                slide_helper.set_target(active_note)
-
             # handle pitch slides after processing this row's note info
             active_note, pitch_commands = self.convert_pitch_slides(tick, tick_data, slide_helper, active_note)
             if cur_dur is not None:
