@@ -2,6 +2,7 @@ import logging
 
 from ..model.FurnaceData import *
 from ..model.ChiptuneData import *
+from .MacroConverter import *
 from ..util import *
 
 # converts a Furnace module to a generic chiptune format
@@ -89,19 +90,23 @@ class FurnaceConverter:
         return pattern_lengths, pattern_start_offsets, loop_tick
 
     def get_ticks(self, flat_rows: List[FurnaceRow], instruments: List[FurnaceInstrument], ticks_per_row: int):
-        # default starting volume is 7F
-        primary_vol = 127
-        macro_mult = 1
+        vol_converter = VolumeMacroConverter()
         # currently active instrument
-        fur_ins = None 
-        furnace_ticks: List[TickData] = []
-        for row in flat_rows:
-            new_vol = row.Vol
-            if new_vol is not None:
-                primary_vol = new_vol
+        active_ins = None 
+        active_note = None
+        total_ticks = ticks_per_row * len(flat_rows)
+        furnace_ticks = [TickData() for _ in range(total_ticks)]
+        for i, row in enumerate(flat_rows):
+            row_tick = i * ticks_per_row
 
             note_kind = row.kind()
-            if note_kind == FurnaceRow.NoteKind.NOTE:                    
+            is_new_note = False
+            if note_kind == FurnaceRow.NoteKind.NOTE:
+                is_new_note = True
+                # TODO: this should take sample mapping into account
+                # also should probably be setting active note to None on note releases
+                # ALSO the active note should change with note slide commands
+                active_note = row.Note
                 new_fur_ins = None
                 for ins in instruments:
                     if ins.index == row.Ins:
@@ -109,33 +114,17 @@ class FurnaceConverter:
                         break
 
                 if new_fur_ins is not None:
-                    fur_ins = new_fur_ins
+                    active_ins = new_fur_ins
 
-                if fur_ins is None:
-                    self.logger.error(f"No furnace instrument active in row with Note {row.Note}.")
-                    continue
+                if active_ins is None:
+                    self.logger.warning(f"No furnace instrument active in row with Note {row.Note}.")
 
-                # only consider first tick of volume macro for now
-                new_macro_mult = macro_mult
-                if fur_ins.snes_macro_data.vol_values:
-                    new_macro_mult = fur_ins.snes_macro_data.vol_values[0] / 127
-                else:
-                    # mult resets to "normal" if no volume macro for this instrument
-                    new_macro_mult = 1
-
-                # note onsets with new macro mult trigger a volume change on this row
-                if new_macro_mult != macro_mult:
-                    macro_mult = new_macro_mult
-                    row.Vol = primary_vol * macro_mult
-                
-            # all volume commands are affected by any active volue macros.
-            if new_vol is not None:
-                row.Vol = primary_vol * macro_mult
+            row_vol = vol_converter.get_volume_for_row(row.Vol, is_new_note, active_ins)
 
             tick = TickData()
             tick.Note = row.Note
             tick.Ins = row.Ins
-            tick.Vol = row.Vol
+            tick.Vol = row_vol
             tick.Effects = row.Effects
 
             if row.kind() == FurnaceRow.NoteKind.OFF or row.kind() == FurnaceRow.NoteKind.RELEASE:
@@ -145,13 +134,22 @@ class FurnaceConverter:
             else:
                 tick.Type = TickData.NoteKind.EMPTY
 
-            furnace_ticks.append(tick)
+            furnace_ticks[row_tick] = tick
 
-            # just fill out rest of row with empty ticks for now
-            i = 1
-            while i < ticks_per_row:
-                furnace_ticks.append(TickData())
-                i += 1
+            # check for quick legato, make a new note if found
+            if effect := row.get_effect(QuickLegatoEffect):
+                new_note = active_note + effect.semitones
+                new_note_tick = row_tick + effect.delay
+                if (new_note_tick < total_ticks):
+                    furnace_ticks[new_note_tick].Note = new_note
+                    furnace_ticks[new_note_tick].Type = TickData.NoteKind.NOTE
+                    active_note = new_note
+
+                # and insert legato effects
+                furnace_ticks[row_tick].Effects.append(LegatoEffect(1))
+                legato_end_tick = new_note_tick + 1
+                if (legato_end_tick < total_ticks):
+                    furnace_ticks[legato_end_tick].Effects.append(LegatoEffect(0))
 
         return furnace_ticks
     
