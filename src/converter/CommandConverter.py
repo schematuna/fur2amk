@@ -103,31 +103,22 @@ class LegatoRegion:
 
 
 class LegatoConverter:
-    def __init__(self, amk_ticks_per_row: int) -> None:
-        self.amk_ticks_per_row = amk_ticks_per_row
+    def __init__(self) -> None:
         self.logger = logging.getLogger(__name__)
 
     def convert(self, ticks: List[TickData], notes: List[MMLNote]) -> List[MMLCommand]:
-        # Pass 1: Build legato regions
-        regions = self._build_legato_regions(ticks, notes)
+        # Build legato regions
+        regions = self.build_legato_regions(ticks, notes)
 
-        # Pass 2: Emit toggle commands
-        commands = self._emit_toggle_commands(regions, notes)
+        # Emit toggle commands
+        commands = self.emit_toggle_commands(regions, notes)
 
         return commands
 
-    def _build_legato_regions(self, ticks: List[TickData], notes: List[MMLNote]) -> List[LegatoRegion]:
+    def build_legato_regions(self, ticks: List[TickData], notes: List[MMLNote]) -> List[LegatoRegion]:
         """
         Build a list of tick ranges where legato should be active.
         """
-        global_regions = self._build_global_legato_regions(ticks)
-
-        # Combine and merge overlapping regions
-        all_regions = sorted(global_regions, key=lambda r: r.start_tick)
-        return self._merge_adjacent_regions(all_regions)
-
-    def _build_global_legato_regions(self, ticks: List[TickData]) -> List[LegatoRegion]:
-        """Build regions from LegatoEffect (simple on/off that persists)."""
         regions: List[LegatoRegion] = []
         current_region: LegatoRegion = None
         legato_on = False
@@ -155,23 +146,7 @@ class LegatoConverter:
 
         return regions
 
-    def _merge_adjacent_regions(self, regions: List[LegatoRegion]) -> List[LegatoRegion]:
-        """Merge regions that are adjacent or overlapping."""
-        if not regions:
-            return []
-
-        merged = [regions[0]]
-        for region in regions[1:]:
-            last = merged[-1]
-            if region.start_tick <= last.end_tick:
-                # Overlapping or adjacent, extend the last region
-                last.end_tick = max(last.end_tick, region.end_tick)
-            else:
-                merged.append(region)
-
-        return merged
-
-    def _emit_toggle_commands(self, regions: List[LegatoRegion], notes: List[MMLNote]) -> List[MMLCommand]:
+    def emit_toggle_commands(self, regions: List[LegatoRegion], notes: List[MMLNote]) -> List[MMLCommand]:
         """
         Emit toggle commands for each region.
 
@@ -209,13 +184,6 @@ class LegatoConverter:
                 continue
             # at note boundaries, defer to the earlier note
             if note.tick < tick <= note.tick + note.duration:
-                return note
-        return None
-
-    def _get_note_starting_in_range(self, start_tick: int, end_tick: int, notes: List[MMLNote]) -> Optional[MMLNote]:
-        """Find the first note that starts within the given tick range [start_tick, end_tick)."""
-        for note in notes:
-            if start_tick <= note.tick < end_tick:
                 return note
         return None
 

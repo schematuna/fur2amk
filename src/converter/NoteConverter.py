@@ -31,7 +31,7 @@ class InstrumentInfo:
 # - pitch slides, which must be contained within a note
 # - envelope-related remote commands
 class NoteConverter():
-    def __init__(self, tick_ratio: float, amk_ticks_per_row: int) -> None:
+    def __init__(self, tick_ratio: float) -> None:
         self.tick_ratio = tick_ratio
         self.pitch_slider = PitchSlider(tick_ratio, 0)
         #init logger
@@ -151,7 +151,7 @@ class NoteConverter():
             has_portamento = False
             if effect := tick_data.get_effect(PortamentoEffect):
                 has_portamento = True
-                if tick_data.Type == TickData.NoteKind.NOTE:
+                if tick_data.kind() == TickData.NoteKind.NOTE:
                     active_note, portamento_command = self.convert_portamento(tick, active_note, tick_data.Note, effect.speed)
                     if portamento_command is not None:
                         if cur_dur is not None:
@@ -167,7 +167,7 @@ class NoteConverter():
                 note_tick += int(effect.delay_ticks * self.tick_ratio)
                 
             # don't make a new note for portamento rows, pitchbend will handle that
-            note_kind = tick_data.Type
+            note_kind = tick_data.kind()
             if note_kind == TickData.NoteKind.NOTE and not has_portamento:                    
                 new_fur_ins = None
                 for ins in instruments:
