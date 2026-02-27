@@ -64,7 +64,7 @@ class RowConverter:
         tick = 0
 
         # initialize converters
-        note_converter = NoteConverter(self.tick_ratio, self.amk_ticks_per_row)
+        note_converter = NoteConverter(self.tick_ratio)
 
         # convert notes
         new_notes, new_commands = note_converter.convert(ticks, ins_info, chiptune_data.instruments)
@@ -72,7 +72,7 @@ class RowConverter:
         notes.extend(new_notes)
 
         # convert commands
-        legato_converter    = LegatoConverter(self.amk_ticks_per_row)
+        legato_converter    = LegatoConverter()
         commands.extend(legato_converter.convert(ticks, notes))
         
         volume_converter    = VolumeConverter(self.tick_ratio)
@@ -85,19 +85,6 @@ class RowConverter:
             commands.extend(pan_converter.convert_tick(tick_data, tick, state))
             commands.extend(vibrato_converter.convert_tick(tick_data, tick, state))
             tick += 1
-
-        # if necessary, toggle legato off before looping
-        if state.quick_legato:
-            last_note = notes[-1]
-            # must be in the middle of a note duration to be effective
-            length = last_note.duration
-            last_tick = last_note.tick + last_note.duration
-            legato_tick = last_tick - 1
-            # use clean duration if possible
-            if length > 12:
-                legato_tick = last_tick - 12
-            commands.append(LegatoToggle(legato_tick))
-            state.quick_legato = False
 
         # sort notes and commands by tick
         sorted_commands = sorted(commands, key=lambda x: x.tick)

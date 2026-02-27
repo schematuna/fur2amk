@@ -9,7 +9,7 @@ class VolumeMacroConverter:
         self.primary_vol = 127
         self.macro_mult = 1
 
-    def get_volume_for_row(self, row_vol: int, is_new_note: bool, active_ins: FurnaceInstrument):
+    def get_volume_for_tick(self, row_vol: int, is_new_note: bool, active_ins: FurnaceInstrument):
         new_vol = row_vol
         if row_vol is not None:
             self.primary_vol = new_vol
@@ -33,6 +33,3 @@ class VolumeMacroConverter:
             new_vol = self.primary_vol * self.macro_mult
 
         return new_vol
-
-        
-        

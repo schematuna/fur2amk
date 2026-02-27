@@ -53,7 +53,25 @@ class TickData:
         RELEASE = 1
         EMPTY = 2
 
-    Type: NoteKind = NoteKind.EMPTY
+    # Classify a Furnace row by note type
+    def kind(self) -> NoteKind:
+        n = self.Note
+        if n is None:
+            return self.NoteKind.EMPTY
+        
+        try:
+            v = int(n)
+        except Exception:
+            return self.NoteKind.EMPTY
+        
+        # for snes, note release and note off are the same
+        if v == 180 or v == 181:
+            return self.NoteKind.RELEASE
+        if 0 <= v <= 179:
+            return self.NoteKind.NOTE
+        
+        # no macro releases considered here, those are abstracted away at this point
+        return self.NoteKind.EMPTY
 
     def get_effect(self, command_type: type[FurnaceEffect]) -> Optional[FurnaceEffect]:
         for effect in self.Effects:
