@@ -15,8 +15,8 @@ import argparse
 
 
 from src.reader.FurnaceParser import FurnaceParser
-from src.converter.FurnaceConverter import FurnaceConverter
-from src.converter.AMKConverter import AMKConverter
+from src.FurnaceConverter.FurnaceConverter import FurnaceConverter
+from src.AMKConverter.AMKConverter import AMKConverter
 from src.writer.AMKWriter import AMKWriter
 from src.writer.BRRHandler import BRRConverter, BRRSample
 from copy_to_amk import main as copy_to_amk_main
