@@ -4,6 +4,7 @@ import logging
 from ..model.FurnaceData import *
 from ..model.MMLCommands import *
 from ..model.MMLData import *
+from ..model.ChiptuneData import *
 from ..model.AMKData import *
 from .ConverterUtil import *
 from ..util.MMLUtil import *
@@ -30,8 +31,7 @@ class InstrumentInfo:
 # - pitch slides, which must be contained within a note
 # - envelope-related remote commands
 class NoteConverter():
-    def __init__(self, tick_ratio: float, amk_ticks_per_row: int) -> None:
-        self.amk_ticks_per_row = amk_ticks_per_row
+    def __init__(self, tick_ratio: float) -> None:
         self.tick_ratio = tick_ratio
         self.pitch_slider = PitchSlider(tick_ratio, 0)
         #init logger
@@ -125,14 +125,14 @@ class NoteConverter():
                 new_active_note = new_command.note
                 commands.append(new_command)
                         
-        if new_command := slide_helper.tick(self.amk_ticks_per_row):
+        if new_command := slide_helper.tick(1):
             new_active_note = new_command.note
             commands.append(new_command)
 
         return new_active_note, commands
 
     # get notes and pitch-related commands
-    def convert(self, flat_rows: List[FurnaceRow], ins_info: Dict[int, InstrumentInfo], instruments: List[FurnaceInstrument]) -> Tuple[List[MMLNote], List[MMLCommand]]:
+    def convert(self, ticks: List[TickData], ins_info: Dict[int, InstrumentInfo], instruments: List[FurnaceInstrument]) -> Tuple[List[MMLNote], List[MMLCommand]]:
         notes: List[MMLNote] = []
         commands: List[MMLCommand] = []
         tick = 0
@@ -146,13 +146,13 @@ class NoteConverter():
         # active furnace instrument
         fur_ins = None
         # process notes and pitch commands
-        for row in flat_rows:
+        for tick_data in ticks:
             # handle portamento before reading this row's note info
             has_portamento = False
-            if effect := row.get_effect(PortamentoEffect):
+            if effect := tick_data.get_effect(PortamentoEffect):
                 has_portamento = True
-                if row.kind() == FurnaceRow.NoteKind.NOTE:
-                    active_note, portamento_command = self.convert_portamento(tick, active_note, row.Note, effect.speed)
+                if tick_data.kind() == TickData.NoteKind.NOTE:
+                    active_note, portamento_command = self.convert_portamento(tick, active_note, tick_data.Note, effect.speed)
                     if portamento_command is not None:
                         if cur_dur is not None:
                             cur_dur.pitch_bends.append(portamento_command)
@@ -163,15 +163,15 @@ class NoteConverter():
 
             # check for note delay (this also affects note offs)
             note_tick = tick
-            if effect := row.get_effect(NoteDelayEffect):
+            if effect := tick_data.get_effect(NoteDelayEffect):
                 note_tick += int(effect.delay_ticks * self.tick_ratio)
                 
             # don't make a new note for portamento rows, pitchbend will handle that
-            note_kind = row.kind()
-            if note_kind == FurnaceRow.NoteKind.NOTE and not has_portamento:                    
+            note_kind = tick_data.kind()
+            if note_kind == TickData.NoteKind.NOTE and not has_portamento:                    
                 new_fur_ins = None
                 for ins in instruments:
-                    if ins.index == row.Ins:
+                    if ins.index == tick_data.Ins:
                         new_fur_ins = ins
                         break
 
@@ -179,7 +179,7 @@ class NoteConverter():
                     fur_ins = new_fur_ins
 
                 if fur_ins is None:
-                    self.logger.error(f"No furnace instrument active in row with Note {row.Note}.")
+                    self.logger.error(f"No furnace instrument active in row with Note {tick_data.Note}.")
                     continue
 
                 pre_note_commands = []
@@ -188,9 +188,9 @@ class NoteConverter():
                     pre_note_commands = self.get_pre_note_commands(fur_ins, ins_info, state, note_tick)
                     state.fur_ins_idx = fur_ins.index   
 
-                note_to_play, amk_ins_idx = self.get_note_info(fur_ins.index, row.Note, ins_info, fur_ins.use_sample_map)
+                note_to_play, amk_ins_idx = self.get_note_info(fur_ins.index, tick_data.Note, ins_info, fur_ins.use_sample_map)
                 if note_to_play is None or amk_ins_idx is None:
-                    self.logger.error(f"No note to play or AMK instrument index found for Furnace instrument {fur_ins.index}, note {row.Note}.")
+                    self.logger.error(f"No note to play or AMK instrument index found for Furnace instrument {fur_ins.index}, note {tick_data.Note}.")
                     continue
 
                 pitch_command = None
@@ -206,10 +206,10 @@ class NoteConverter():
                 slide_helper.set_target(active_note)
                 # if this note interrupted a pitch slide, start a new one
                 # unless there is a pitch slide effect on this row, in which case we'll let that handle it
-                if pitch_command is not None and not row.get_effect(PitchSlideEffect):
+                if pitch_command is not None and not tick_data.get_effect(PitchSlideEffect):
                     slide_helper.start_slide()
 
-            elif note_kind == FurnaceRow.NoteKind.OFF or note_kind == FurnaceRow.NoteKind.RELEASE:
+            elif note_kind == TickData.NoteKind.RELEASE:
                 if fur_ins is not None and fur_ins.sn_envelope_on and fur_ins.sustain_mode == SustainMode.DELAYED:
                     # the delayed adsr mode sets the release time to the release value on key off
                     adsr = ADSR(fur_ins.sn_attack, fur_ins.sn_decay, fur_ins.sn_sustain, fur_ins.sn_release)
@@ -230,26 +230,13 @@ class NoteConverter():
                     cur_dur = None
                     active_note = None
 
-            # check for quick legato, make a new note if found
-            if effect := row.get_effect(QuickLegatoEffect):
-                pre_note_commands = []
-                new_note_onset = note_tick + int(effect.delay * self.tick_ratio)
-                if cur_dur is not None:
-                    cur_dur.duration = new_note_onset - cur_dur.tick
-                    notes.append(cur_dur)
-                new_note = active_note + effect.semitones
-                new_note = max(0,min(new_note, MMLUtil.AMK_MAX_PITCH))
-                cur_dur = MMLNote(new_note_onset, 0, new_note, cur_dur.instrument, pre_note_commands)
-                active_note = new_note
-                slide_helper.set_target(active_note)
-
             # handle pitch slides after processing this row's note info
-            active_note, pitch_commands = self.convert_pitch_slides(tick, row, slide_helper, active_note)
+            active_note, pitch_commands = self.convert_pitch_slides(tick, tick_data, slide_helper, active_note)
             if cur_dur is not None:
                 cur_dur.pitch_bends.extend(pitch_commands)
 
-            # increment tick before next row
-            tick += self.amk_ticks_per_row
+            # increment tick before next tick
+            tick += 1
         
         # Finalize possible final note
         if cur_dur is not None:

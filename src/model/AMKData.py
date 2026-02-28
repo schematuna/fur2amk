@@ -30,16 +30,6 @@ class AMKInstrument:
     gain: int = 0
 
 @dataclass
-class AMKEchoData:
-    firIdx: Optional[int] = None
-    echoDelay: Optional[int] = None
-    echoFeedback: Optional[int] = None
-    echoMask: Optional[int] = None
-    echoVolL: Optional[int] = None
-    echoVolR: Optional[int] = None
-    echoFilterCoeffs: Optional[List[int]] = None
-
-@dataclass
 class AMKRemoteDef():
     command_idx: int
     amk_command: MMLCommand
@@ -95,7 +85,7 @@ class AMKData:
     tempo: int = 0
     volume: int = 0
 
-    echo_data: AMKEchoData = None
+    echo_data: SNESEchoData = None
 
     remote_defs: List[AMKRemoteDef] = field(default_factory=list)
 

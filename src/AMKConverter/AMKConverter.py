@@ -6,33 +6,32 @@ import sys
 import logging
 from typing import Dict, List, Tuple
 
-from ..model.FurnaceData import FurnaceModule, FurnaceRow, SustainMode
+from ..model.ChiptuneData import *
 from ..model.AMKData import *
 from ..model.MMLCommands import *
 from .RowConverter import *
 from ..util import *
 
-class FurnaceConverter:
+class AMKConverter:
     def __init__(self) -> None:
         self.logger = logging.getLogger(__name__)
         self.row_converter = None
         # mapping of furnace instrument index to conversion info
         self.instrument_info : Dict[int, InstrumentInfo] = {}
 
-    def convert_spc_info(self, module: FurnaceModule) -> SPCInfo:
+    def convert_spc_info(self, chiptune_data: ChiptuneData) -> SPCInfo:
         info = SPCInfo()
-        info.title = module.SongName
+        info.title = chiptune_data.song_info.title
         # info.game = module.Game
-        info.author = module.Author
+        info.author = chiptune_data.song_info.author
         # info.length = module.Length
-        info.comment = module.Comment
+        info.comment = chiptune_data.song_info.comment
         return info
 
-    def convert_samples(self, module: FurnaceModule) -> Dict[int, Tuple[str, str]]:
+    def convert_samples(self, chiptune_data: ChiptuneData) -> Dict[int, Tuple[str, str]]:
         sample_dict = {}
-        for s in module.Samples:
+        for s in chiptune_data.sample_info:
             # Build sample filename and tuning string
-            fname = f"{s.index:02d}_" + (s.name or f"Sample{s.index}").replace(' ', '_') + '.brr'
             tuning_word = 0x0100
             if s.c4_rate and s.c4_rate > 0:
                 # MAGIC NUMBERS to convert from c4_rate to AMK instrument tuning value
@@ -40,15 +39,15 @@ class FurnaceConverter:
                 val = int(round(float(s.c4_rate) * 768 / 12539))
                 tuning_word = max(0, min(0xFFFF, val))
             tune_str = f"${(tuning_word >> 8) & 0xFF:02X} ${(tuning_word & 0xFF):02X}"
-            sample_dict[s.index] = AMKSample(filename=fname, tuning=tune_str)
+            sample_dict[s.index] = AMKSample(filename=s.filename, tuning=tune_str)
 
         return sample_dict
     
-    def convert_instruments(self, module: FurnaceModule, num_samples: int) -> List[AMKInstrument]:
+    def convert_instruments(self, chiptune_data: ChiptuneData, num_samples: int) -> List[AMKInstrument]:
         instruments: List[AMKInstrument] = []
 
         amk_ins_index = 0
-        for ins in module.Instruments:
+        for ins in chiptune_data.instruments:
             ins_info = InstrumentInfo()
             amk_instruments: List[AMKInstrument] = []
             # first, check if this is a noise instrument
@@ -118,15 +117,15 @@ class FurnaceConverter:
 
         return instruments
     
-    def convert_remote_commands(self, module: FurnaceModule, amk_data: AMKData) -> int:
+    def convert_remote_commands(self, chiptune_data: ChiptuneData, amk_data: AMKData) -> int:
         # start at 1, 0 will be reserved for stop remote commands
         command_num = 1
 
-        for fur_ins in module.Instruments:
+        for fur_ins in chiptune_data.instruments:
             gmacro = fur_ins.snes_macro_data.gain_values
             if gmacro and len(gmacro) > 1:
                 # just support one gain change for now.
-                # If we want to support more we;ll have to set gain manually throughout the note.
+                # If we want to support more we'll have to set gain manually throughout the note.
                 comment = "Gain toggle for Furnace instrument " + str(fur_ins.index)+ ": " + fur_ins.name
                 command = EnableGainCommand(None, SnesGain.from_byte(gmacro[1]))
                 remote_def = AMKRemoteDef(command_num, command, comment, RemoteCommandTiming.AFTER_START, fur_ins.snes_macro_data.gain_speed)
@@ -164,81 +163,45 @@ class FurnaceConverter:
         # loop labels and remote command labels can't overlap
         return command_num
 
-    def convert_tempo(self, module: FurnaceModule) -> int:
+    def convert_tempo(self, chiptune_data: ChiptuneData) -> int:
         rows_per_beat = MMLUtil.AMK_TICKS_PER_BEAT / self.row_converter.amk_ticks_per_row
-        fur_ticks_per_beat = rows_per_beat * module.Speed1
-        beats_per_second = module.TicksPerSecond / fur_ticks_per_beat
+        fur_ticks_per_beat = rows_per_beat * chiptune_data.structure.ticks_per_step
+        beats_per_second = chiptune_data.tick_rate / fur_ticks_per_beat
         bpm = int(round(60 * beats_per_second))
         amk_tempo = int(round(bpm * 0.4096 - 1))
         return amk_tempo
 
-    def convert_volume(self, module: FurnaceModule) -> int:
-        # global volume is average of left/right furnace volumes
-        # volumes also stored inversely for some reason.
-        Lvol = 127 - module.SNESFlags.volScaleL
-        Rvol = 127 - module.SNESFlags.volScaleR
-        # map 127 -> w255
-        gvol = Lvol + Rvol
-        return min(int(gvol), 255)
-    
-    def convert_echo(self, module: FurnaceModule) -> AMKEchoData:
-        echo_data = AMKEchoData()
-        echoOn = module.SNESFlags.echo
-        echo_data.firIdx = 0x01 if echoOn else 0x00
-        echo_data.echoDelay = module.SNESFlags.echoDelay
-        echo_data.echoFeedback = module.SNESFlags.echoFeedback
-        echo_data.echoMask = module.SNESFlags.echoMask
-        echo_data.echoVolL = module.SNESFlags.echoVolL
-        echo_data.echoVolR = module.SNESFlags.echoVolR
-        echo_data.echoFilterCoeffs = module.SNESFlags.echoFilterCoeffs
-        return echo_data
-
-    def convert_mml_data(self, module: FurnaceModule) -> MMLData:
+    # TODO: need to convert to AMK ticks
+    def convert_mml_data(self, chiptune_data: ChiptuneData) -> MMLData:
         mml_data = MMLData()
-        mml_data.num_channels = module.NumChannels
+        mml_data.num_channels = chiptune_data.structure.num_channels
         # for formatting and duration calculations
         # lengths are in ticks
-        mml_data.measure_length = module.HighlightB * self.row_converter.amk_ticks_per_row
-
-        # Analyze pattern lengths and detect loop point
-        pattern_lengths_rows, pattern_offsets, loop_tick = self.row_converter.analyze_pattern_lengths(module)
+        mml_data.measure_length = self.row_converter.to_amk_ticks(chiptune_data.structure.measure_length)
 
         # Convert to ticks and store
-        mml_data.section_lengths = [length * self.row_converter.amk_ticks_per_row
-                                     for length in pattern_lengths_rows]
-        mml_data.song_length = sum(mml_data.section_lengths)
-        mml_data.loop_tick = loop_tick
+        mml_data.section_lengths = [self.row_converter.to_amk_ticks(length) for length in chiptune_data.structure.section_lengths]
+        mml_data.song_length = self.row_converter.to_amk_ticks(chiptune_data.structure.song_length)
+        mml_data.loop_tick = self.row_converter.to_amk_ticks(chiptune_data.structure.loop_tick)
 
-        for ch in range(module.NumChannels):
-            flat_rows: List[FurnaceRow] = []
-            patmap = module.PatternsByChannel[ch]
-            orders = module.OrdersPerChannel[ch]
 
-            for order_idx, pat in enumerate(orders):
-                rows = patmap.get(pat)
-                if rows:
-                    start_offset = pattern_offsets[order_idx]
-                    end_offset = start_offset + pattern_lengths_rows[order_idx]
-                    flat_rows.extend(rows[start_offset:end_offset])
-                else:
-                    self.logger.warning(f"Channel {ch} references missing pattern {pat}. Inserting empty pattern.")
-                    flat_rows.extend([FurnaceRow() for _ in range(pattern_lengths_rows[order_idx])])
-
-            mml_data.notes[ch], mml_data.commands[ch] = self.row_converter.convert(flat_rows, module, self.instrument_info)
+        for ch, ticks in enumerate(chiptune_data.tick_data):
+            amk_ticks = self.row_converter.expand_ticks(ticks)
+            mml_data.notes[ch], mml_data.commands[ch] = self.row_converter.convert(amk_ticks, chiptune_data, self.instrument_info)
 
         return mml_data
 
-    def convert(self, module: FurnaceModule) -> AMKData:
-        self.row_converter = RowConverter(module.Speed1)
+    def convert(self, chiptune_data: ChiptuneData) -> AMKData:
+        self.row_converter = RowConverter(chiptune_data.structure.ticks_per_step)
 
         amk_data = AMKData()
-        amk_data.spc_info     = self.convert_spc_info(module)
-        amk_data.samples      = self.convert_samples(module)
-        amk_data.instruments  = self.convert_instruments(module, len(amk_data.samples))
-        amk_data.label_start  = self.convert_remote_commands(module, amk_data)
-        amk_data.tempo        = self.convert_tempo(module)
-        amk_data.volume       = self.convert_volume(module)
-        amk_data.echo_data    = self.convert_echo(module)
-        amk_data.mml_data     = self.convert_mml_data(module)
+        amk_data.spc_info     = self.convert_spc_info(chiptune_data)
+        amk_data.samples      = self.convert_samples(chiptune_data)
+        amk_data.instruments  = self.convert_instruments(chiptune_data, len(amk_data.samples))
+        amk_data.label_start  = self.convert_remote_commands(chiptune_data, amk_data)
+        amk_data.tempo        = self.convert_tempo(chiptune_data)
+        amk_data.volume       = chiptune_data.global_volume
+        amk_data.echo_data    = chiptune_data.echo_data
+        amk_data.mml_data     = self.convert_mml_data(chiptune_data)
 
         return amk_data

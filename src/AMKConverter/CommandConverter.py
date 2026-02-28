@@ -5,17 +5,18 @@ import logging
 from ..model.FurnaceData import *
 from ..model.MMLCommands import *
 from ..model.MMLData import *
+from ..model.ChiptuneData import *
 
 from .ConverterUtil import *
 
 class VolumeConverter():
-    def __init__(self, tick_ratio: float, amk_ticks_per_row: int) -> None:
-        self.amk_ticks_per_row = amk_ticks_per_row
+    def __init__(self, tick_ratio: float) -> None:
+        self.tick_ratio = tick_ratio
         self.volume_slider = VolumeSlider(tick_ratio, 0)
 
-    def convert_row(self, row: FurnaceRow, tick: int, state: FurnaceState) -> List[MMLCommand]:
+    def convert_tick(self, tick_data: TickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
-        new_vol = row.Vol
+        new_vol = tick_data.Vol
         slide_command = None
         if new_vol is not None:
             slide_command = self.volume_slider.end_slide()
@@ -24,41 +25,41 @@ class VolumeConverter():
             self.volume_slider.set_target(new_vol)
             commands.append(VolumeChange(tick, MMLUtil.find_v(new_vol)))
 
-        if effect := row.get_effect(VolumeSlideEffect) or row.get_effect(FineVolumeSlideEffect):
+        if effect := tick_data.get_effect(VolumeSlideEffect) or tick_data.get_effect(FineVolumeSlideEffect):
             if new_command := self.volume_slider.handle_new_effect(effect):
                 commands.append(new_command)
         elif slide_command is not None:
             # restart slide if it was interrupted by a volume command
             self.volume_slider.start_slide()
             
-        if new_command := self.volume_slider.tick(self.amk_ticks_per_row):
+        if new_command := self.volume_slider.tick(1):
             commands.append(new_command)
 
         return commands
 
 class PanConverter():
-    def __init__(self, tick_ratio: float, amk_ticks_per_row: int) -> None:
-        self.amk_ticks_per_row = amk_ticks_per_row
+    def __init__(self, tick_ratio: float) -> None:
+        self.tick_ratio = tick_ratio
         self.pan_slider = PanSlider(tick_ratio, 0)
 
-    def convert_row(self, row: FurnaceRow, tick: int, state: FurnaceState) -> List[MMLCommand]:
+    def convert_tick(self, tick_data: TickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
-        if effect := row.get_effect(PanEffect):
+        if effect := tick_data.get_effect(PanEffect):
             self.pan_slider.set_target(effect.pan_position)
             amk_pan = FurnaceUtil.unity_to_amk_pan(effect.pan_position)
             commands.append(PanChange(tick, amk_pan))
         
-        if effect := row.get_effect(StereoPanEffect):
+        if effect := tick_data.get_effect(StereoPanEffect):
             cur_pan = FurnaceUtil.stereo_to_unity_pan(effect.left_volume, effect.right_volume)
             self.pan_slider.set_target(cur_pan)
             amk_pan = FurnaceUtil.stereo_to_amk_pan(effect.left_volume, effect.right_volume)
             commands.append(PanChange(tick, amk_pan))
         
-        if effect := row.get_effect(PanSlideEffect):
+        if effect := tick_data.get_effect(PanSlideEffect):
             if new_command := self.pan_slider.handle_new_effect(effect):
                 commands.append(new_command)
                     
-        if new_command := self.pan_slider.tick(self.amk_ticks_per_row):
+        if new_command := self.pan_slider.tick(1):
             commands.append(new_command)
 
         return commands
@@ -67,9 +68,9 @@ class VibratoConverter():
     def __init__(self, tick_ratio: float) -> None:
         self.tick_ratio = tick_ratio
         
-    def convert_row(self, row: FurnaceRow, tick: int, state: FurnaceState) -> List[MMLCommand]:
+    def convert_tick(self, tick_data: TickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
-        if effect := row.get_effect(VibratoEffect):
+        if effect := tick_data.get_effect(VibratoEffect):
             # Vibrato off when both speed and depth are 0
             if effect.speed == 0 and effect.depth == 0:
                 commands.append(DisableVibrato(tick))
@@ -102,41 +103,29 @@ class LegatoRegion:
 
 
 class LegatoConverter:
-    def __init__(self, amk_ticks_per_row: int) -> None:
-        self.amk_ticks_per_row = amk_ticks_per_row
+    def __init__(self) -> None:
         self.logger = logging.getLogger(__name__)
 
-    def convert(self, flat_rows: List[FurnaceRow], notes: List[MMLNote]) -> List[MMLCommand]:
-        # Pass 1: Build legato regions
-        regions = self._build_legato_regions(flat_rows, notes)
+    def convert(self, ticks: List[TickData], notes: List[MMLNote]) -> List[MMLCommand]:
+        # Build legato regions
+        regions = self.build_legato_regions(ticks)
 
-        # Pass 2: Emit toggle commands
-        commands = self._emit_toggle_commands(regions, notes)
+        # Emit toggle commands
+        commands = self.emit_toggle_commands(regions, notes)
 
         return commands
 
-    def _build_legato_regions(self, flat_rows: List[FurnaceRow], notes: List[MMLNote]) -> List[LegatoRegion]:
+    def build_legato_regions(self, ticks: List[TickData]) -> List[LegatoRegion]:
         """
         Build a list of tick ranges where legato should be active.
-
-        Builds global and quick legato regions separately, then merges them.
         """
-        global_regions = self._build_global_legato_regions(flat_rows)
-        quick_regions = self._build_quick_legato_regions(flat_rows, notes)
-
-        # Combine and merge overlapping regions
-        all_regions = sorted(global_regions + quick_regions, key=lambda r: r.start_tick)
-        return self._merge_adjacent_regions(all_regions)
-
-    def _build_global_legato_regions(self, flat_rows: List[FurnaceRow]) -> List[LegatoRegion]:
-        """Build regions from LegatoEffect (simple on/off that persists)."""
         regions: List[LegatoRegion] = []
         current_region: LegatoRegion = None
         legato_on = False
 
         tick = 0
-        for row in flat_rows:
-            if legato_effect := row.get_effect(LegatoEffect):
+        for tick_data in ticks:
+            if legato_effect := tick_data.get_effect(LegatoEffect):
                 if legato_effect.legato_on and not legato_on:
                     # Legato turning ON
                     legato_on = True
@@ -148,7 +137,7 @@ class LegatoConverter:
                     regions.append(current_region)
                     current_region = None
 
-            tick += self.amk_ticks_per_row
+            tick += 1
 
         # Close any open region at end of song
         if current_region:
@@ -157,59 +146,7 @@ class LegatoConverter:
 
         return regions
 
-    def _build_quick_legato_regions(self, flat_rows: List[FurnaceRow], notes: List[MMLNote]) -> List[LegatoRegion]:
-        """
-        Build regions from QuickLegatoEffect.
-
-        Quick legato starts at the effect and ends at the start of the destination note
-        (the first note after the quick legato chain that doesn't have a quick legato effect).
-        """
-        regions: List[LegatoRegion] = []
-        current_region: LegatoRegion = None
-
-        tick = 0
-        for row in flat_rows:
-            row_end = tick + self.amk_ticks_per_row
-            quick_legato_effect = row.get_effect(QuickLegatoEffect)
-                
-            note_in_row = self._get_note_starting_in_range(tick, row_end, notes)
-            if quick_legato_effect:
-                # Start a new region if not already in one
-                if current_region is None:
-                    current_region = LegatoRegion(start_tick=tick)
-            elif current_region is not None and note_in_row:
-                # No quick legato on this row, but we're in a region and a note starts here
-                # This note is the destination - end the region at its start
-                current_region.end_tick = note_in_row.tick
-                regions.append(current_region)
-                current_region = None
-
-            tick += self.amk_ticks_per_row
-
-        # Close any open region at end of song
-        if current_region:
-            current_region.end_tick = tick - 1
-            regions.append(current_region)
-
-        return regions
-
-    def _merge_adjacent_regions(self, regions: List[LegatoRegion]) -> List[LegatoRegion]:
-        """Merge regions that are adjacent or overlapping."""
-        if not regions:
-            return []
-
-        merged = [regions[0]]
-        for region in regions[1:]:
-            last = merged[-1]
-            if region.start_tick <= last.end_tick:
-                # Overlapping or adjacent, extend the last region
-                last.end_tick = max(last.end_tick, region.end_tick)
-            else:
-                merged.append(region)
-
-        return merged
-
-    def _emit_toggle_commands(self, regions: List[LegatoRegion], notes: List[MMLNote]) -> List[MMLCommand]:
+    def emit_toggle_commands(self, regions: List[LegatoRegion], notes: List[MMLNote]) -> List[MMLCommand]:
         """
         Emit toggle commands for each region.
 
@@ -247,13 +184,6 @@ class LegatoConverter:
                 continue
             # at note boundaries, defer to the earlier note
             if note.tick < tick <= note.tick + note.duration:
-                return note
-        return None
-
-    def _get_note_starting_in_range(self, start_tick: int, end_tick: int, notes: List[MMLNote]) -> Optional[MMLNote]:
-        """Find the first note that starts within the given tick range [start_tick, end_tick)."""
-        for note in notes:
-            if start_tick <= note.tick < end_tick:
                 return note
         return None
 

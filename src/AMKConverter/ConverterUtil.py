@@ -15,8 +15,6 @@ import logging
 class FurnaceState:
     remote_commands: List[RemoteCommand] = field(default_factory=list)
     is_echo: bool = True
-    quick_legato: bool = False         # is legato active 
-    global_legato: bool = False  # is global legato active (i.e. not quick legato)
     adsr: ADSR = None
     fur_ins_idx: int = None
 
