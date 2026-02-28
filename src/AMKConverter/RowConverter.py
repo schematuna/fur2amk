@@ -75,15 +75,17 @@ class RowConverter:
         legato_converter    = LegatoConverter()
         commands.extend(legato_converter.convert(ticks, notes))
         
+        tempo_converter     = TempoConverter(chiptune_data.structure, self.amk_ticks_per_row)
         volume_converter    = VolumeConverter(self.tick_ratio)
         pan_converter       = PanConverter(self.tick_ratio)
         vibrato_converter   = VibratoConverter(self.tick_ratio)
         state = FurnaceState()
         for tick_data in ticks:
-            # commands.extend(legato_converter.convert_row(row, tick, state))
+            commands.extend(tempo_converter.convert_tick(tick_data, tick, state))
             commands.extend(volume_converter.convert_tick(tick_data, tick, state))
             commands.extend(pan_converter.convert_tick(tick_data, tick, state))
             commands.extend(vibrato_converter.convert_tick(tick_data, tick, state))
+
             tick += 1
 
         # sort notes and commands by tick

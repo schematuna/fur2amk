@@ -7,6 +7,7 @@ from ..model.FurnaceEffects import *
 from ..model.MMLCommands import *
 from ..model.MMLData import *
 from ..model.FurnaceData import *
+from ..model.ChiptuneData import *
 
 import logging
 
@@ -63,7 +64,15 @@ class FurnaceUtil:
         level = round(255 * right / total)
         
         return max(0, min(255, level))
-
+    
+    @staticmethod
+    def tick_rate_to_amk_tempo(structure: ChiptuneStructure, amk_ticks_per_row: int, tick_rate: int) -> int:
+        rows_per_beat = MMLUtil.AMK_TICKS_PER_BEAT / amk_ticks_per_row
+        fur_ticks_per_beat = rows_per_beat * structure.ticks_per_step
+        beats_per_second = tick_rate / fur_ticks_per_beat
+        bpm = int(round(60 * beats_per_second))
+        amk_tempo = int(round(bpm * 0.4096 - 1))
+        return amk_tempo
 
 # Create this before iterating through rows, and call tick() for each row
 # call handle_new_command whenever a relevant slide command is encountered

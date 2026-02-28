@@ -42,6 +42,7 @@ which has high moderation standards.
 - 0D: Jump to Next Pattern
 - 80: Pan
 - 83: Pan Slide
+- C:  Set Tick Rate (Hz)
 - E1: Note Slide Up
 - E2: Note Slide Down
 - E6: Quick Legato
@@ -49,6 +50,7 @@ which has high moderation standards.
 - E9: Quick legato down
 - EA: Toggle Legato
 - ED: Note Delay
+- F0: Set Tick Rate (BPM)
 - F3: Fine Volume Slide Up
 - F4: Fine Volume Slide Down
 - FA: Fast Volume Slide

@@ -154,6 +154,16 @@ class JumpToNextPatternEffect(FurnaceEffect):
     def __init__(self, raw_value: int):
         self.row_number = raw_value
 
+class SetTickRateEffect(FurnaceEffect):
+    """Sets the Tick Rate. tick_rate is from 000 to 3FF in Hz."""
+
+    def __init__(self, raw_value: int, isBPM: bool):
+        if isBPM:
+            # Bizarrely in the Furnace Speed pane, Base Tempo = Tick Rate * 2.5
+            self.tick_rate = round(raw_value // 2.5)
+        else: 
+            self.tick_rate = raw_value
+
 class FurnaceEffectFactory:
     effect_map = {
             0x01: lambda v: PitchSlideEffect(v, True),
@@ -166,6 +176,7 @@ class FurnaceEffectFactory:
             0x0D: JumpToNextPatternEffect,
             0x80: PanEffect,
             0x83: PanSlideEffect,
+            0xC0: lambda v: SetTickRateEffect(v, False),
             0xE1: lambda v: NoteSlideEffect(v, True),
             0xE2: lambda v: NoteSlideEffect(v, False),
             0xE6: lambda v: QuickLegatoEffect(v, True, None),   # quick legato
@@ -173,6 +184,7 @@ class FurnaceEffectFactory:
             0xE9: lambda v: QuickLegatoEffect(v, False, False), # quick legato down
             0xEA: LegatoEffect,
             0xED: NoteDelayEffect,
+            0xF0: lambda v: SetTickRateEffect(v, True),
             0xF3: lambda v: FineVolumeSlideEffect(v, True),
             0xF4: lambda v: FineVolumeSlideEffect(v, False),
             0xFA: lambda v: VolumeSlideEffect(v, True),
