@@ -108,14 +108,14 @@ class LegatoConverter:
 
     def convert(self, ticks: List[TickData], notes: List[MMLNote]) -> List[MMLCommand]:
         # Build legato regions
-        regions = self.build_legato_regions(ticks, notes)
+        regions = self.build_legato_regions(ticks)
 
         # Emit toggle commands
         commands = self.emit_toggle_commands(regions, notes)
 
         return commands
 
-    def build_legato_regions(self, ticks: List[TickData], notes: List[MMLNote]) -> List[LegatoRegion]:
+    def build_legato_regions(self, ticks: List[TickData]) -> List[LegatoRegion]:
         """
         Build a list of tick ranges where legato should be active.
         """

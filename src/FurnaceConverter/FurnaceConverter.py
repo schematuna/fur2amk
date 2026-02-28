@@ -115,13 +115,10 @@ class FurnaceConverter:
             portamento_effect = tick_data.get_effect(PortamentoEffect)
             # when portamento happens, there isn't actually a note onset to end the ql chain
             tick_has_note = tick_data.Note is not None and not portamento_effect
-
-            quick_legato_effect = tick_data.get_effect(QuickLegatoEffect)
-                
+            
             # quick legato chains end when a note happens
             if in_ql_chain and tick_has_note:
                 in_ql_chain = False
-                print("exiting chain")
                 # turn legato off if we aren't already in a global legato region
                 if not global_legato_enabled:
                     if i - 1 > 0:
@@ -130,10 +127,10 @@ class FurnaceConverter:
                     else:
                         self.logger.warning("Can't end legato because tick would be negative")
 
+            quick_legato_effect = tick_data.get_effect(QuickLegatoEffect)
             # start quick legato chain
             if quick_legato_effect and not in_ql_chain:
                 in_ql_chain = True
-                print("entering chain")
                 # turn legato on if we aren't already in a global legato region
                 if not global_legato_enabled:
                     # turn on legato on the tick before new note would start
@@ -168,6 +165,7 @@ class FurnaceConverter:
                 furnace_ticks.append(TickData())
 
         # abstract away quick legato
+        # this just handles legato commands, corresponding notes are added in loop below
         furnace_ticks = self.resolve_quick_legato(furnace_ticks)
 
         vol_converter = VolumeMacroConverter()
