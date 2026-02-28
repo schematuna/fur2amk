@@ -146,7 +146,7 @@ class FurnaceMacro:
     speed: int                  # step length in ticks
     values: List[int]           # parsed integer values (length entries)
 
-
+# class representing a chunk of time in the Furnace sequencer. Could be a row or just a tick
 @dataclass
 class FurnaceRow:
     Note: Optional[int] = None
