@@ -1,0 +1,490 @@
+#amk 4
+
+#spc
+{
+    #title   "Mega Man 8 - Frost Man's Stage"
+    #author  "Syusaku Uchiyama cv 2022 SuperJet Spade"
+    #comment "Hodgepodge of samples from the PSX version of Mega Man 8 and Donkey Kong Country"
+}
+
+#path "Frost Man"
+
+#samples
+{
+    #optimized
+    "00_MM8-Kick.brr"
+    "01_MM8-Snare1.brr"
+    "02_MM8-Shaker.brr"
+    "03_MM8-SlapBass.brr"
+    "04_MM8-ChoirPad.brr"
+    "05_Trumpet.brr"
+    "06_Pan_Flute_2.brr"
+    "07_DKC-Tambourine_mod.brr"
+}
+
+#instruments
+{
+    "00_MM8-Kick.brr"            $FF $E0 $80 $08 $60 ;@30
+    "01_MM8-Snare1.brr"          $FF $E0 $80 $06 $A6 ;@31
+    "02_MM8-Shaker.brr"          $FF $E0 $80 $01 $92 ;@32
+    "03_MM8-SlapBass.brr"        $8F $00 $80 $03 $F4 ;@33
+    "04_MM8-ChoirPad.brr"        $FF $EB $80 $01 $FA ;@34
+    "05_Trumpet.brr"             $FF $EC $80 $06 $03 ;@35
+    "06_Pan_Flute_2.brr"         $FF $EE $80 $07 $1F ;@36
+    "07_DKC-Tambourine_mod.brr"  $FF $ED $80 $05 $1C ;@37
+}
+
+; created with fur2amk 0.4.2
+
+w128 t30
+
+$EF $F8 $C0 $3F
+$F1 $03 $40 $01
+$F5 $7F $00 $00 $00 $00 $00 $00 $00
+
+(!1)[$FA$01$92] ;Remote gain command for Furnace instrument 3: MM8 Slap Bass
+(!2)[$ED$0F$00] ;Restore ADSR for Furnace instrument 3: MM8 Slap Bass
+
+
+#0
+; enable light staccato
+$F4$02 
+; section 00
+@30 o2 b8 b8 b8 b16 b16 b8 b8 b8 b16 b16
+; section 01
+b8 b8 b8 b16 b16 b8^16 b8 b8 b16
+; section 02
+b8 b8 b8 b16 b16 b8 b8 b8 b16 b16
+; section 03
+b8 b8 b8 b16 b16 b4^32 @31 v202 o3 d+32 @30 v255 o2 b8 b16
+/
+; reset state on loop
+@30  
+; section 04
+(4)[
+b16^32 v219 b32 v255 b16 v219 b16
+v255 b16^32 v219 b32 v255 b16 v219 b16
+v255 b16^32 v219 b32 v255 b16 v219 b16
+v255 b16^32 v219 b32 v255 b16 v219 b16
+]
+; section 05
+(3)[
+v255 b16^32 v219 b32 v255 b16 v219 b16
+v255 b16^32 v219 b32 v255 b16 v219 b16
+v255 b16^32 v219 b32 v255 b16 v219 b16
+v255 b16^32 v219 b32 v255 b16 v219 b16
+]
+; section 06
+(3)
+; section 07
+v255 b8 b8
+b16^32 v219 b32 v255 b16 v219 b16
+v255 b4 @31 v156 o3 d+32^64 v250 d+64 v255 d+32 v202 d+32 v255 d+16 @30 v255 o2 b16
+; section 08
+(4)
+; section 09
+(3)
+; section 0A
+(3)
+; section 0B
+(3)
+; section 0C
+(4)
+; section 0D
+(3)
+; section 0E
+(4)
+; section 0F
+(4)
+
+
+#1
+; section 00
+@32 v156 y11 o5 e32 v255 e32 v156 e32 v111 e32 v255 e32 v156 e32 v111 e32 v255 e32
+v156 e32 v255 e32 v156 e32 e32 v255 e32 v156 e32 v111 e32 v255 e32
+v156 e32 v255 e32 v156 e32 v111 e32 v255 e32 v156 e32 v111 e32 v255 e32
+v156 e32 v255 e32 v156 e32 e32 v255 e32 v156 e32 v111 e32 v255 e32
+; section 01
+(5)[
+v156 e32 v255 e32 v156 e32 v111 e32 v255 e32 v156 e32 v111 e32 v255 e32
+v156 e32 v255 e32 v156 e32 e32 v255 e32 v156 e32 v111 e32 v255 e32
+v156 e32 v255 e32 v156 e32 v111 e32 v255 e32 v156 e32 v111 e32 v255 e32
+v156 e32 v255 e32 v156 e32 e32 v255 e32 v156 e32 v111 e32 v255 e32
+]
+; section 02
+(5)
+; section 03
+v156 e32 v255 e32 v156 e32 v111 e32 v255 e32 v156 e32 v111 e32 v255 e32
+v156 e32 v255 e32 v156 e32 e32 v255 e32 v156 e32 v111 e32 v255 e32
+v156 e32 v255 e32 v156 e32 v111 e32 v255 e32 v156 e32 v111 e32 v255 e32
+v156 e32 v255 e32 @31 v156 y10 o3 d+32 @32 y11 o5 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 @31 v255 y10 o3 d+32 d+32
+/
+; reset state on loop
+@31  
+; section 04
+(6)[
+@32 v156 y11 o5 e32 v255 e32 v156 e32 v111 e32 @31 v250 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 @31 v250 y10 o3 d+32
+@32 v156 y11 o5 e32 v255 e32 @31 v250 y10 o3 d+32 @32 v156 y11 o5 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 @31 v255 y10 o3 d+32
+@32 v156 y11 o5 e32 v255 e32 v156 e32 v111 e32 @31 v250 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 @31 v250 y10 o3 d+32
+@32 v156 y11 o5 e32 v255 e32 @31 v250 y10 o3 d+32 @32 v156 y11 o5 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 @31 v255 y10 o3 d+32
+]
+; section 05
+@32 v156 y11 o5 e32 v255 e32 v156 e32 v111 e32 @31 v250 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 @31 v250 y10 o3 d+32
+@32 v156 y11 o5 e32 v255 e32 @31 v250 y10 o3 d+32 @32 v156 y11 o5 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 @31 v255 y10 o3 d+32
+@32 v156 y11 o5 e32 v255 e32 v156 e32 v111 e32 @31 v250 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 @31 v250 y10 o3 d+32
+@32 v156 y11 o5 e32 v255 e32 @31 v250 y10 o3 d+32 @32 v156 y11 o5 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 @31 v255 y10 o3 d+32 d+32
+; section 06
+(6)
+; section 07
+@32 v156 y11 o5 e32 @31 v250 y10 o3 d+32 @32 v156 y11 o5 e32 @31 v255 y10 o3 d+32 y10 d+32 @32 v156 y11 o5 e32 @31 v250 y10 o3 d+32 v255 d+32
+@32 v156 y11 o5 e32 @31 v250 y10 o3 d+32 v255 d+32 @32 v156 y11 o5 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 @31 v255 y10 o3 d+32 d+32
+@32 v156 y11 o5 e32 v255 e32 v156 e32 v111 e32 v255 e32 v156 e32 v111 e32 v255 e32
+v156 e32 v255 e32 v156 e32 e32 v255 e32 v156 e32 @31 v255 y10 o3 d+32 @32 y11 o5 e32
+; section 08
+(7)[
+v156 y11 e32 v255 e32 v156 e32 v111 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 v255 e32
+v156 e32 v255 e32 v156 e32 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 v255 e32
+v156 e32 v255 e32 v156 e32 v111 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 v255 e32
+v156 e32 v255 e32 v156 e32 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 v255 e32
+]
+; section 09
+(8)[
+v156 y11 e32 v255 e32 v156 e32 v111 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 v255 e32
+v156 e32 v255 e32 v156 e32 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 v255 e32
+v156 e32 v255 e32 v156 e32 v111 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 v255 e32
+v156 e32 v255 e32 v156 e32 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 @31 v255 y10 o3 d+32 @32 y11 o5 e32
+]
+; section 0A
+(7)
+; section 0B
+v156 y11 e32 v255 e32 v156 e32 v111 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 v255 e32
+v156 e32 v255 e32 v156 e32 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 v255 e32
+v156 e32 v255 e32 v156 e32 v111 e32 v255 e32 v156 e32 v111 e32 v255 e32
+@31 v156 y10 o3 d+32 v255 d+32 @32 v156 y11 o5 e32 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 @31 v255 y10 o3 d+32 @32 y11 o5 e32
+; section 0C
+(7)
+; section 0D
+(8)
+; section 0E
+v156 y11 e32 v255 e32 v156 e32 v111 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 v255 e32
+v156 e32 v255 e32 v156 e32 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 v255 e32
+v156 e32 v255 e32 v156 e32 v111 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 v255 e32
+v156 e32 v255 e32 v156 e32 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 @31 v202 y10 o3 d+32 @32 v255 y11 o5 e32
+; section 0F
+@31 v255 y10 o3 d+32 @32 y11 o5 e32 v156 e32 v111 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 @31 v255 y10 o3 d+32 @32 y11 o5 e32
+@31 v255 y10 o3 d+32 @32 y11 o5 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 @31 v255 y10 o3 d+32 v202 d+32
+v255 d+32 @32 y11 o5 e32 v156 e32 @31 v255 y10 o3 d+32 @32 y11 o5 e32 v156 e32 @31 v255 y10 o3 d+32 @32 y11 o5 e32
+v156 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 v156 y11 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 @31 v255 y10 o3 d+32 @32 y11 o5 e32
+
+
+#2
+; section 00
+(!1, 3) (!2, -1) @33 v255 o3 c+8 c+32 r32 c+64 r64 c+64 r32^64
+o2 g+16 b32 r32 o3 c+8^32
+o2 b32 r32 b16^32 g+16
+r32 g+16 b16 o3 c+32 r32
+; section 01
+o2 f+8 f+32 r32 f+32 r32
+f+64 r64 f+16 f+32 r32 f+8^32
+f+32 r32 f+16 g+16^32
+g+64 r64 a16 b32 r32 o3 e16
+; section 02
+c+8 c+32 r32 c+64 r32^64
+c+64 r64 o2 g+16 b32 r32 o3 c+8^32
+o2 b32 r16^32 g+16^32
+r32 g+32 b64 r32^64 o3 c+16^32
+; section 03
+o2 f+8 f+32 r32 f+32 r32
+f+64 r64 f+16 f+64 r64 f+16^32 f+64 r64
+g+32 g+32 r32 b16^32 g+16
+b32 g+64 r32^64 g+32 o3 e32 o2 b32 r32 g+32
+/
+; reset state on loop
+@33  
+; section 04
+r32 o3 c+32 c+32 r32 e16 e64 r64 c+16
+c+64 r64 g+16 f+16 o2 b16
+a16 a64 r64 o3 e16 e64 r64 o2 a16
+a64 r64 a64 r32^64 o3 f+16 e32 r32 c+32
+; section 05
+(9)[
+o2 b16 b64 r64 o3 d+16 d+64 r64 o2 b16
+b64 r64 b64 r64 g+16 o3 f+16 o2 b32 r32
+g+16 g+64 r64 g+64 r64 g+16 b32 r32
+o3 d+16 d+64 r64 o2 g+16 o3 f+32 d+16^64
+]
+; section 06
+(10)[
+r64 o2 a16 a32 r32 o3 c+64 r64 c+16
+r32 c+16 o2 a64 r64 o3 e16 o2 a16
+b16 b64 r64 o3 d+16^32 o2 b32 r32
+o3 f+32 r32 o2 b16 o3 g+32 r32 o2 b8
+]
+; section 07
+(11)[
+b64 r64 o3 c+4^16^32
+o2 g+32 r32
+o3 e64 r64 d+32 r32 c+32 r32 o2 b32 o3 c+16
+o2 b32 a32 g+32 f+32 g+32 b32 o3 e32 e32
+]
+; section 08
+o2 g+32 o3 c+32 c+32 r32 e16 e64 r64 c+16
+c+64 r64 g+16 f+16 o2 b16
+a16 a64 r64 o3 e16 e64 r64 o2 a16
+a64 r64 a64 r32^64 o3 f+16 e32 r32 c+32
+; section 09
+(9)
+; section 0A
+(10)
+; section 0B
+(11)
+; section 0C
+o2 a16^32 a64 r64 a32 a32 r32 a16^32
+o3 e32 r32 e16 o2 b32 r32
+a16^32 a32 r16 a16
+o3 e32 r16 f+16^32 d+32 r32
+; section 0D
+o2 g+16^32 g+32 r16 g+32 r32
+g+16^32 b32 r32 g+32 o3 d+8
+o2 g+32 r32 g+16 g+32 r32
+g+32 g+32 r32 f+16^32 o3 d+32 r32
+; section 0E
+o2 a16 a32 r16^32 a16^32
+r32 o3 e32 r32 g+16 o2 a16
+r16 a8 o3 e32 r16^32
+f+8 o2 a16
+; section 0F
+g+16^32 g+64 r64 b16^32 b64 r64
+g+16 b64 r32^64 o3 c16 d+8
+v202 g+32 r32 v255 g+8
+g+64 r64 g+64 r32^64 f+64 r64 e8
+
+
+#3
+; section 00
+@34 v174 o5 d+1
+; section 01
+(12)[
+o4 g+1
+]
+; section 02
+o5 d+1
+; section 03
+(12)
+/
+; reset state on loop
+@34  
+; section 04
+r8^16 @35 v174 o4 c+8^16
+g+32 r32 v131 c+16
+v174 b8 a32 v131 b32 v174 g+8
+f+32 v131 g+16^32 v174 g+4^8
+; section 05
+(13)[
+v174 f+16 e16 f+16
+e8 d+16 c+16
+v131 d+16 v174 o3 b32 r32 v131 o4 c+32 v108 o3 b32 v174 o4 c+4^16
+]
+; section 06
+(14)[
+e32 v131 c+16^32 v174 f+16 v131 e32 r32
+v174 g+8 f+32 v131 g+32 v174 d+16
+v131 f+16 v174 o3 b16 g+64 r32^64 b16
+]
+; section 07
+v131 g+64 r32^64 v174 o4 c+32 r32 c+2^8 r4^8^16
+; section 08
+c+8^16 g+32 r32 v131 c+16
+v174 b8 a32 v131 b32 v174 g+8
+f+32 v131 g+16^32 v174 g+4^8
+; section 09
+(13)
+; section 0A
+(14)
+; section 0B
+v131 o3 g+64 r32^64 v174 o4 c+32 r32 c+2^8
+r16 @36 v169 c64 c+32 r64 e32^64 r64 f+16
+; section 0C
+g+8 f+32 r16 c+4^16^32 g64 g+32 r64 f+32^64 r64 c+32^64 r64 e8 f+8
+; section 0D
+d+8 c+32 r32 c+16
+r16 o3 a+64 b64 r32 o4 c+4^8
+r16 c64 c+32 r64 e32^64 r64 f+16
+; section 0E
+g+8 f+32 r16 c+4^16^32 c64 c+32 r64 e32^64 r64 f+32^64 r64 g+8 f+32 r16^32
+; section 0F
+b8 a32 r16^32 g+16^32 r32 f+32 r32 f+8 g+32 r32 g+4^8
+
+
+#4
+; section 00
+@34 v162 y7 o4 e1
+; section 01
+(15)[
+o3 a1
+]
+; section 02
+o4 e1
+; section 03
+(15)
+/
+; reset state on loop
+@34  
+; section 04
+v156 y10 o5 d+2 e2
+; section 05
+(16)[
+f+2 f+2
+]
+; section 06
+(17)[
+c+2 f+2
+]
+; section 07
+c+2^4 d+8^16 e16
+; section 08
+v156 d+2 e2
+; section 09
+(16)
+; section 0A
+(17)
+; section 0B
+c+2^4^8 o4 b8
+; section 0C
+(18)[
+o5 c+1
+]
+; section 0D
+(18)
+; section 0E
+e1
+; section 0F
+c+2 d+2
+
+
+#5
+; section 00
+@34 v162 y13 o3 b1
+; section 01
+e1
+; section 02
+o4 c+2 o3 b1^2
+/
+; reset state on loop
+@34  
+; section 04
+v156 y7 o4 e2 g+2
+; section 05
+(19)[
+o5 d+2 o4 b2
+]
+; section 06
+(20)[
+g+2 b2
+]
+; section 07
+e2^4 v104 o5 c+4
+; section 08
+v156 o4 e2 g+2
+; section 09
+(19)
+; section 0A
+(20)
+; section 0B
+e1
+; section 0C
+y10 o3 a1
+; section 0D
+g+1
+; section 0E
+f+1
+; section 0F
+g+2 o4 c2
+
+
+#6
+; section 00
+@34 v156 o3 c+1
+; section 01
+o2 f+1
+; section 02
+o3 c+1
+; section 03
+e1
+/
+; reset state on loop
+@34  
+; section 04
+v156 y13 b2 o4 c+2
+; section 05
+(21)[
+g+2 f+2
+]
+; section 06
+(22)[
+o3 a2 o4 d+2
+]
+; section 07
+c+2^4 v131 b4
+; section 08
+v156 o3 b2 o4 c+2
+; section 09
+(21)
+; section 0A
+(22)
+; section 0B
+c+1
+; section 0C
+@35 v108 y13 g+2 b2
+; section 0D
+y7 a+2 f+2
+; section 0E
+y13 g+2 o5 c=8 $DD$00$08 c+ ^4^8^16^64^=1
+; section 0F
+y7 e2 d+2
+
+
+#7
+; section 00
+r8^16 @37 v252 y8 o3 e1
+; section 01
+(23)[
+y12 o2 b1
+]
+; section 02
+(24)[
+y8 o3 e1
+]
+; section 03
+y12 o2 b2^4^16
+/
+; reset state on loop
+@37  
+; section 04
+r8^16 y8 o3 e2^4^16
+; section 05
+(23)
+; section 06
+y8 e2 y12 d+2
+; section 07
+y10 o2 b1^8^16
+; section 08
+(25)[
+y8 o3 e2^4^16
+]
+; section 09
+(23)
+; section 0A
+y8 e2 y12 d+2^8
+; section 0B
+y10 o2 b2^4^8
+; section 0C
+(24)
+; section 0D
+y12 b1^8^16
+; section 0E
+(25)
+; section 0F
+y12 o3 f+2 y10 d+2
+
+

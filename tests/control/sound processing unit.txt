@@ -1,0 +1,284 @@
+#amk 4
+
+#spc
+{
+    #title   "sound processing unit"
+    #author  "Architect"
+    #comment "SOUND PROCESSING UNIT - ARCHITECT_"
+}
+
+#path "sound processing unit"
+
+#samples
+{
+    #optimized
+    "00_khaen_soothingchords.brr"
+    "01_khaen_soothingchords.brr"
+    "02_shoegaze.brr"
+    "03_bass_common_0.brr"
+    "04_kick.brr"
+    "05_subsnare.brr"
+    "06_snare.brr"
+    "07_hihat.brr"
+    "08_radiob_idle.brr"
+    "09_frumsambsh0.brr"
+    "10_xorsine.brr"
+    "11_spuechoo.brr"
+    "12_tamborine_revb.brr"
+}
+
+#instruments
+{
+    "00_khaen_soothingchords.brr"  $FF $E0 $80 $05 $61 ;@30
+    "01_khaen_soothingchords.brr"  $FF $E0 $80 $02 $AD ;@31
+    "02_shoegaze.brr"              $FF $E0 $80 $01 $E5 ;@32
+    "03_bass_common_0.brr"         $FF $E0 $80 $03 $8D ;@33
+    "04_kick.brr"                  $FF $E0 $80 $07 $A8 ;@34
+    "05_subsnare.brr"              $FF $E0 $80 $07 $A8 ;@35
+    "06_snare.brr"                 $FF $E0 $80 $07 $A8 ;@36
+    "07_hihat.brr"                 $FF $E0 $80 $07 $A8 ;@37
+    "08_radiob_idle.brr"           $F0 $E0 $80 $03 $D4 ;@38
+    "09_frumsambsh0.brr"           $F0 $E0 $80 $05 $47 ;@39
+    "10_xorsine.brr"               $AF $95 $80 $01 $6F ;@40
+    "11_spuechoo.brr"              $F0 $E0 $80 $00 $BA ;@41
+    "12_tamborine_revb.brr"        $FF $EC $80 $00 $F5 ;@42
+}
+
+; created with fur2amk 0.4.1
+
+w254 t25
+
+$EF $00 $00 $00
+$F1 $00 $00 $01
+$F5 $00 $00 $00 $00 $00 $00 $00 $00
+
+(!1)[$FA$01$AB] ;Remote gain command for Furnace instrument 8: _O
+(!2)[$ED$70$E0] ;Restore ADSR for Furnace instrument 8: _O
+
+
+#0
+; enable light staccato
+$F4$02 
+; section 00
+@30 v187 o3 c32 v99 c32 v99 o1 f32 v187 o3 g32 v99 f32 v99 f32 v164 f32 v99 o4 c32
+v187 o3 c32 v99 c32 v99 c32 v187 c32 v99 f32 v99 f32 v187 f32 v137 f32
+v187 o2 a+32 v99 a+32 v99 a+32 v187 a+32 v111 o3 d+32 v99 d+32 v187 d+32 v137 d+32
+v187 d+32 v99 d+32 v99 d+32 v187 d+32 v111 o2 a+32 v99 a+32 v187 a+32 v137 a+32
+v187 o3 c32 v99 c32 v99 c32 v187 c32 v111 f32 v99 f32 v187 f32 v137 f32
+v187 f32 v99 f32 v99 f32 v187 f32 v111 a+32 v99 a+32 v187 a+32 v137 a+32
+v187 o2 a+32 v99 a+32 v99 a+32 v187 a+32 v111 o3 d+32 v99 d+32 v187 d+32 v137 d+32
+v187 d+32 v99 d+32 v99 d+32 v187 d+32 v111 d+32 v99 d+32 v187 d+32 v137 d+32
+; section 01
+(3)[
+v187 o1 e32 $DD$00$06 a+  v99 o3 c32 $DD$00$06 f+  v99 o1 f32 v187 o3 g32 v99 f32 v99 f32 v164 f32 $DD$00$06 e  v99 b32 $DD$00$06 a+
+v187 c32 v99 c32 v99 c32 v187 c32 v99 f32 v99 f32 v187 f32 v137 f32
+v187 o2 a+32 v99 a+32 v99 a+32 v187 a+32 v111 o3 d+32 v99 d+32 v187 d+32 v137 d+32
+v187 d+32 v99 d+32 v99 d+32 v187 d+32 v111 o2 a+32 $DD$00$06 a  v99 a+32 $DD$00$06 a  v134 g+32 $DD$00$06 g  v137 g32 $DD$00$06 f+
+v187 o3 c32 v99 c32 v99 c32 v187 c32 v111 f32 v99 f32 v187 f32 v137 f32
+v187 f32 v99 f32 v99 f32 v187 f32 v111 a+32 v99 a+32 v187 a+32 v137 a+32
+v187 o2 a+32 v99 a+32 v99 a+32 v187 a+32 v111 o3 d+32 v99 d+32 v187 d+32 v137 d+32
+v187 d+32 v99 d+32 v99 d+32 v187 d+32 v111 d+32 v99 d+32 v187 d+32 $DD$00$06 e  v137 d+32 $DD$00$06 e
+]
+; section 02
+(3)
+; section 03
+v187 c32 v99 c32 v99 o1 f32 v187 o3 g32 v99 f32 v99 f32 v164 f32 v99 o4 c32
+v187 o3 c32 v99 c32 v99 c32 v187 c32 v99 f32 v99 f32 v187 f32 v137 f32
+v187 o2 a+32 v99 a+32 v99 a+32 v187 a+32 v111 o3 d+32 v99 d+32 v187 d+32 v137 d+32
+v187 d+32 v99 d+32 v99 d+32 v187 d+32 v111 o2 a+32 v99 a+32 v187 a+32 v137 a+32
+; section 04
+(3)
+; section 05
+(3)
+; section 06
+(3)
+; section 07
+(3)
+; section 08
+v187 o3 c32 v99 c32 v99 c32 v187 c32 v99 c32 v99 c32 v164 c32 v99 c32
+v187 c32 v99 c32 v99 c32 v187 c32 v99 c32 v99 c32 v187 c32 v137 c32
+v187 c32 v99 c32 v99 c32 v187 c32 v111 c32 v99 c32 v187 c32 v137 c32
+v187 c32 v99 c32 v99 c32 v187 c32 v111 c32 v99 c32 v134 c32 v137 c32
+v187 c32 v99 c32 v99 c32 v187 c32 v111 c32 v99 c32 v187 c32 v137 c32
+v187 c32 v99 c32 v99 c32 v187 c32 v111 c32 v99 c32 v187 c32 v137 c32
+v187 c32 v99 c32 v99 c32 v187 c32 v111 c32 v99 c32 v187 c32 v137 c32
+v187 c32 v99 c32 v99 c32 v187 c32 v111 c32 v99 c32 v187 c32 v137 c32
+; section 09
+$E8$88$00 c16 ^=84 $DD$00$54 d+  d+1^2
+
+
+#1
+; section 00
+r1^1
+; section 01
+@31 v187 o3 f1 a+1
+; section 02
+v187 f1 a+1 $E8$C0$6C ^1 $E8$50$00 ^1^1^1^1
+; section 06
+v187 f1 a+1
+; section 07
+v187 f1 a+1 $E8$C0$6C ^1 $E8$50$00 ^1^1^1
+
+
+#2
+; section 00
+r1^1^2
+; section 01
+@31 v187 o2 a+2 r2 a+2
+; section 02
+r2 v187 a+2 r2 a+2 $E8$C0$6C ^1 $E8$50$00 ^1^1^1^1
+; section 06
+r2 v187 a+2 r2 a+2
+; section 07
+r2 v187 a+2 r2 a+2 $E8$C0$6C ^1 $E8$50$00 ^1^1^1
+
+
+#3
+; section 00
+r1^1
+; section 01
+@32 v164 o2 a16 r32 o3 g32 o4 d16 o3 g16
+r16 a16 r32 d32^64 r32^64
+v164 o2 a16 r32 o3 g32 o4 d16 o3 g16
+r16 a16 r32 d32^64 r32^64
+v164 o2 a16 r32 o3 g32 o4 d16 o3 g16
+r16 a16 r32 d32^64 r32^64
+v164 o2 a16 r32 o3 g32 o4 d16 o3 g16
+r16 a16 r32 d32^64 r32^64
+; section 02
+v164 o2 a16 r32 o3 g32 o4 d16 o3 g16
+r16 a16 r32 d32^64 r32^64
+v164 o2 a16 r32 o3 g32 o4 d16 o3 g16
+r16 a16 r32 d32^64 r32^64
+v164 o2 a16 r32 o3 g32 o4 d16 o3 g16
+r16 a16 r32 d32^64 r32^64
+v164 o2 a16 r32 o3 g32 o4 d16 o3 g16
+r16 a16 r32 d32^64 r32^64 $E8$C0$3A ^2^4^8
+; section 03
+@38 o4 g16^32^64 r64 $E8$0C$00 ^1^1^1^1^1^1^1^1^1^1^1^1
+
+
+#4
+; section 00
+r1^1^1^1
+; section 02
+@33 v187 o4 a16 $DD$00$0C g  r32 g32 d16 r32 d32
+r32 o5 d32 o4 a32 r32 v99 d32 v187 g+32 v99 g+64 r64 v137 g+64 r64
+v187 f32 v137 f64 r64 v164 f64 r64 v187 f32 v187 o5 f32 o6 g32 d32 o4 f32
+r16 f32 r16 f16 ^32 $DD$00$06 e
+d32 r32 d64 r64 d32 o5 d32 o6 d64 r64 o5 d32 o4 d32
+r16 d32 r16 d64 r64 d16 $DD$00$0C a+
+c64 r64 c32 r32 o5 c32 o6 c64 r32^64 o4 c32^64 r16^64
+c32^64 r32^64 v137 c32 v187 c16 $E8$88$00 ^=84 $DD$00$60 o2d+  ^=60 $DD$00$3C o1d
+; section 03
+@38 v164 o3 c4 $DD$00$30 o2d
+; section 04
+@33 v187 o4 a16 $DD$00$0C g  r32 g32 d16 r32 d32
+r32 o5 d32 o4 a32 r32 v99 d32 v187 g+32 v99 g+64 r64 v137 g+64 r64
+v187 f32 v137 f64 r64 v164 f64 r64 v187 f32 v187 o5 f32 o6 g32 d32 o4 f32
+r16 f32 r16 f16 ^32 $DD$00$06 e
+d32 r32 d64 r64 d32 o5 d32 o6 d64 r64 o5 d32 o4 d32
+r16 d32 r16 d64 r64 d16 $DD$00$0C a+
+c64 r64 c32 r32 o5 c32 o6 c64 r32^64 o4 c32^64 r16^64
+c32^64 r32^64 v137 c32 v187 c16 $DD$00$0C o3a
+; section 05
+(4)[
+v187 o4 a16 $DD$00$0C g  r32 g32 d16 r32 d32
+r32 o5 d32 o4 a32 r32 v99 d32 v187 g+32 v99 g+64 r64 v137 g+64 r64
+v187 f32 v137 f64 r64 v164 f64 r64 v187 f32 v187 o5 f32 o6 g32 d32 o4 f32
+r16 f32 r16 f16 ^32 $DD$00$06 e
+d32 r32 d64 r64 d32 o5 d32 o6 d64 r64 o5 d32 o4 d32
+r16 d32 r16 d64 r64 d16 $DD$00$0C a+
+c64 r64 c32 r32 o5 c32 o6 c64 r32^64 o4 c32^64 r16^64
+c32^64 r32^64 v137 c32 v187 c16 $DD$00$0C o3a
+]
+; section 06
+(4)
+; section 07
+v187 o4 a16 $DD$00$0C g  r32 g32 d16 r32 d32
+r32 o5 d32 o4 a32 r32 v99 d32 v187 g+32 v99 g+64 r64 v137 g+64 r64
+v187 f32 v137 f64 r64 v164 f64 r64 v187 f32 v187 o5 f32 o6 g32 d32 o4 f32
+r16 f32 r16 f16 ^32 $DD$00$06 e
+d32 r32 d64 r64 d32 o5 d32 o6 d64 r64 o5 d32 o4 d32
+r16 d32 r16 d64 r64 d16 $DD$00$0C a+
+c64 r64 c32 r32 o5 c32 o6 c64 r32^64 o4 c32^64 r16^64
+c32^64 r32^64 v137 c32 v187 c16 $E8$C0$6C ^=84 $DD$00$60 o2d+  ^=68 $DD$00$44 o1c ^8^16^64^=1 $E8$50$00 ^1^1^1
+
+
+#5
+; section 00
+r1^1^1^1
+; section 02
+@42 o4 c+1^1
+; section 03
+$F4$03 @39 v137 e2^4^8^16^32^64 r1^1^1^1^1^1^1^2^8^64
+; section 07
+v255 o5 d+4^8 $E8$C0$CA ^1 $E8$C0$83 ^1 $E8$7C$00 ^1^1
+
+
+#6
+; reset state on loop
+(!99, 0)  
+; section 00
+r1^1^1^4
+; section 01
+(!1, 3) (!2, -1) @41 v131 o4 c2^4
+; section 02
+v137 o5 d1 o4 c1
+; section 03
+r4 (!99, 0) @38 v137 o6 c2^8^16^32^64 r1^1^1^1^1^1^64
+; section 07
+@40 v187 o3 g+64 r64 o4 c+64 r64 d+64 r64 a+64 r64 g+64 r64 o5 d+64 r64 o4 a+64 r64 d+64 r64
+c+64 r64 o3 g+64 r64 o4 c+64 r64 g+64 r64 a+64 r64 d+64 r64 f64 r64 c+64 r64
+d+64 r64 f64 r64 o3 a+64 r64 o4 c+64 r64 o3 g+64 r64 a+64 r64 f64 r64 d+64 r64
+f64 r64 f+64 r64 g+64 r64 a+64 r64 o4 c+64 r64 f64 r64 g+64 r64 a+64 r64
+f+64 r64 f64 r64 c+64 r64 d+64 r64 o3 a+64 r64 o4 c+64 r64 o3 g+64 r64 a+64 r64
+f+64 r64 f64 r64 g+64 r64 a+64 r64 o4 c+64 r64 d+64 r64 g+64 r64 o5 c+64 r64
+o4 b64 r64 o5 c+64 r64 o4 f+64 r64 g+64 r64 c+64 r64 d+64 r64 g+64 r64 d+64 r64
+c+64 r64 o3 a+64 r64 g+64 r64 f+32 g+32 o4 d+32 g+32 o5 c+32 $E8$C0$6C ^1 $E8$50$00 ^1^1^1
+
+
+#7
+; reset state on loop
+(!99, 0)  
+; section 00
+r1^1^1^2
+; section 01
+(!1, 3) (!2, -1) @41 v131 o4 g1^4
+; section 02
+v137 a2 f2^4
+; section 03
+r1
+; section 04
+(!99, 0) @34 v235 c32 @37 v174 c64 v95 c64 @35 v235 c32 @34 v235 c32 @37 v174 c64 v125 c64 @35 v235 c64 r64 @37 v125 c32 v151 c32
+@36 v235 c16 @37 v95 c32 v125 c32 v95 c64 v77 c64 v70 c32 @34 v235 c32 v174 c32
+v235 c32 @37 v125 c32 @35 v235 c32 @34 v235 c32 @37 v125 c64 v95 c64 @35 v235 c64 r32^64 @37 v125 c32
+@36 v235 c16 @37 v95 c32 v125 c32 v95 c64 v77 c64 v70 c32 @34 v235 c16
+v235 c32 @37 v174 c64 v95 c64 @35 v235 c32 @34 v235 c32 @37 v174 c64 v125 c64 @35 v235 c64 r64 @37 v125 c32 v125 c32
+@36 v235 c16 @37 v95 c32 v125 c32 v95 c64 v77 c64 v70 c32 @34 v235 c32 v174 c32
+v235 c32 @37 v174 c64 v95 c64 @35 v235 c32 @34 v235 c32 @37 v174 c64 v95 c64 @35 v235 c64 r64 @37 v125 c32 v125 c32
+@36 v235 c64 v174 c64 v95 c32 @34 v235 c32 @36 v235 c32 @37 v125 c32 @34 v235 c32 @36 v235 c16
+; section 05
+(5)[
+@34 v235 c32 @37 v174 c64 v95 c64 @35 v235 c32 @34 v235 c32 @37 v174 c64 v125 c64 @35 v235 c64 r64 @37 v125 c32 v151 c32
+@36 v235 c16 @37 v95 c32 v125 c32 v95 c64 v77 c64 v70 c32 @34 v235 c32 v174 c32
+v235 c32 @37 v125 c32 @35 v235 c32 @34 v235 c32 @37 v125 c64 v95 c64 @35 v235 c64 r32^64 @37 v125 c32
+@36 v235 c16 @37 v95 c32 v125 c32 v95 c64 v77 c64 v70 c32 @34 v235 c16
+v235 c32 @37 v174 c64 v95 c64 @35 v235 c32 @34 v235 c32 @37 v174 c64 v125 c64 @35 v235 c64 r64 @37 v125 c32 v125 c32
+@36 v235 c16 @37 v95 c32 v125 c32 v95 c64 v77 c64 v70 c32 @34 v235 c32 v174 c32
+v235 c32 @37 v174 c64 v95 c64 @35 v235 c32 @34 v235 c32 @37 v174 c64 v95 c64 @35 v235 c64 r64 @37 v125 c32 v125 c32
+@36 v235 c64 v174 c64 v95 c32 @34 v235 c32 @36 v235 c32 @37 v125 c32 @34 v235 c32 @36 v235 c16
+]
+; section 06
+(5)
+; section 07
+@34 v235 c32 @37 v174 c64 v95 c64 @35 v235 c32 @34 v235 c32 @37 v174 c64 v125 c64 @35 v235 c64 r64 @37 v125 c32 v151 c32
+@36 v235 c16 @37 v95 c32 v125 c32 v95 c64 v77 c64 v70 c32 @34 v235 c32 v174 c32
+v235 c32 @37 v125 c32 @35 v235 c32 @34 v235 c32 @37 v125 c64 v95 c64 @35 v235 c64 r32^64 @37 v125 c32
+@36 v235 c16 @37 v95 c32 v125 c32 v95 c64 v77 c64 v70 c32 @34 v235 c16
+v235 c32 @37 v174 c64 v95 c64 @35 v235 c32 @34 v235 c32 @37 v174 c64 v125 c64 @35 v235 c64 r64 @37 v125 c32 v125 c32
+@36 v235 c16 @37 v95 c32 v125 c32 v95 c64 v77 c64 v70 c32 @34 v235 c32 v174 c32
+v235 c32 @37 v174 c64 v95 c64 @35 v235 c32 @34 v235 c32 @37 v174 c64 v95 c64 @35 v235 c64 r64 @37 v125 c32 v125 c32
+@36 v235 c64 v174 c64 v95 c32 @34 v235 c32 @36 v235 c32 @37 v125 c32 @34 v235 c32 @36 v235 c16 $E8$C0$B0 ^1 $E8$C0$57 ^1 $E8$2C$00 ^1^1
+
+
