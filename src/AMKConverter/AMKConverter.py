@@ -164,12 +164,7 @@ class AMKConverter:
         return command_num
 
     def convert_tempo(self, chiptune_data: ChiptuneData) -> int:
-        rows_per_beat = MMLUtil.AMK_TICKS_PER_BEAT / self.row_converter.amk_ticks_per_row
-        fur_ticks_per_beat = rows_per_beat * chiptune_data.structure.ticks_per_step
-        beats_per_second = chiptune_data.tick_rate / fur_ticks_per_beat
-        bpm = int(round(60 * beats_per_second))
-        amk_tempo = int(round(bpm * 0.4096 - 1))
-        return amk_tempo
+        return FurnaceUtil.tick_rate_to_amk_tempo(chiptune_data.structure, self.row_converter.amk_ticks_per_row, chiptune_data.tick_rate)
 
     # TODO: need to convert to AMK ticks
     def convert_mml_data(self, chiptune_data: ChiptuneData) -> MMLData:

@@ -547,9 +547,18 @@ class FurnaceParser:
 
         def read_effect(note: FurnaceRow, have_type: bool, have_value: bool):
             t = self._ru8(s) if have_type else None
-            v = self._ru8(s) if have_value else None
-            if (t is not None) and (v is None):
-                v = 0
+            if t is not None:
+                low_nibble = t >> 4
+                # check for 0xCXXX effects, which uniquely have 12-bit values
+                if low_nibble == 0xC: 
+                    high_nibble = t & 0x0F     # first X
+                    t = low_nibble << 4        # effect type becomes 0xC0
+                    low_byte = self._ru8(s)    # last XX
+                    v = (high_nibble << 8) | low_byte if have_value else None
+                else:
+                    v = self._ru8(s) if have_value else None
+                if v is None:
+                    v = 0
             if have_type or have_value:
                 if t is None:
                     t = 0

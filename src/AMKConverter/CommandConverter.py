@@ -93,6 +93,18 @@ class VibratoConverter():
                 commands.append(Vibrato(tick, speed, amplitude))
 
         return commands
+    
+class TempoConverter():
+    def __init__(self, structure: ChiptuneStructure, amk_ticks_per_row: int) -> None:
+        self.structure = structure
+        self.amk_ticks_per_row = amk_ticks_per_row
+
+    def convert_tick(self, tick_data: TickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
+        commands: List[MMLCommand] = []
+        if effect := tick_data.get_effect(SetTickRateEffect):
+            commands.append(TempoChange(tick, FurnaceUtil.tick_rate_to_amk_tempo(self.structure, self.amk_ticks_per_row, effect.tick_rate)))
+
+        return commands
 
 
 @dataclass

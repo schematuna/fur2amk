@@ -146,3 +146,11 @@ class CustomADSR(MMLCommand):
         da_byte = ((self.adsr.decay & 0x07) << 4) | (self.adsr.attack & 0x0F)
         sr_byte = ((self.adsr.sustain & 0x07) << 5) | (self.adsr.release & 0x1F)
         return f"$ED${MMLUtil.to_hex(da_byte)}${MMLUtil.to_hex(sr_byte)}"
+    
+@dataclass
+class TempoChange(MMLCommand):
+    tempo: int
+
+    def to_mml(self, mml_state: 'MMLState' = None) -> str:
+        # Could equivalently use $E2 here but t is cleaner
+        return f"t{self.tempo}"
