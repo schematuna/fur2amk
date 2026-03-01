@@ -295,15 +295,6 @@ class MMLWriter:
         # If tick is beyond all sections, return the last section
         return len(self.mml_data.section_lengths) - 1
 
-    def get_measure_num(self, tick: int) -> int:
-        """
-        Calculate which measure within a section a given tick falls into.
-        """
-        section_num = self.get_section_num(tick)
-        # Sum all ticks from previous sections
-        accumulated_ticks = sum(self.mml_data.section_lengths[:section_num])
-        return round((tick - accumulated_ticks) / self.mml_data.measure_length)
-
     def optimize_loops(self, sections: List[MMLSection], label_count: int) -> int:
         # Identify and label loops in the channel lines
         labels_assigned: Dict[int, MMLSection] = {}
@@ -398,7 +389,7 @@ class MMLWriter:
                 for pitch_bend in duration.pitch_bends:
                     # check that pitchbend is contained within this note
                     if pitch_bend.tick < duration.tick:
-                        self.logger.warning(f"Pitchbend starts before the note. Ignoring. section: {self.get_section_num(pitch_bend.tick)}, measure: {self.get_measure_num(pitch_bend.tick)}")
+                        self.logger.warning(f"Pitchbend starts before the note. Ignoring. section: {self.get_section_num(pitch_bend.tick)}")
                         continue
                     if pitch_bend.tick + pitch_bend.duration > duration.tick + duration.duration:
                         self.logger.warning(f"Pitchbend duration exceeds the duration of the note. Trimming to fit.")
