@@ -9,7 +9,7 @@ from typing import Dict, List, Tuple
 from ..model.ChiptuneData import *
 from ..model.AMKData import *
 from ..model.MMLCommands import *
-from .RowConverter import *
+from .TickDataConverter import *
 from ..util import *
 
 class AMKConverter:
@@ -188,7 +188,7 @@ class AMKConverter:
         return mml_data
 
     def convert(self, chiptune_data: ChiptuneData) -> AMKData:
-        self.row_converter = RowConverter(chiptune_data.structure.ticks_per_step)
+        self.row_converter = TickDataConverter(chiptune_data.structure.ticks_per_step[0])
 
         amk_data = AMKData()
         amk_data.spc_info     = self.convert_spc_info(chiptune_data)

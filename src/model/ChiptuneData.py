@@ -22,14 +22,12 @@ class ChiptuneStructure:
     # for formatting and duration calculations
     # lengths are in ticks
     measure_length: int = 64
-    # TODO: incorporate Set Speed command into creation of this field
     section_lengths: List[int] = None
-    # TODO: incorporate Set Speed command into creation of this field
     song_length: int = 64
 
     # usually ticks per tracker row
     # used to decide what AMK base musical length should be
-    ticks_per_step: int = 8
+    ticks_per_step: List[int] = field(default_factory=list)
 
     # loop point
     loop_tick: int = None

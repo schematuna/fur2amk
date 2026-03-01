@@ -12,7 +12,7 @@ from .CommandConverter import *
 from .NoteConverter import *
 from ..util import *
 
-class RowConverter:
+class TickDataConverter:
     def __init__(self, ticks_per_step: int) -> None:
         # calc initial amk ticks per row based on chiptune ticks per step
         self.calc_amk_ticks_per_row(ticks_per_step)
