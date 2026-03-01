@@ -345,7 +345,7 @@ class FurnaceConverter:
         chiptune_data.structure = structure
 
         # decompose all rows into ticks
-        for channel_rows in flat_song_rows:
+        for channel_rows in condensed_rows:
             chiptune_data.tick_data.append(self.get_ticks(channel_rows, module.Instruments, ticks_per_row))
 
         return chiptune_data
