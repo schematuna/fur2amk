@@ -13,27 +13,31 @@ from .NoteConverter import *
 from ..util import *
 
 class RowConverter:
-    def __init__(self, fur_ticks_per_row: int) -> None:
+    def __init__(self, ticks_per_step: int) -> None:
+        # calc initial amk ticks per row based on chiptune ticks per step
+        self.calc_amk_ticks_per_row(ticks_per_step)
+
+    def calc_amk_ticks_per_row(self, ticks_per_step: int) -> None:
         self.logger = logging.getLogger(__name__)
         # determine musical duration to map to a furnace row
         # find first AMK tick value that is greater than or equal to the furnace tick rate
         self.amk_ticks_per_row = 12
         for tick_value in MMLUtil.TICK_TO_DURATION.keys():
-            if tick_value >= fur_ticks_per_row:
+            if tick_value >= ticks_per_step:
                 self.amk_ticks_per_row = tick_value
                 break
 
         # ratio of amk ticks to furnace ticks
-        self.tick_ratio = self.amk_ticks_per_row / fur_ticks_per_row
+        self.tick_ratio = self.amk_ticks_per_row / ticks_per_step
         if self.tick_ratio != round(self.tick_ratio):
             self.logger.warning("Furnace ticks not cleanly convertible to amk ticks.")
         self.logger.info(f"One Furnace tick is {self.tick_ratio:.2g} AMK ticks.")
 
-    def to_amk_ticks(self, furnace_ticks: int):
-        if furnace_ticks is None:
+    def to_amk_ticks(self, chiptune_ticks: int):
+        if chiptune_ticks is None:
             return None
         
-        amk_ticks = furnace_ticks * self.tick_ratio
+        amk_ticks = chiptune_ticks * self.tick_ratio
         rounded_amk_ticks = round(amk_ticks)
         if (rounded_amk_ticks != amk_ticks):
             self.logger.debug("furnace to amk tick conversion was not clean")
@@ -43,6 +47,7 @@ class RowConverter:
     # expands a set of Furnace ticks out into AMK ticks
     # there will (or at least should) always be the same or more AMK ticks than Furnace ticks per beat
     # so we iterate over all Furnace ticks and place its notes and commands in the nearest AMK tick
+    # TODO: don't we have to update all FurnaceEffects with tick-based data to account for the expansion?
     def expand_ticks(self, ticks: List[TickData]):
         song_length = self.to_amk_ticks(len(ticks))
         amk_ticks = [TickData() for _ in range(song_length)]
