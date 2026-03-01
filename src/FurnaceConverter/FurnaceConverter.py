@@ -62,7 +62,7 @@ class FurnaceConverter:
             # Scan all channels for jump commands in current section
             for ch in range(num_channels):
                 # grab this section's rows
-                rows = flat_rows[ch][section_idx * pattern_length: (section_idx + 1) * pattern_length - 1]
+                rows = flat_rows[ch][section_idx * pattern_length: (section_idx + 1) * pattern_length]
 
                 current_start = pattern_start_offsets[-1]
 
@@ -340,7 +340,8 @@ class FurnaceConverter:
         structure.measure_length = module.HighlightB * ticks_per_row[0] # TODO: variable measure lengths
         structure.section_lengths = pattern_lengths_ticks
         structure.song_length = sum(pattern_lengths_ticks)
-        structure.loop_tick = sum(ticks_per_row[:loop_row])
+        if loop_row is not None:
+            structure.loop_tick = sum(ticks_per_row[:loop_row])
         chiptune_data.structure = structure
 
         # decompose all rows into ticks
