@@ -285,7 +285,7 @@ class FurnaceConverter:
         chiptune_data.global_volume = self.get_global_volume(module)
         chiptune_data.echo_data = self.get_echo_data(module)
 
-        # process all rows into tick data
+        # get flat rows taking jumps into account
         flat_song_rows: List[List[FurnaceRow]] = []
         for ch in range(module.NumChannels):
             channel_rows: List[FurnaceRow] = []
@@ -312,6 +312,7 @@ class FurnaceConverter:
                         if set_speed_effect not in flat_rows[i].Effects:
                             flat_rows[i].Effects.append(set_speed_effect)
 
+        # decompose all rows into ticks
         for channel_rows in flat_song_rows:
             chiptune_data.tick_data.append(self.get_ticks(channel_rows, module.Instruments, chiptune_data.structure.ticks_per_step))
 

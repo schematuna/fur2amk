@@ -510,27 +510,27 @@ class MMLWriter:
 
             pre_loop_commands, post_loop_commands = self.get_loop_state_commands(words)
 
-            lines: List[MMLSection] = []
-            line_words: List[MMLWord] = []
+            sections: List[MMLSection] = []
+            section_words: List[MMLWord] = []
             cur_section_num = 0
             for word in words:
                 sectionNum = self.get_section_num(word.tick)
                 # split line at loop point
                 is_loop_point = has_loop_point and word.tick == self.mml_data.loop_tick
                 if sectionNum != cur_section_num or is_loop_point:
-                    lines.append(MMLSection(line_words, cur_section_num, self.mml_data.measure_length))
+                    sections.append(MMLSection(section_words, cur_section_num, self.mml_data.measure_length))
                     cur_section_num = sectionNum
-                    line_words = []
-                line_words.append(word)
+                    section_words = []
+                section_words.append(word)
 
-            lines.append(MMLSection(line_words, cur_section_num, self.mml_data.measure_length))
+            sections.append(MMLSection(section_words, cur_section_num, self.mml_data.measure_length))
 
-            self.label_count = self.optimize_loops(lines, self.label_count)
+            self.label_count = self.optimize_loops(sections, self.label_count)
 
             mml_state = MMLState()
             # light staccato is a global toggle
             # enable it by default for all ports to reduce unwanted space between notes from 2 ticks to 1 tick
-            # There is no good way to have no gap without spamming q commands everywhere.
+            # TODO: Use Kevin trick to reduce gap to 0. Use Furnace EE command to suggest this.
             if c == 0:
                 staccato_cmd = LightStaccatoToggle(0)
                 txt += "; enable light staccato\n"
@@ -545,15 +545,15 @@ class MMLWriter:
                     txt += '\n'
                 return txt
 
-            for i, line in enumerate(lines):
+            for i, section in enumerate(sections):
                 if not has_loop_point and i == 0:
                     word_txt += get_commands_text(post_loop_commands, 'reset state on loop')
-                elif has_loop_point and line.tick() == self.mml_data.loop_tick:
+                elif has_loop_point and section.tick() == self.mml_data.loop_tick:
                     word_txt += get_commands_text(pre_loop_commands, 'reset state before loop')
                     word_txt += '/\n'
                     word_txt += get_commands_text(post_loop_commands, 'reset state on loop')
-                word_txt += f"; section {MMLUtil.to_hex(line.section_num)}\n"
-                word_txt += line.to_mml(mml_state) + '\n'
+                word_txt += f"; section {MMLUtil.to_hex(section.section_num)}\n"
+                word_txt += section.to_mml(mml_state) + '\n'
 
             txt += word_txt + '\n\n'
 

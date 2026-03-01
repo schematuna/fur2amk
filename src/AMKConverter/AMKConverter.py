@@ -176,6 +176,7 @@ class AMKConverter:
 
         # Convert to ticks and store
         mml_data.section_lengths = [self.row_converter.to_amk_ticks(length) for length in chiptune_data.structure.section_lengths]
+        # TODO: consider changes in ticks_per_step when calculating song length
         mml_data.song_length = self.row_converter.to_amk_ticks(chiptune_data.structure.song_length)
         mml_data.loop_tick = self.row_converter.to_amk_ticks(chiptune_data.structure.loop_tick)
 
