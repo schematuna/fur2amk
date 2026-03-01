@@ -34,7 +34,6 @@ class FurnaceConverter:
         loop_target_order = None  # Track which order the loop jumps to
 
         next_start_row = 0
-        accumulated_ticks = 0  # Track total ticks for loop calculation
         for order_idx in range(num_orders):
             pattern_start_offsets.append(next_start_row)
 
@@ -78,8 +77,6 @@ class FurnaceConverter:
                     break
 
             pattern_lengths.append(effective_length)
-            # Accumulate ticks for next iteration
-            accumulated_ticks += effective_length * module.Speed1
 
         # Calculate loop tick based on the target order
         loop_tick = None
@@ -151,6 +148,7 @@ class FurnaceConverter:
         # first, do basic expansion from rows to ticks
         # TODO: support grooves here
         furnace_ticks: List[TickData] = []
+        num_ticks_per_row = ticks_per_row
         for row in flat_rows:
             # copy row info into first tick of row
             first_tick = TickData()
@@ -160,8 +158,13 @@ class FurnaceConverter:
             first_tick.Effects = row.Effects
             furnace_ticks.append(first_tick)
 
+            if set_speed_effect := row.get_effect(SetSpeedEffect):
+                val = set_speed_effect.ticks_per_row
+                if val > 0:
+                    num_ticks_per_row = set_speed_effect.ticks_per_row
+
             # and create empty ticks for rest of row
-            for i in range(ticks_per_row - 1):
+            for i in range(num_ticks_per_row - 1):
                 furnace_ticks.append(TickData())
 
         # abstract away quick legato
@@ -283,8 +286,9 @@ class FurnaceConverter:
         chiptune_data.echo_data = self.get_echo_data(module)
 
         # process all rows into tick data
+        flat_song_rows: List[List[FurnaceRow]] = []
         for ch in range(module.NumChannels):
-            flat_rows: List[FurnaceRow] = []
+            channel_rows: List[FurnaceRow] = []
             patmap = module.PatternsByChannel[ch]
             orders = module.OrdersPerChannel[ch]
 
@@ -293,11 +297,22 @@ class FurnaceConverter:
                 if rows:
                     start_offset = pattern_offsets[order_idx]
                     end_offset = start_offset + pattern_lengths_rows[order_idx]
-                    flat_rows.extend(rows[start_offset:end_offset])
+                    channel_rows.extend(rows[start_offset:end_offset])
                 else:
                     self.logger.warning(f"Channel {ch} references missing pattern {pat}. Inserting empty pattern.")
-                    flat_rows.extend([FurnaceRow() for _ in range(pattern_lengths_rows[order_idx])])
+                    channel_rows.extend([FurnaceRow() for _ in range(pattern_lengths_rows[order_idx])])
 
-            chiptune_data.tick_data.append(self.get_ticks(flat_rows, module.Instruments, chiptune_data.structure.ticks_per_step))
+            flat_song_rows.append(channel_rows)
+
+        # copy global effects to all rows
+        for flat_rows in flat_song_rows:
+            for i, row in enumerate(flat_rows):
+                if set_speed_effect := row.get_effect(SetSpeedEffect):
+                    for flat_rows in flat_song_rows:
+                        if set_speed_effect not in flat_rows[i].Effects:
+                            flat_rows[i].Effects.append(set_speed_effect)
+
+        for channel_rows in flat_song_rows:
+            chiptune_data.tick_data.append(self.get_ticks(channel_rows, module.Instruments, chiptune_data.structure.ticks_per_step))
 
         return chiptune_data

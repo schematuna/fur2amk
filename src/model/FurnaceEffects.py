@@ -164,6 +164,12 @@ class SetTickRateEffect(FurnaceEffect):
         else: 
             self.tick_rate = raw_value
 
+class SetSpeedEffect(FurnaceEffect):
+    """Changes the number of ticks per row"""
+
+    def __init__(self, raw_value: int):
+        self.ticks_per_row = raw_value
+
 class FurnaceEffectFactory:
     effect_map = {
             0x01: lambda v: PitchSlideEffect(v, True),
@@ -174,6 +180,7 @@ class FurnaceEffectFactory:
             0x0A: lambda v: VolumeSlideEffect(v, False),
             0x0B: JumpToOrderEffect,
             0x0D: JumpToNextPatternEffect,
+            0x0F: SetSpeedEffect,
             0x80: PanEffect,
             0x83: PanSlideEffect,
             0xC0: lambda v: SetTickRateEffect(v, False),

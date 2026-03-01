@@ -185,10 +185,18 @@ class FurnaceRow:
         return self.NoteKind.EMPTY
 
     def get_effect(self, command_type: type[FurnaceEffect]) -> Optional[FurnaceEffect]:
+        num_effects = 0
+        ret = None
         for effect in self.Effects:
             if isinstance(effect, command_type):
-                return effect
-        return None
+                num_effects += 1
+                ret = effect
+
+        self.logger = logging.getLogger(__name__)
+        if num_effects > 1:
+            self.logger.warning(f"{num_effects} effects of the type {command_type} found in row. This isn't right.")
+
+        return ret
 
 
 @dataclass
