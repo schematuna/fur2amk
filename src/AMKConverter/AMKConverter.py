@@ -180,7 +180,6 @@ class AMKConverter:
         mml_data.song_length = self.row_converter.to_amk_ticks(chiptune_data.structure.song_length)
         mml_data.loop_tick = self.row_converter.to_amk_ticks(chiptune_data.structure.loop_tick)
 
-
         for ch, ticks in enumerate(chiptune_data.tick_data):
             amk_ticks = self.row_converter.expand_ticks(ticks)
             mml_data.notes[ch], mml_data.commands[ch] = self.row_converter.convert(amk_ticks, chiptune_data, self.instrument_info)
