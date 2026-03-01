@@ -10,45 +10,59 @@ import copy
 # converts a Furnace module to a generic chiptune format
 # this class abstracts away lots of Furnace-specific stuff like:
 #   - quick legato
-#   - delayed commands
 #   - macros
-#   - sample maps
 
 class FurnaceConverter:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
 
-    def analyze_pattern_lengths(self, module: FurnaceModule) -> tuple[List[int], List[int], Optional[int]]:
+    def flatten_rows(self, module: FurnaceModule):
+        flat_song_rows: List[List[FurnaceRow]] = []
+        for ch in range(module.NumChannels):
+            channel_rows: List[FurnaceRow] = []
+            patmap = module.PatternsByChannel[ch]
+            orders = module.OrdersPerChannel[ch]
+
+            for pat in orders:
+                rows = patmap.get(pat)
+                if rows:
+                    channel_rows.extend(rows)
+                else:
+                    self.logger.warning(f"Channel {ch} references missing pattern {pat}. Inserting empty pattern.")
+                    channel_rows.extend([FurnaceRow() for _ in range(len(patmap))])
+
+            flat_song_rows.append(channel_rows)
+
+        return flat_song_rows
+
+    def resolve_jumps(self, flat_rows: List[List[FurnaceRow]], pattern_length: int) -> tuple[List[List[FurnaceRow]], List[int], Optional[int]]:
         """
         Analyze patterns to determine effective lengths considering jump commands.
         Also detects the loop point (0B command).
-
-        Returns:
-            - pattern_lengths: [order] -> row count for that pattern
-            - pattern_start_offsets: [order] -> starting row offset
-            - loop_tick: tick position where loop starts (destination of 0B jump, None if no loop)
         """
-        num_orders = len(module.OrdersPerChannel[0])
+        num_channels = len(flat_rows)
+        num_sections = len(flat_rows[0]) // pattern_length
+        if num_sections != int(num_sections):
+            self.logger.warning("Rows not evenly divisible by section length. Truncating.")
+            num_sections = int(num_sections)
         pattern_lengths = []
         pattern_start_offsets = []
-        loop_target_order = None  # Track which order the loop jumps to
+        loop_target_section = None  # Track which section the loop jumps to
 
+        # Trawl rows for pattern length and offset metadata
         next_start_row = 0
-        for order_idx in range(num_orders):
+        for section_idx in range(num_sections):
             pattern_start_offsets.append(next_start_row)
 
             # Default: pattern runs from start_row to end
-            effective_length = module.PatternLength - next_start_row
+            effective_length = pattern_length - next_start_row
             next_start_row = 0  # Reset for next pattern
             jump_found = False
 
-            # Scan all channels for jump commands at this order
-            for ch in range(module.NumChannels):
-                orders = module.OrdersPerChannel[ch]
-
-                pat_id = orders[order_idx]
-                patmap = module.PatternsByChannel[ch]
-                rows = patmap.get(pat_id, [])
+            # Scan all channels for jump commands in current section
+            for ch in range(num_channels):
+                # grab this section's rows
+                rows = flat_rows[ch][section_idx * pattern_length: (section_idx + 1) * pattern_length - 1]
 
                 current_start = pattern_start_offsets[-1]
 
@@ -68,8 +82,8 @@ class FurnaceConverter:
                         effective_length = (row_idx - current_start) + 1
                         next_start_row = 0
                         jump_found = True
-                        # Store the target order for loop tick calculation
-                        loop_target_order = effect.order_number
+                        # Store the target section for loop tick calculation
+                        loop_target_section = effect.order_number
                         break
 
                 # If we found a jump command, stop scanning other channels
@@ -78,16 +92,71 @@ class FurnaceConverter:
 
             pattern_lengths.append(effective_length)
 
-        # Calculate loop tick based on the target order
-        loop_tick = None
-        if loop_target_order is not None:
-            loop_tick = 0
-            for i in range(loop_target_order):
-                if i < len(pattern_lengths):
-                    loop_tick += pattern_lengths[i] * module.Speed1
+        # get condensed rows taking jumps into account
+        condensed_rows: List[List[FurnaceRow]] = []
+        for ch in range(num_channels):
+            channel_rows: List[FurnaceRow] = []
 
-        return pattern_lengths, pattern_start_offsets, loop_tick
+            for section_idx in range(num_sections):
+                rows = flat_rows[ch][section_idx * pattern_length: (section_idx + 1) * pattern_length]
+                start_offset = pattern_start_offsets[section_idx]
+                end_offset = start_offset + pattern_lengths[section_idx]
+                channel_rows.extend(rows[start_offset:end_offset])
+
+            condensed_rows.append(channel_rows)
+
+        # Calculate loop row based on the target order
+        loop_row = None
+        if loop_target_section is not None:
+            loop_row = 0
+            for i in range(loop_target_section):
+                if i < len(pattern_lengths):
+                    loop_row += pattern_lengths[i]
+
+        return condensed_rows, pattern_lengths, loop_row
     
+    def resolve_speeds(self, condensed_rows: List[List[FurnaceRow]], default_speed: int) -> List[int]:
+        """ 
+        Returns the number of ticks that should be in each row 
+
+        Accounts for command 0F Set Speed
+        TODO: account for 09, alternating speeds, and grooves
+        """
+
+        num_channels = len(condensed_rows)
+        num_rows = len(condensed_rows[0])
+        # First, round up all speed changes across all channels
+        speed_changes: Dict[int, int] = dict() # dict tracking row num to speed change
+        for ch in range(num_channels):
+            channels_rows = condensed_rows[ch]
+            for i, row in enumerate(channels_rows):
+                if speed_effect := row.get_effect(SetSpeedEffect):
+                    speed_changes[i] = speed_effect.ticks_per_row
+
+        # Then create a list of speeds for all rows
+        row_speeds: List[int] = []
+        cur_speed = default_speed
+        for i in range(num_rows):
+            if i in speed_changes:
+                cur_speed = speed_changes[i]
+
+            row_speeds.append(cur_speed)
+        
+        return row_speeds
+    
+    def get_pattern_lengths_ticks(self, pattern_lengths_rows: List[int], ticks_per_row: List[int]) -> List[int]:
+        cur_row = 0
+        pattern_lengths: List[int] = []
+        for pattern_length in pattern_lengths_rows:
+            pattern_length_ticks = 0
+            for _ in range(pattern_length):
+                pattern_length_ticks += ticks_per_row[cur_row]
+                cur_row += 1
+
+            pattern_lengths.append(pattern_length_ticks)
+        
+        return pattern_lengths
+
     def resolve_quick_legato(self, furnace_ticks: List[TickData]):
         """
         Resolve Quick Legato commands into legato commands
@@ -144,12 +213,10 @@ class FurnaceConverter:
 
         return resolved_furnace_ticks
 
-    def get_ticks(self, flat_rows: List[FurnaceRow], instruments: List[FurnaceInstrument], ticks_per_row: int):
+    def get_ticks(self, flat_rows: List[FurnaceRow], instruments: List[FurnaceInstrument], ticks_per_row: List[int]):
         # first, do basic expansion from rows to ticks
-        # TODO: support grooves here
         furnace_ticks: List[TickData] = []
-        num_ticks_per_row = ticks_per_row
-        for row in flat_rows:
+        for i, row in enumerate(flat_rows):
             # copy row info into first tick of row
             first_tick = TickData()
             first_tick.Note = row.Note
@@ -158,13 +225,8 @@ class FurnaceConverter:
             first_tick.Effects = row.Effects
             furnace_ticks.append(first_tick)
 
-            if set_speed_effect := row.get_effect(SetSpeedEffect):
-                val = set_speed_effect.ticks_per_row
-                if val > 0:
-                    num_ticks_per_row = set_speed_effect.ticks_per_row
-
             # and create empty ticks for rest of row
-            for i in range(num_ticks_per_row - 1):
+            for i in range(ticks_per_row[i] - 1):
                 furnace_ticks.append(TickData())
 
         # abstract away quick legato
@@ -212,7 +274,6 @@ class FurnaceConverter:
 
         return furnace_ticks
     
-
     def get_song_info(self, module: FurnaceModule):
         info = ChiptuneSongInfo()
 
@@ -221,29 +282,6 @@ class FurnaceConverter:
         info.title = module.SongName
 
         return info
-    
-    def get_structure(self, module: FurnaceModule):
-        structure = ChiptuneStructure()
-
-        structure.num_channels = module.NumChannels
-
-        # Analyze pattern lengths and detect loop point
-        pattern_lengths_rows, pattern_offsets, loop_tick = self.analyze_pattern_lengths(module)
-
-        # for formatting and duration calculations
-        # lengths are in ticks
-        ticks_per_row = module.Speed1
-        structure.ticks_per_step = ticks_per_row
-        structure.measure_length = module.HighlightB * ticks_per_row
-        structure.section_lengths = [length * ticks_per_row
-                                    for length in pattern_lengths_rows]
-        structure.song_length = sum(structure.section_lengths)
-
-        # loop point
-        structure.loop_tick = loop_tick
-
-        return structure, pattern_offsets, pattern_lengths_rows
-
     
     def get_sample_info(self, module: FurnaceModule):
         samps: List[ChiptuneSampleInfo] = []
@@ -278,42 +316,35 @@ class FurnaceConverter:
         chiptune_data = ChiptuneData()
 
         chiptune_data.song_info = self.get_song_info(module)
-        chiptune_data.structure, pattern_offsets, pattern_lengths_rows = self.get_structure(module)
         chiptune_data.sample_info = self.get_sample_info(module)
         chiptune_data.instruments = module.Instruments
         chiptune_data.tick_rate = module.TicksPerSecond
         chiptune_data.global_volume = self.get_global_volume(module)
         chiptune_data.echo_data = self.get_echo_data(module)
 
-        # get flat rows taking jumps into account
-        flat_song_rows: List[List[FurnaceRow]] = []
-        for ch in range(module.NumChannels):
-            channel_rows: List[FurnaceRow] = []
-            patmap = module.PatternsByChannel[ch]
-            orders = module.OrdersPerChannel[ch]
+        # first, naively flatten rows
+        flat_song_rows = self.flatten_rows(module)
 
-            for order_idx, pat in enumerate(orders):
-                rows = patmap.get(pat)
-                if rows:
-                    start_offset = pattern_offsets[order_idx]
-                    end_offset = start_offset + pattern_lengths_rows[order_idx]
-                    channel_rows.extend(rows[start_offset:end_offset])
-                else:
-                    self.logger.warning(f"Channel {ch} references missing pattern {pat}. Inserting empty pattern.")
-                    channel_rows.extend([FurnaceRow() for _ in range(pattern_lengths_rows[order_idx])])
+        # Then, trim rows to account for jump commands, keeping track of the resulting pattern lengths and loop point
+        condensed_rows, pattern_lengths_rows, loop_row = self.resolve_jumps(flat_song_rows, module.PatternLength)
 
-            flat_song_rows.append(channel_rows)
+        # Get the number of ticks per row, which may be variable
+        ticks_per_row = self.resolve_speeds(condensed_rows, module.Speed1)
 
-        # copy global effects to all rows
-        for flat_rows in flat_song_rows:
-            for i, row in enumerate(flat_rows):
-                if set_speed_effect := row.get_effect(SetSpeedEffect):
-                    for flat_rows in flat_song_rows:
-                        if set_speed_effect not in flat_rows[i].Effects:
-                            flat_rows[i].Effects.append(set_speed_effect)
+        # Convert pattern lengths to ticks
+        pattern_lengths_ticks = self.get_pattern_lengths_ticks(pattern_lengths_rows, ticks_per_row)
+
+        structure = ChiptuneStructure()
+        structure.num_channels = module.NumChannels
+        structure.ticks_per_step = ticks_per_row
+        structure.measure_length = module.HighlightB * ticks_per_row[0] # TODO: variable measure lengths
+        structure.section_lengths = pattern_lengths_ticks
+        structure.song_length = sum(pattern_lengths_ticks)
+        structure.loop_tick = sum(ticks_per_row[:loop_row])
+        chiptune_data.structure = structure
 
         # decompose all rows into ticks
         for channel_rows in flat_song_rows:
-            chiptune_data.tick_data.append(self.get_ticks(channel_rows, module.Instruments, chiptune_data.structure.ticks_per_step))
+            chiptune_data.tick_data.append(self.get_ticks(channel_rows, module.Instruments, ticks_per_row))
 
         return chiptune_data
