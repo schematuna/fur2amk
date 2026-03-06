@@ -27,7 +27,7 @@ This tool must be run at the command line!
 
 2. **Convert a `.fur` file to MML + BRRs:**
    ```powershell
-   python .\fur2amk.py ".\examples\Sunken Lights.fur"
+   python .\fur2amk.py ".\examples\Frost Man.fur"
    ```
 
 You can optionally edit `fur2amk_config.json` to set the AddmusicK directory path. If `amk_dir` is set, the output will automatically be copied to AddmusicK after conversion:
@@ -42,5 +42,5 @@ Leave `amk_dir` as `null` to disable automatic copying.
 
 ## Outputs
 
-- **MML:** `.\music\Sunken Lights.txt`
-- **Samples:** `.\music\Sunken Lights\*.brr`
+- **MML:** `.\music\Frost Man.txt`
+- **Samples:** `.\music\Frost Man\*.brr`
