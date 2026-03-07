@@ -42,61 +42,22 @@ def _diff_output(generated_path: Path, control_path: Path) -> str | None:
     ))
 
 
-def run_conversion_tests(script_dir: Path, fur2amk_script: Path) -> tuple[int, int, list[tuple[str, str]]]:
-    """Run fur2amk on all .fur files in tests/. Returns (passed, failed, failures)."""
-    tests_dir = script_dir / "tests"
-
-    if not tests_dir.exists():
-        print(f"Error: tests directory not found: {tests_dir}")
-        return 0, 0, []
-
-    fur_files = sorted(tests_dir.glob("*.fur"))
-    if not fur_files:
-        print("No .fur files found in tests/")
-        return 0, 0, []
-
-    print(f"Conversion tests ({len(fur_files)} files in tests/):\n")
-
-    passed = 0
-    failed = 0
-    failures: list[tuple[str, str]] = []
-
-    for fur_file in fur_files:
-        name = fur_file.stem
-        print(f"  {name}... ", end="", flush=True)
-        try:
-            result = _run_fur2amk(fur2amk_script, fur_file, script_dir)
-            if result.returncode == 0:
-                print("OK")
-                passed += 1
-            else:
-                print("FAILED")
-                failed += 1
-                failures.append((name, result.stderr or result.stdout))
-        except Exception as e:
-            print(f"ERROR")
-            failed += 1
-            failures.append((name, str(e)))
-
-    return passed, failed, failures
-
-
 def run_example_tests(script_dir: Path, fur2amk_script: Path) -> tuple[int, int, list[tuple[str, str]]]:
     """Run fur2amk on examples/ and diff output against tests/control. Returns (passed, failed, failures)."""
-    examples_dir = script_dir / "examples"
+    fur_dir = script_dir / "tests" / "fur"
     control_dir = script_dir / "tests" / "control"
     music_dir = script_dir / "music"
 
-    if not examples_dir.exists():
-        print(f"Error: examples directory not found: {examples_dir}")
+    if not fur_dir.exists():
+        print(f"Error: furnace test files directory not found: {fur_dir}")
         return 0, 0, []
 
-    fur_files = sorted(examples_dir.glob("*.fur"))
+    fur_files = sorted(fur_dir.rglob("*.fur"))
     if not fur_files:
-        print("No .fur files found in examples/")
+        print(f"No .fur files found in {fur_dir}")
         return 0, 0, []
 
-    print(f"Control tests ({len(fur_files)} files in examples/control):\n")
+    print(f"Control tests ({len(fur_files)} files in tests/control):\n")
 
     passed = 0
     failed = 0
@@ -157,14 +118,12 @@ def main() -> int:
     script_dir = Path(__file__).parent
     fur2amk_script = script_dir / "fur2amk.py"
 
-    conv_passed, conv_failed, conv_failures = run_conversion_tests(script_dir, fur2amk_script)
-    print()
     ex_passed, ex_failed, ex_failures = run_example_tests(script_dir, fur2amk_script)
 
-    _print_failures(conv_failures + ex_failures)
+    _print_failures(ex_failures)
 
-    total_passed = conv_passed + ex_passed
-    total_failed = conv_failed + ex_failed
+    total_passed = ex_passed
+    total_failed = ex_failed
     print(f"\n{total_passed} passed, {total_failed} failed")
 
     return 0 if total_failed == 0 else 1

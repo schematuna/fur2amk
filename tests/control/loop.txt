@@ -1,0 +1,87 @@
+#amk 4
+
+#spc
+{
+    #title   "loop"
+    #author  "tuna"
+}
+
+#path "loop"
+
+#samples
+{
+    #optimized
+    "00_Bell_8850.brr"
+    "01_S4_MltFlute.brr"
+    "02_S4_Music_Box.brr"
+    "03_S4_SoftTrb.brr"
+    "04_S4_Snr1.brr"
+    "05_S4_Xylophone.brr"
+    "06_SRM_Waterways_Minor.brr"
+    "07_AD4_BigOKick_Looped.brr"
+    "08_KT7_PrimeBass_Harm.brr"
+    "09_K1_Choir_Min9.brr"
+    "10_emu2shaku.brr"
+    "11_emuShaku2.brr"
+    "12_k1choir-major.brr"
+}
+
+#instruments
+{
+    "00_Bell_8850.brr"            $CF $6E $80 $07 $9D ;@30
+    "01_S4_MltFlute.brr"          $CF $68 $80 $05 $AB ;@31
+    "02_S4_Music_Box.brr"         $DF $78 $80 $03 $72 ;@32
+    "03_S4_SoftTrb.brr"           $DF $78 $80 $05 $63 ;@33
+    "03_S4_SoftTrb.brr"           $00 $00 $7F $05 $63 ;@34
+    "04_S4_Snr1.brr"              $EF $36 $80 $03 $D4 ;@35
+    "05_S4_Xylophone.brr"         $EF $36 $80 $02 $76 ;@36
+    n1D                           $00 $00 $18 $00 $00 ;@37
+    "06_SRM_Waterways_Minor.brr"  $FF $E0 $80 $02 $D4 ;@38
+    "07_AD4_BigOKick_Looped.brr"  $DF $17 $80 $07 $A8 ;@39
+    "08_KT7_PrimeBass_Harm.brr"   $DF $C4 $80 $03 $FD ;@40
+    "09_K1_Choir_Min9.brr"        $DF $C4 $80 $03 $34 ;@41
+    "04_S4_Snr1.brr"              $EF $72 $80 $03 $D4 ;@42
+    "10_emu2shaku.brr"            $CF $80 $80 $07 $25 ;@43
+    "04_S4_Snr1.brr"              $F5 $FF $80 $03 $D4 ;@44
+    "11_emuShaku2.brr"            $CE $8C $80 $06 $54 ;@45
+    "08_KT7_PrimeBass_Harm.brr"   $CF $8D $80 $03 $FD ;@46
+    "12_k1choir-major.brr"        $DF $C4 $80 $01 $9C ;@47
+    n1D                           $00 $00 $2F $00 $00 ;@48
+    "05_S4_Xylophone.brr"         $EB $B1 $80 $02 $76 ;@49
+    "03_S4_SoftTrb.brr"           $00 $00 $3A $05 $63 ;@50
+}
+
+; created with fur2amk 0.4.2
+
+w194 t52
+
+$EF $FF $50 $B0
+$F1 $02 $80 $01
+$F5 $4D $11 $FA $F4 $FA $FB $FA $00
+
+(!1)[$FA$01$BE] ;Gain toggle for Furnace instrument 7: NoiseHHat
+(!2)[$FA$01$B1] ;Gain toggle for Furnace instrument 18: noizcymbal
+
+
+#0
+; enable light staccato
+$F4$02 
+; section 00
+@31 v202 y20 o4 f1
+/
+; reset state on loop
+@31  
+; section 01
+v202 y20 f2 @34 v159 y0 o3 e2
+
+
+#1
+; section 00
+$F4$03 @39 v202 o3 c1
+/
+; reset state on loop
+@39  
+; section 01
+v202 c1
+
+
