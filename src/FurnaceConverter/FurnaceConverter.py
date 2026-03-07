@@ -259,7 +259,7 @@ class FurnaceConverter:
                 if active_ins is None:
                     self.logger.warning(f"No furnace instrument active in row with Note {tick_data.Note}.")
 
-            tick_data.Vol = vol_converter.get_volume_for_tick(tick_data.Vol, is_new_note, active_ins)
+            tick_data.Vol = vol_converter.get_volume_for_tick(tick_data, is_new_note, active_ins)
 
             # check for quick legato, make a new note if found
             if effect := tick_data.get_effect(QuickLegatoEffect):

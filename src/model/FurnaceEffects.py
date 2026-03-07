@@ -133,6 +133,16 @@ class FineVolumeSlideEffect(FurnaceEffect):
             if raw_value > 0:
                 self.change_per_tick = -(speed / 256)
 
+class SingleTickVolumeEffect(FurnaceEffect):
+    """Changes volume up or down by a set amount. Value is amount to change volume by."""
+
+    def __init__(self, raw_value: int, is_up: bool):
+        # double cause internal vol range is 0->FE, not 0->7F
+        self.vol_change = 2 * raw_value
+
+        if not is_up:
+            self.vol_change = -self.vol_change
+
 class VibratoEffect(FurnaceEffect):
     def __init__(self, raw_value: int):
         # speed is number of table positions to move every tick
@@ -194,6 +204,8 @@ class FurnaceEffectFactory:
             0xF0: lambda v: SetTickRateEffect(v, True),
             0xF3: lambda v: FineVolumeSlideEffect(v, True),
             0xF4: lambda v: FineVolumeSlideEffect(v, False),
+            0xF8: lambda v: SingleTickVolumeEffect(v, True),
+            0xF9: lambda v: SingleTickVolumeEffect(v, False),
             0xFA: lambda v: VolumeSlideEffect(v, True),
         }
     

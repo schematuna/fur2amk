@@ -1,6 +1,7 @@
 import logging
 
 from ..model.FurnaceData import *
+from ..model.ChiptuneData import *
 
 class VolumeMacroConverter:
     def __init__(self):
@@ -9,10 +10,14 @@ class VolumeMacroConverter:
         self.primary_vol = 127
         self.macro_mult = 1
 
-    def get_volume_for_tick(self, row_vol: int, is_new_note: bool, active_ins: FurnaceInstrument):
-        new_vol = row_vol
-        if row_vol is not None:
+    def get_volume_for_tick(self, tick_data: TickData, is_new_note: bool, active_ins: FurnaceInstrument):
+        new_vol = tick_data.Vol
+        if tick_data.Vol is not None:
             self.primary_vol = new_vol
+
+        if vol_change_effect := tick_data.get_effect(SingleTickVolumeEffect):
+            self.primary_vol += vol_change_effect.vol_change
+            new_vol = self.primary_vol * self.macro_mult
 
         if is_new_note:
             # only consider first tick of volume macro for now
@@ -29,7 +34,11 @@ class VolumeMacroConverter:
                 new_vol = self.primary_vol * self.macro_mult
             
         # all volume commands are affected by any active volue macros.
-        if row_vol is not None:
+        if tick_data.Vol is not None:
             new_vol = self.primary_vol * self.macro_mult
+
+        # must limit 0->254
+        if new_vol:
+            new_vol = min(max(0, new_vol), 254)
 
         return new_vol

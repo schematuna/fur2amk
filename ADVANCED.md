@@ -53,6 +53,8 @@ which has high moderation standards.
 - F0: Set Tick Rate (BPM)
 - F3: Fine Volume Slide Up
 - F4: Fine Volume Slide Down
+- F8: Single tick volume up
+- F9: Single tick volume down
 - FA: Fast Volume Slide
 
 ## Vanilla Samples
