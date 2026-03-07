@@ -445,14 +445,15 @@ class MMLWriter:
             is_post_loop = self.mml_data.loop_tick is None or word.tick >= self.mml_data.loop_tick
             first_note_after_loop = is_post_loop and word.note is not None
 
+            # Capture legato state at first word after loop
+            if first_note_after_loop:
+                legato_on_at_loop = legato_on
+
             # Track legato state from LegatoToggle commands
             for command in word.commands:
                 if isinstance(command, LegatoToggle):
                     legato_on = not legato_on
-
-            # Capture legato state at first word after loop
-            if first_note_after_loop:
-                legato_on_at_loop = legato_on
+                    print(f"switched legato state to {legato_on}, is_post_loop is {is_post_loop}")
 
             # need to explicitly handle instrument change at loop point, so it's correct on loop
             if first_note_after_loop:
