@@ -1,0 +1,68 @@
+#amk 4
+
+#spc
+{
+    #title   "adsr"
+    #author  "tuna"
+}
+
+#path "adsr"
+
+#samples
+{
+    #optimized
+    "00_Bell_8850.brr"
+    "01_S4_MltFlute.brr"
+    "02_S4_Music_Box.brr"
+    "03_S4_SoftTrb.brr"
+    "04_S4_Snr1.brr"
+    "05_S4_Xylophone.brr"
+    "06_SRM_Waterways_Minor.brr"
+    "07_AD4_BigOKick_Looped.brr"
+    "08_KT7_PrimeBass_Harm.brr"
+    "09_K1_Choir_Min9.brr"
+    "10_emu2shaku.brr"
+    "11_emuShaku2.brr"
+    "12_k1choir-major.brr"
+    "13_Sample13.brr"
+    "14_Sample14.brr"
+}
+
+#instruments
+{
+    "01_S4_MltFlute.brr"  $BC $A1 $80 $05 $AB ;@30
+    "13_Sample13.brr"     $00 $00 $7F $01 $EA ;@31
+    "14_Sample14.brr"     $C9 $A3 $80 $0A $03 ;@32
+}
+
+; created with fur2amk 0.4.2
+
+w194 t52
+
+$EF $FF $50 $B0
+$F1 $00 $80 $01
+$F5 $4D $11 $FA $F4 $FA $FB $FA $00
+
+(!1)[$ED$3C$A1] ;Restore ADSR for Furnace instrument 0: GlocknFlute
+(!2)[$FA$01$88] ;Remote gain command for Furnace instrument 2: square
+(!3)[$ED$49$A3] ;Restore ADSR for Furnace instrument 2: square
+
+
+#0
+; enable light staccato
+$F4$02 
+; reset state on loop
+(!99, 0)  
+; section 00
+(!2, 3) (!3, -1) @32 o2 c1 r2 o3 f4 r4 e8 d8 c8 r2^8 (!99, 0) (!1, -1) @30 c1
+; section 01
+v255 e1 $ED$3C$AD ^1 e1 (!99, 0) (!2, 3) (!3, -1) @32 c1
+
+
+#1
+; section 00
+$F4$03 @31 o3 c1 c1 c1 c1
+; section 01
+c1 c1 c1 c1
+
+
