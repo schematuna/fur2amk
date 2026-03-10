@@ -453,7 +453,6 @@ class MMLWriter:
             for command in word.commands:
                 if isinstance(command, LegatoToggle):
                     legato_on = not legato_on
-                    print(f"switched legato state to {legato_on}, is_post_loop is {is_post_loop}")
 
             # need to explicitly handle instrument change at loop point, so it's correct on loop
             if first_note_after_loop:

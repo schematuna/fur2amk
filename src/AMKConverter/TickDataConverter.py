@@ -84,12 +84,14 @@ class TickDataConverter:
         volume_converter    = VolumeConverter(self.tick_ratio)
         pan_converter       = PanConverter(self.tick_ratio)
         vibrato_converter   = VibratoConverter(self.tick_ratio)
+        tuning_converter    = TuningConverter()
         state = FurnaceState()
         for tick_data in ticks:
             commands.extend(tempo_converter.convert_tick(tick_data, tick, state))
             commands.extend(volume_converter.convert_tick(tick_data, tick, state))
             commands.extend(pan_converter.convert_tick(tick_data, tick, state))
             commands.extend(vibrato_converter.convert_tick(tick_data, tick, state))
+            commands.extend(tuning_converter.convert_tick(tick_data, tick, state))
 
             tick += 1
 
