@@ -105,7 +105,34 @@ class TempoConverter():
             commands.append(TempoChange(tick, FurnaceUtil.tick_rate_to_amk_tempo(self.structure, self.amk_ticks_per_row, effect.tick_rate)))
 
         return commands
+    
+class TuningConverter():
+    def convert_tick(self, tick_data: TickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
+        commands: List[MMLCommand] = []
+        if effect := tick_data.get_effect(SetPitchEffect):
+            # get into AMK range, 0->FF
+            pitch_change = effect.pitch * 2
+            semitone_tune = 0
+            fine_tune = 0
+            if pitch_change < 0:
+                # compress to -255 -> 0
+                pitch_change = round(pitch_change * 255/256)
+                semitone_tune = -1
+                fine_tune = (0xFF + pitch_change)
+            else:
+                # expand to 255 -> 0
+                pitch_change = round(pitch_change * 255/254)
+                fine_tune = pitch_change
 
+            if state.fine_tune != fine_tune:
+                commands.append(FineTune(tick, fine_tune))
+                state.fine_tune = fine_tune
+
+            if state.semitone_tune != semitone_tune:
+                commands.append(SemitoneTune(tick, semitone_tune))
+                state.semitone_tune = semitone_tune
+
+        return commands
 
 @dataclass
 class LegatoRegion:

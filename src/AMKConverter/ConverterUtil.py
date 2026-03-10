@@ -18,6 +18,9 @@ class FurnaceState:
     is_echo: bool = True
     adsr: ADSR = None
     fur_ins_idx: int = None
+    # channel tuning state
+    fine_tune: int = 0
+    semitone_tune: int = 0
 
 class FurnaceUtil:
     PITCH_STEPS_PER_OCTAVE = 384

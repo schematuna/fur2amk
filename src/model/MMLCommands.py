@@ -154,3 +154,20 @@ class TempoChange(MMLCommand):
     def to_mml(self, mml_state: 'MMLState' = None) -> str:
         # Could equivalently use $E2 here but t is cleaner
         return f"t{self.tempo}"
+
+@dataclass
+class FineTune(MMLCommand):
+    # tunes the channel, 0 -> +1 semitone (0 -> 0xFF)
+    tuning: int
+
+    def to_mml(self, mml_state: 'MMLState' = None) -> str:
+        return f"$EE${MMLUtil.to_hex(self.tuning)}"
+    
+@dataclass
+class SemitoneTune(MMLCommand):
+    # tunes the channel by a number of semitones
+    # uses 2's complement
+    semitones: int
+
+    def to_mml(self, mml_state: 'MMLState' = None) -> str:
+        return f"$FA$02${MMLUtil.to_hex(self.semitones)}"

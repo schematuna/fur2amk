@@ -45,6 +45,7 @@ which has high moderation standards.
 - C:  Set Tick Rate (Hz)
 - E1: Note Slide Up
 - E2: Note Slide Down
+- E5: Set Pitch
 - E6: Quick Legato
 - E8: Quick legato up
 - E9: Quick legato down
@@ -83,6 +84,7 @@ AMK only supports C1 -> A6. If any notes are out of this range they will be octa
 - **Most Macros** are not yet supported. Only 1 Volume value, 1 Noise Freq value, up to 2 Gain values, and the Special Echo and Noise flags are supported. 
 - **Alternating Speeds and Grooves** are not supported.
 - **Compatibility Flags** are not supported. Conversion assumes that all compatibility flags are disabled.
+- **E5: Set Pitch** will not work when used mid-note. Use legato and new notes for this.
 
 ## Importing from other trackers
 

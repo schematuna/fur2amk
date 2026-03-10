@@ -32,6 +32,13 @@ class NoteSlideEffect(FurnaceEffect):
         if not is_up:
             self.semitones = -self.semitones
 
+class SetPitchEffect(FurnaceEffect):
+    """Sets global pitch modifier for the channel, from -1 to +1 semitone."""
+
+    def __init__(self, raw_value: int):
+        # val ranges -80 -> 7F
+        self.pitch = raw_value - 0x80
+
 class StereoPanEffect(FurnaceEffect):
     """Stereo pan effect (0x08). Value encodes left (upper nibble) and right (lower nibble) volumes."""
     
@@ -196,6 +203,7 @@ class FurnaceEffectFactory:
             0xC0: lambda v: SetTickRateEffect(v, False),
             0xE1: lambda v: NoteSlideEffect(v, True),
             0xE2: lambda v: NoteSlideEffect(v, False),
+            0xE5: SetPitchEffect,
             0xE6: lambda v: QuickLegatoEffect(v, True, None),   # quick legato
             0xE8: lambda v: QuickLegatoEffect(v, False, True),  # quick legaato up
             0xE9: lambda v: QuickLegatoEffect(v, False, False), # quick legato down
