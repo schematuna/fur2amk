@@ -2,7 +2,7 @@
 
 #spc
 {
-    #title   "Test"
+    #title   "pitch test"
     #author  "tuna"
 }
 
@@ -67,25 +67,28 @@ $F5 $4D $11 $FA $F4 $FA $FB $FA $00
 ; enable light staccato
 $F4$02 
 ; section 00
-@41 v202 y10 o4 f8^16 ^16 $DD$00$0C c
-@34 v131 o3 e2 $DD$00$60 g
-f2 $DD$00$60 g+  ^2 $DD$00$60 f
-d2 $DD$00$60 o2b  ^2 $DD$00$60 o3d  ^2 $DD$00$60 f ^2^4
+$F4$01 @34 o3 c4 $EE$FF c4 $EE$00 $FA$02$FF c4 $FA$02$00 c2^16
+; reset state before loop
+$F4$01  
 /
 ; reset state on loop
-@34  
+$F4$01  @34  
 ; section 01
-r4 c2 ^=36 $DD$00$24 d ^4^16 ^=18 $DD$00$12 c+ ^4^8^32 ^=36 $DD$00$24 d+ ^4^16
+$F4$01 @41 v202 y10 o4 f8^16 ^16 $DD$00$0C c  @34 v131 o3 e2 $DD$00$60 g
+f2 $DD$00$60 g+  ^2 $DD$00$60 f
+d2 $DD$00$60 o2b  ^2 $DD$00$60 o3d  ^2 $DD$00$60 f ^1
+; section 02
+c2 ^=36 $DD$00$24 d ^4^16 ^=18 $DD$00$12 c+ ^4^8^32 ^=36 $DD$00$24 d+ ^4^16
 f2 ^4 $DD$00$30 o4c ^4 ^4 $DD$00$30 o3f ^2
 
 
 #1
 ; section 00
-r4 $F4$03 @39 v202 o3 c1 c1 c1 c2^4
+r1^4^16
 /
-; reset state on loop
-@39  
 ; section 01
-r4 v202 c1 c1 c1 c2^4
+r4 $F4$03 @39 v202 o3 c1 c1 c1 c1
+; section 02
+v202 c1 c1 c1 c2^4
 
 
