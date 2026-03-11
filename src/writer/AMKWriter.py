@@ -149,9 +149,11 @@ class AMKWriter:
             self.txt += f'$EF ${MMLUtil.to_hex(echo_data.echoMask)} ${MMLUtil.to_hex(echo_data.echoVolL)} ${MMLUtil.to_hex(echo_data.echoVolR)}\n'
             self.txt += f'$F1 ${MMLUtil.to_hex(echo_data.echoDelay)} ${MMLUtil.to_hex(echo_data.echoFeedback)} ${MMLUtil.to_hex(echo_data.firIdx)}\n'
 
-        if echo_data.echoFilterCoeffs:
+        if echo_data.echoFilterCoeffs and echo_data.echoFilterCoeffs != DefaultFilterCoeffs:
             coeffs_hex = ' '.join(f'${MMLUtil.to_hex(c)}' for c in echo_data.echoFilterCoeffs)
-            self.txt += f'$F5 {coeffs_hex}\n\n'
+            self.txt += f'$F5 {coeffs_hex}\n'
+
+        self.txt += '\n'
 
     def add_remote_commands(self) -> None:
         for command in self.amk_data.remote_defs:

@@ -5,6 +5,8 @@ import logging
 
 # common music utilities
 
+DefaultFilterCoeffs = [0x7F, 0, 0, 0, 0, 0, 0, 0]
+
 @dataclass
 class ADSR:
     attack: int = None
