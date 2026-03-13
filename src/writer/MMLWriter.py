@@ -494,7 +494,7 @@ class MMLWriter:
 
 
     def write(self) -> None:
-        has_loop_point = self.mml_data.loop_tick is not None
+        has_loop_point = self.mml_data.loop_tick not in [None, 0]
 
         txt = ''
         for c in range(self.mml_data.num_channels):
