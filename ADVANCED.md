@@ -40,6 +40,7 @@ which has high moderation standards.
 - 0A: Volume Slide
 - 0B: Jump to Order (1 occurrence allowed)
 - 0D: Jump to Next Pattern
+- 0F: Set speed
 - 80: Pan
 - 83: Pan Slide
 - C:  Set Tick Rate (Hz)
