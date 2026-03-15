@@ -160,11 +160,6 @@ class NoteConverter():
                             self.logger.warning("no active note to portamento from, ignoring portamento command.")
                 else:
                     self.logger.warning("Portamento effect found on non-note row, ignoring.")
-
-            # check for note delay (this also affects note offs)
-            note_tick = tick
-            if effect := tick_data.get_effect(NoteDelayEffect):
-                note_tick += int(effect.delay_ticks * self.tick_ratio)
                 
             # don't make a new note for portamento rows, pitchbend will handle that
             note_kind = tick_data.kind()
@@ -185,7 +180,7 @@ class NoteConverter():
                 pre_note_commands = []
                 # we only have to set up pre-note commands for new instruments
                 if fur_ins.index != state.fur_ins_idx:
-                    pre_note_commands = self.get_pre_note_commands(fur_ins, ins_info, state, note_tick)
+                    pre_note_commands = self.get_pre_note_commands(fur_ins, ins_info, state, tick)
                     state.fur_ins_idx = fur_ins.index   
 
                 note_to_play, amk_ins_idx = self.get_note_info(fur_ins.index, tick_data.Note, ins_info, fur_ins.use_sample_map)
@@ -195,12 +190,12 @@ class NoteConverter():
 
                 pitch_command = None
                 if cur_dur is not None:
-                    cur_dur.duration = note_tick - cur_dur.tick
+                    cur_dur.duration = tick - cur_dur.tick
                     pitch_command = slide_helper.end_slide(None)
                     if pitch_command is not None:
                         cur_dur.pitch_bends.append(pitch_command)
                     notes.append(cur_dur)
-                cur_dur = MMLNote(note_tick, 0, note_to_play, amk_ins_idx, pre_note_commands)
+                cur_dur = MMLNote(tick, 0, note_to_play, amk_ins_idx, pre_note_commands)
                 active_note = note_to_play
 
                 slide_helper.set_target(active_note)
@@ -221,7 +216,7 @@ class NoteConverter():
                     if cur_dur is not None:
                         if pitch_command is not None:
                             cur_dur.pitch_bends.append(pitch_command)
-                        cur_dur.duration = note_tick - cur_dur.tick
+                        cur_dur.duration = tick - cur_dur.tick
                         notes.append(cur_dur)
                     else:
                         self.logger.debug(f"Note off or release was found but no note was playing.")

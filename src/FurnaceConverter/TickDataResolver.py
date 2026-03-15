@@ -13,8 +13,9 @@ class TickDataResolver():
 
     def resolve_ticks(self, tick_data: List[TickData], instruments: List[FurnaceInstrument]) -> List[TickData]:
         furnace_ticks = tick_data
-        # Handle note delay here! Speed changes and jump commands are already handled by the time we get here
-        # furnace_ticks = self.resolve_note_delay(furnace_ticks)
+        # Speed changes and jump commands are already handled by the time we get here
+        # virtual tempo changes must also be resolved before note delay is handled
+        furnace_ticks = self.resolve_note_delay(furnace_ticks)
 
         # abstract away quick legato
         # this just handles legato commands, corresponding notes are added in loop below
@@ -60,8 +61,21 @@ class TickDataResolver():
                         active_note = new_note
 
         return furnace_ticks
+    
+    def resolve_note_delay(self, furnace_ticks: List[TickData]) -> List[TickData]:
+        out_ticks: List[TickData] = [TickData()] * len(furnace_ticks)
+        for i, tick_data in enumerate(furnace_ticks):
+            if note_delay_effect := tick_data.get_effect(NoteDelayEffect):
+                delay = note_delay_effect.delay_ticks
+                out_ticks[i + delay] = tick_data
+            else:
+                # only populate if this tick isn't already a delayed tick
+                if out_ticks[i] == TickData():
+                    out_ticks[i] = tick_data
 
-    def resolve_quick_legato(self, furnace_ticks: List[TickData]):
+        return out_ticks
+
+    def resolve_quick_legato(self, furnace_ticks: List[TickData]) -> List[TickData]:
         """
         Resolve Quick Legato commands into legato commands
 
@@ -77,8 +91,7 @@ class TickDataResolver():
         resolved_furnace_ticks = copy.deepcopy(furnace_ticks)
         for i, tick_data in enumerate(furnace_ticks):
             # track global legato changes
-            legato_effect = tick_data.get_effect(LegatoEffect)
-            if legato_effect:
+            if legato_effect := tick_data.get_effect(LegatoEffect):
                 global_legato_enabled = legato_effect.legato_on
 
             # check for portamento
