@@ -1,0 +1,22 @@
+#amk 4
+
+#spc
+{
+}
+
+#path "empty"
+
+#samples
+{
+    #optimized
+}
+
+; created with fur2amk 0.4.2
+
+w254 t30
+
+$EF $00 $7F $7F
+$F1 $00 $00 $01
+
+
+
