@@ -11,8 +11,8 @@ class TickDataResolver():
     def __init__(self):
         pass
 
-    def resolve_ticks(self, tick_data: List[TickData], instruments: List[FurnaceInstrument]) -> List[TickData]:
-        furnace_ticks = tick_data
+    def resolve_ticks(self, ticks: List[TickData], instruments: List[FurnaceInstrument]) -> List[TickData]:
+        furnace_ticks = ticks
         # Speed changes and jump commands are already handled by the time we get here
         # virtual tempo changes must also be resolved before note delay is handled
         furnace_ticks = self.resolve_note_delay(furnace_ticks)
@@ -69,7 +69,7 @@ class TickDataResolver():
                 delay = note_delay_effect.delay_ticks
                 out_ticks[i + delay] = tick_data
             else:
-                # only populate if this tick isn't already a delayed tick
+                # only populate if this tick isn't already populated by a delayed tick
                 if out_ticks[i] == TickData():
                     out_ticks[i] = tick_data
 

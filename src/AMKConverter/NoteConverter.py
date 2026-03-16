@@ -225,6 +225,12 @@ class NoteConverter():
                     cur_dur = None
                     active_note = None
 
+            if effect := tick_data.get_effect(SendExternalEffect):
+                if effect.value == 0 and cur_dur is not None:
+                    cur_dur.no_gap = True
+                else:
+                    self.logger.warning("Send external effect found outside of a note, ignoring.")
+
             # handle pitch slides after processing this row's note info
             active_note, pitch_commands = self.convert_pitch_slides(tick, tick_data, slide_helper, active_note)
             if cur_dur is not None:

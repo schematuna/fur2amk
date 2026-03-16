@@ -17,6 +17,9 @@ class MMLNote:
     # pitchbends must occur within the duration of the note
     pitch_bends: List[PitchBend] = field(default_factory=lambda: [])
 
+    # whether this note should use the MML trick to avoid a 1-tick gap before the next note
+    no_gap: bool = False
+
 @dataclass
 class MMLData:
     num_channels: int = 8
