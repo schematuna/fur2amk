@@ -187,6 +187,14 @@ class SetSpeedEffect(FurnaceEffect):
     def __init__(self, raw_value: int):
         self.ticks_per_row = raw_value
 
+class SendExternalEffect(FurnaceEffect):
+    """Special command for fur2amk hints. Valid values:
+        00 - Remove 1-tick gap between this note and the next note
+    """
+    
+    def __init__(self, raw_value: int):
+        self.value = raw_value
+
 class FurnaceEffectFactory:
     effect_map = {
             0x01: lambda v: PitchSlideEffect(v, True),
@@ -209,6 +217,7 @@ class FurnaceEffectFactory:
             0xE9: lambda v: QuickLegatoEffect(v, False, False), # quick legato down
             0xEA: LegatoEffect,
             0xED: NoteDelayEffect,
+            0xEE: SendExternalEffect,
             0xF0: lambda v: SetTickRateEffect(v, True),
             0xF3: lambda v: FineVolumeSlideEffect(v, True),
             0xF4: lambda v: FineVolumeSlideEffect(v, False),

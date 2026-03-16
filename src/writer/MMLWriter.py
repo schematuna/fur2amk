@@ -19,6 +19,13 @@ class TieBreakCommand(MMLCommand):
     def to_mml(self, mml_state: 'MMLState' = None) -> str:
         return ''
 
+# a silent instruction to break a tie and force the compiler to not optimize it away
+# useful for forcing 1-tick ties for removing N-SPC 1-tick gap
+@dataclass
+class HardTieBreakCommand(MMLCommand):
+    def to_mml(self, mml_state: 'MMLState' = None) -> str:
+        return '|'
+
 @dataclass
 class MMLRest:
     tick: int
@@ -401,6 +408,11 @@ class MMLWriter:
                     # Pitchbend commands are placed after the duration to be modulated
                     pitch_bend.tick = pitch_bend.tick + pitch_bend.duration
                     word.commands.append(pitch_bend)
+
+                # handle no-gap notes. Not compatible with pitchbends.
+                if duration.no_gap and len(duration.pitch_bends) == 0:
+                    # place hard tiebreak command 1 tick before the end of the note to remove 1-tick gap before next note
+                    word.commands.append(HardTieBreakCommand(duration.tick + duration.duration - 1))
                     
             while cmd_idx < len(commands):
                 cmd_tick = commands[cmd_idx].tick
@@ -530,7 +542,6 @@ class MMLWriter:
             mml_state = MMLState()
             # light staccato is a global toggle
             # enable it by default for all ports to reduce unwanted space between notes from 2 ticks to 1 tick
-            # TODO: Use Kevin trick to reduce gap to 0. Use Furnace EE command to suggest this.
             if c == 0:
                 staccato_cmd = LightStaccatoToggle(0)
                 txt += "; enable light staccato\n"
