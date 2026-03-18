@@ -51,7 +51,7 @@
     "03_S4_SoftTrb.brr"           $00 $00 $3A $05 $63 ;@50
 }
 
-; created with fur2amk 0.4.2
+; created with fur2amk 0.5.0
 
 w194 t52
 
@@ -67,12 +67,12 @@ $F5 $4D $11 $FA $F4 $FA $FB $FA $00
 ; enable light staccato
 $F4$02 
 ; section 00
-$F4$01 @31 o3 a32^=1 b64^=2 ^=2 $DD$00$02 a ^64^=2 b64^=2 ^=2 $DD$00$02 a ^64^=2 b64^=2 ^=2 $DD$00$02 a ^64^=2 b64^=2 ^=2 $DD$00$02 a ^64^=2
+$F4$01 @31 o3 a32^=1 b64^=2^=2 $DD$00$02 a^64^=2 b64^=2^=2 $DD$00$02 a^64^=2 b64^=2^=2 $DD$00$02 a^64^=2 b64^=2^=2 $DD$00$02 a^64^=2
 b4 a8^16^32^=2 b4
 a4^16^32^64^=2 b4 a4^16^32^=2 $F4$01 ^=2
 /
 ; reset state on loop
-@31  
+@31 
 ; section 01
 $F4$01 v221 e8^64^=2 g+8^16 o4 c8^32^=1 o3 g4 $F4$01 a4 b4 r4 g4 $F4$01 f4
 ; section 02

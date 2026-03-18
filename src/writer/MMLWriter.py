@@ -16,6 +16,10 @@ from ..util import *
 # useful for pitchbend commands that need to be placed after the duration to be modulated
 @dataclass
 class TieBreakCommand(MMLCommand):
+    # no spaces around this command
+    def add_spaces(self, text: str) -> str:
+        return text
+    
     def to_mml(self, mml_state: 'MMLState' = None) -> str:
         return ''
 
@@ -23,6 +27,10 @@ class TieBreakCommand(MMLCommand):
 # useful for forcing 1-tick ties for removing N-SPC 1-tick gap
 @dataclass
 class HardTieBreakCommand(MMLCommand):
+    # no spaces around this command
+    def add_spaces(self, text: str) -> str:
+        return text
+
     def to_mml(self, mml_state: 'MMLState' = None) -> str:
         return '|'
 
@@ -39,15 +47,26 @@ class MMLWord:
     note: Optional[int] = None
     commands: List[MMLCommand] = field(default_factory=list)
 
-    def _format_duration_to_cmd(self, duration_ticks: int, cont: bool, next_cmd: MMLCommand) -> str:
-        """Format a duration segment before a command."""
-        # PitchBend requires the prior duration to be a singular duration
-        no_ties = isinstance(next_cmd, PitchBend)
-        result = DurationFormatter.format(duration_ticks, cont, no_ties)
-        # don't add space if next command is a tie break
-        if not isinstance(next_cmd, TieBreakCommand):
-            result += ' '
-        return result
+    def _want_space_after_duration(self, tick: int) -> str:
+        # insert a space after the duration if the following tick contains any non-tiebreak commands
+        space_after_duration = False
+        for cmd in self.commands:
+            if cmd.tick == tick and not isinstance(cmd, TieBreakCommand) and not isinstance(cmd, HardTieBreakCommand):
+                space_after_duration = True
+                break
+
+        return space_after_duration
+    
+    def _want_space_after_pitchbend(self, tick: int, ensuing_commands: List[MMLCommand]) -> str:
+        # insert a space after the pitchbend if there's another command on the same tick
+        space_after_pitchbend = False
+        for cmd in ensuing_commands:
+            if cmd.tick == tick and not isinstance(cmd, PitchBend) and not isinstance(cmd, TieBreakCommand) and not isinstance(cmd, HardTieBreakCommand):
+                print(cmd)
+                space_after_pitchbend = True
+                break
+
+        return space_after_pitchbend
 
     def to_mml(self, mml_state: MMLState) -> str:
         word_txt = ''
@@ -64,7 +83,6 @@ class MMLWord:
         # add note name and octave
         if self.note is not None:
             note_name, note_octave = MMLUtil.note_name_and_octave(self.note)
-            
             # Emit octave change if needed
             if mml_state.octave != note_octave:
                 word_txt += f'o{note_octave} '
@@ -80,7 +98,9 @@ class MMLWord:
             first_cmd = self.commands[command_idx]
             first_cmd_tick = first_cmd.tick
             if first_cmd_tick > cur_tick:
-                word_txt += self._format_duration_to_cmd(first_cmd_tick - cur_tick, cont, first_cmd)
+                word_txt += DurationFormatter.format(first_cmd_tick - cur_tick, cont, isinstance(first_cmd, PitchBend))
+                if self._want_space_after_duration(first_cmd_tick):
+                    word_txt += ' '
                 cur_tick = first_cmd_tick
                 cont = True
 
@@ -89,6 +109,11 @@ class MMLWord:
             command = self.commands[command_idx]
             cmd_tick = command.tick
             word_txt += command.get_text(mml_state)
+            if isinstance(command, PitchBend) and command_idx + 1 < len(self.commands):
+                # If there's another command on this tick after the pitchbend command, we need a space
+                # if not, we don't want a space
+                if self._want_space_after_pitchbend(cmd_tick, self.commands[command_idx+1:]):
+                    word_txt += ' '
             command_idx += 1
             
             # Update cur_tick to this command's tick
@@ -99,7 +124,9 @@ class MMLWord:
                 next_cmd = self.commands[command_idx]
                 next_cmd_tick = next_cmd.tick
                 if next_cmd_tick > cur_tick:
-                    word_txt += self._format_duration_to_cmd(next_cmd_tick - cur_tick, cont, next_cmd)
+                    word_txt += DurationFormatter.format(next_cmd_tick - cur_tick, cont, isinstance(next_cmd, PitchBend))
+                    if self._want_space_after_duration(next_cmd_tick):
+                        word_txt += ' '
                     cur_tick = next_cmd_tick
                     cont = True
 
@@ -552,7 +579,7 @@ class MMLWriter:
                 if len(commands) > 0:
                     txt += f'; {comment}\n'
                     for cmd in commands:
-                        txt += cmd.get_text(mml_state) + ' '
+                        txt += cmd.get_text(mml_state)
                     txt += '\n'
                 return txt
 

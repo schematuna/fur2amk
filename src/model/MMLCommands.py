@@ -79,10 +79,14 @@ class PitchBend(MMLCommand):
     duration: int
     note: int
 
+    # no space after target note
+    def add_spaces(self, text: str) -> str:
+        return text
+
     def to_mml(self, mml_state: 'MMLState' = None) -> str:
         bend_note, octave = MMLUtil.note_name_and_octave(self.note)
         if octave != mml_state.octave:
-            bend_note = f'o{octave}{bend_note}'
+            bend_note = f'o{octave} {bend_note}'
             mml_state.octave = octave
         return f"$DD$00${MMLUtil.to_hex(self.duration)} {bend_note}"
 

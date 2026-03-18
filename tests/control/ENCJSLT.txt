@@ -51,7 +51,7 @@
     "09_jsma502a__2024-06-24_182000_.brr"         $FF $EE $80 $02 $A3 ;@46
 }
 
-; created with fur2amk 0.4.2
+; created with fur2amk 0.5.0
 
 w254 t76
 
@@ -69,7 +69,7 @@ $F5 $58 $21 $EB $00 $00 $00 $00 $01
 ; enable light staccato
 $F4$02 
 ; reset state on loop
-(!99, 0)  
+(!99, 0) 
 ; section 00
 @30 v51 o4 c64 v51 c64 v51 c64 v51 c64 v58 c64 v58 c64 v58 c64 v58 c64 v64 c64 v64 c64 v64 c64 v64 c64 v64 c64 v70 c64 v70 c64 v70 c64
 v70 c64 v70 c64 v70 c64 v70 c64 v70 c64 v77 c64 v77 c64 v77 c64 v82 c64 v82 c64 v82 c64 v87 c64 v87 c64 v87 c64 v87 c64 v87 c64
@@ -139,7 +139,7 @@ r1^1^1
 
 #1
 ; reset state on loop
-(!99, 0)  
+(!99, 0) 
 ; section 00
 @36 v187 o4 c32 v164 c32 v99 c32 v99 c32 v187 c32 v164 c32 v99 c32 v99 c32
 v187 c32 v164 c32 v99 c32 v99 c32 v187 c32 v164 c32 v99 c32 v99 c32
@@ -194,17 +194,17 @@ r1^1^1^1^1^1
 
 #2
 ; reset state on loop
-(!99, 0)  
+(!99, 0) 
 ; section 00
 @37 v196 o4 c8 v196 c8 v196 c8 v196 c8 v196 c8 v196 c8 v196 c8 v196 c8
 ; section 01
-@39 v137 o6 d2 $DD$00$60 c+  ^2 $DD$00$60 c  ^2 $DD$00$60 o5b  ^2 $DD$00$60 a+  ^2 $DD$00$60 a  ^2 $DD$00$60 g+
+@39 v137 o6 d2 $DD$00$60 c+^2 $DD$00$60 c^2 $DD$00$60 o5 b^2 $DD$00$60 a+^2 $DD$00$60 a^2 $DD$00$60 g+
 ; section 02
 (8)[
-c+2 $DD$00$60 c  ^2 $DD$00$60 o4b  ^2 $DD$00$60 a+  ^2 $DD$00$60 a  ^2 $DD$00$60 g+  ^2 $DD$00$60 g
+c+2 $DD$00$60 c^2 $DD$00$60 o4 b^2 $DD$00$60 a+^2 $DD$00$60 a^2 $DD$00$60 g+^2 $DD$00$60 g
 ]
 ; section 03
-v137 o6 d2 $DD$00$60 c+  ^2 $DD$00$60 c  ^2 $DD$00$60 o5b  ^2 $DD$00$60 a+  ^2 $DD$00$60 a  ^2 $DD$00$60 g+
+v137 o6 d2 $DD$00$60 c+^2 $DD$00$60 c^2 $DD$00$60 o5 b^2 $DD$00$60 a+^2 $DD$00$60 a^2 $DD$00$60 g+
 ; section 04
 (8)
 ; section 05
@@ -243,17 +243,17 @@ r1^1^1
 
 #3
 ; reset state on loop
-(!99, 0)  
+(!99, 0) 
 ; section 00
 r1
 ; section 01
-@39 v137 o5 a2 $DD$00$60 g+  ^2 $DD$00$60 g  ^2 $DD$00$60 f+  ^2 $DD$00$60 f  ^2 $DD$00$60 e  ^2 $DD$00$60 d+
+@39 v137 o5 a2 $DD$00$60 g+^2 $DD$00$60 g^2 $DD$00$60 f+^2 $DD$00$60 f^2 $DD$00$60 e^2 $DD$00$60 d+
 ; section 02
 (12)[
-o4 g+2 $DD$00$60 g  ^2 $DD$00$60 f+  ^2 $DD$00$60 f  ^2 $DD$00$60 e  ^2 $DD$00$60 d+  ^2 $DD$00$60 d
+o4 g+2 $DD$00$60 g^2 $DD$00$60 f+^2 $DD$00$60 f^2 $DD$00$60 e^2 $DD$00$60 d+^2 $DD$00$60 d
 ]
 ; section 03
-v137 o5 a2 $DD$00$60 g+  ^2 $DD$00$60 g  ^2 $DD$00$60 f+  ^2 $DD$00$60 f  ^2 $DD$00$60 e  ^2 $DD$00$60 d+
+v137 o5 a2 $DD$00$60 g+^2 $DD$00$60 g^2 $DD$00$60 f+^2 $DD$00$60 f^2 $DD$00$60 e^2 $DD$00$60 d+
 ; section 04
 (12)
 ; section 05
@@ -288,7 +288,7 @@ r1^1^1^1^1^1
 
 #4
 ; reset state on loop
-(!99, 0)  
+(!99, 0) 
 ; section 00
 r1
 ; section 01
@@ -397,7 +397,7 @@ v99 o4 e32 r16^32 v99 o3 a32 r1^1^1^1^1^1^1^1^1^1^1^1^1^1^1^16^32
 
 #6
 ; reset state on loop
-(!99, 0)  
+(!99, 0) 
 ; section 00
 r1^1^1^1^1^1^1^1^1^1^1^1^1
 ; section 05
