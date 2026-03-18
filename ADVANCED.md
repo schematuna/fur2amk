@@ -52,6 +52,7 @@ which has high moderation standards.
 - E9: Quick legato down
 - EA: Toggle Legato
 - ED: Note Delay
+- EE: Send External Command (for fur2amk hints, see below)
 - F0: Set Tick Rate (BPM)
 - F3: Fine Volume Slide Up
 - F4: Fine Volume Slide Down
@@ -86,6 +87,15 @@ AMK only supports C1 -> A6. If any notes are out of this range they will be octa
 - **Alternating Speeds and Grooves** are not supported.
 - **Compatibility Flags** are not supported. Conversion assumes that all compatibility flags are disabled.
 - **E5: Set Pitch** will not work when used mid-note. Use legato and new notes for this.
+
+## Removing the N-SPC 1-tick gap
+
+By default, Super Mario World forces a 1-tick gap between successive notes, even if there is no gap in Furnace.
+
+There is a trick to work around this using some crafty MML syntax. To enable this trick on a specific note, 
+call the EE effect in Furnace with a value of 00 at the beginning of the note. 
+
+Be careful when using this, as it can cause crackles in the AMK playback.
 
 ## Importing from other trackers
 
