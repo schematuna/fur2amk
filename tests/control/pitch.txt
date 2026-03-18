@@ -51,7 +51,7 @@
     "03_S4_SoftTrb.brr"           $00 $00 $3A $05 $63 ;@50
 }
 
-; created with fur2amk 0.4.2
+; created with fur2amk 0.5.0
 
 w194 t52
 
@@ -69,17 +69,17 @@ $F4$02
 ; section 00
 $F4$01 @34 o3 c4 $EE$FF c4 $EE$00 $FA$02$FF c4 $FA$02$00 c2^16
 ; reset state before loop
-$F4$01  
+$F4$01 
 /
 ; reset state on loop
-$F4$01  @34  
+$F4$01 @34 
 ; section 01
-$F4$01 @41 v202 y10 o4 f8^16 ^16 $DD$00$0C c  @34 v131 o3 e2 $DD$00$60 g
-f2 $DD$00$60 g+  ^2 $DD$00$60 f
-d2 $DD$00$60 o2b  ^2 $DD$00$60 o3d  ^2 $DD$00$60 f ^1
+$F4$01 @41 v202 y10 o4 f8^16^16 $DD$00$0C c @34 v131 o3 e2 $DD$00$60 g
+f2 $DD$00$60 g+^2 $DD$00$60 f
+d2 $DD$00$60 o2 b^2 $DD$00$60 o3 d^2 $DD$00$60 f v159 ^1
 ; section 02
-c2 ^=36 $DD$00$24 d ^4^16 ^=18 $DD$00$12 c+ ^4^8^32 ^=36 $DD$00$24 d+ ^4^16
-f2 ^4 $DD$00$30 o4c ^4 ^4 $DD$00$30 o3f ^2
+c2^=36 $DD$00$24 d^4^16^=18 $DD$00$12 c+^4^8^32^=36 $DD$00$24 d+^4^16
+f2^4 $DD$00$30 o4 c^4^4 $DD$00$30 o3 f^2
 
 
 #1
