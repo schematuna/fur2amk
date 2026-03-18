@@ -30,6 +30,7 @@ class InstrumentInfo:
 # This includes:
 # - pitch slides, which must be contained within a note
 # - envelope-related remote commands
+# - remove 1-tick-gap
 class NoteConverter():
     def __init__(self, tick_ratio: float) -> None:
         self.tick_ratio = tick_ratio
