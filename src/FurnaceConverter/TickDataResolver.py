@@ -23,48 +23,11 @@ class TickDataResolver():
         # this just handles legato commands, corresponding notes are added in loop below
         furnace_ticks = self.resolve_quick_legato(furnace_ticks)
 
-        vol_converter = VolumeMacroConverter()
-        # currently active instrument
-        active_ins = None 
-        active_note = None
-        total_ticks = len(furnace_ticks)
-        for i, tick_data in enumerate(furnace_ticks):
-            note_kind = tick_data.kind()
-            is_new_note = False
-            if note_kind == TickData.NoteKind.NOTE:
-                is_new_note = True
-                # TODO: this should take sample mapping into account
-                # also should probably be setting active note to None on note releases
-                # ALSO the active note should change with note slide commands
-                active_note = tick_data.Note
-                new_fur_ins = None
-                for ins in instruments:
-                    if ins.index == tick_data.Ins:
-                        new_fur_ins = ins
-                        break
-
-                if new_fur_ins is not None:
-                    active_ins = new_fur_ins
-
-                if active_ins is None:
-                    self.logger.warning(f"No furnace instrument active in row with Note {tick_data.Note}.")
-
-            tick_data.Vol = vol_converter.get_volume_for_tick(tick_data, is_new_note, active_ins)
-
-            # check for quick legato, make a new note if found
-            if effect := tick_data.get_effect(QuickLegatoEffect):
-                if active_note is None:
-                    self.logger.warning("Quick Legato found but no note active. Ignoring.")
-                else:
-                    new_note = active_note + effect.semitones
-                    new_note_tick = i + effect.delay
-                    if (new_note_tick < total_ticks):
-                        furnace_ticks[new_note_tick].Note = new_note
-                        active_note = new_note
-
         # convert portamento into note slides so AMK Converter doesn't need to worry about porta logic
-        # need to do this after quick legato notes are resolved...
         furnace_ticks = self.resolve_portamento(furnace_ticks)
+
+        # convert macros into plain commands
+        furnace_ticks = self.resolve_macros(furnace_ticks, instruments)
 
         return furnace_ticks
     
@@ -81,7 +44,7 @@ class TickDataResolver():
 
         return out_ticks
 
-    def resolve_quick_legato(self, furnace_ticks: List[TickData]) -> List[TickData]:
+    def resolve_ql_legato(self, furnace_ticks: List[TickData]) -> List[TickData]:
         """
         Resolve Quick Legato commands into legato commands
 
@@ -136,6 +99,38 @@ class TickDataResolver():
 
         return resolved_furnace_ticks
     
+    def resolve_ql_notes(self, furnace_ticks: List[TickData]) -> List[TickData]:
+        # currently active instrument
+        active_note = None
+        total_ticks = len(furnace_ticks)
+        new_ticks = furnace_ticks
+        for i, tick_data in enumerate(furnace_ticks):
+            note_kind = tick_data.kind()
+            if note_kind == TickData.NoteKind.NOTE:
+                # TODO: this should take sample mapping into account
+                # also should probably be setting active note to None on note releases
+                # ALSO the active note should change with note slide commands
+                active_note = tick_data.Note
+
+            # check for quick legato, make a new note if found
+            if effect := tick_data.get_effect(QuickLegatoEffect):
+                if active_note is None:
+                    self.logger.warning("Quick Legato found but no note active. Ignoring.")
+                else:
+                    new_note = active_note + effect.semitones
+                    new_note_tick = i + effect.delay
+                    if (new_note_tick < total_ticks):
+                        new_ticks[new_note_tick].Note = new_note
+                        active_note = new_note
+
+        return new_ticks
+
+    def resolve_quick_legato(self, furnace_ticks: List[TickData]) -> List[TickData]:
+        resolved_ticks = furnace_ticks
+        resolved_ticks = self.resolve_ql_legato(resolved_ticks)
+        resolved_ticks = self.resolve_ql_notes(resolved_ticks)
+        return resolved_ticks
+    
     def resolve_portamento(self, furnace_ticks: List[TickData]):
         '''Convert portamentos to note slides for simplicity'''
         # TODO: this conversion loses precision. Convert all pitch slides to some standard ChiptuneData format instead
@@ -178,3 +173,30 @@ class TickDataResolver():
             out_ticks.append(new_tick)
                 
         return out_ticks
+    
+
+    def resolve_macros(self, furnace_ticks: List[TickData], instruments: List[FurnaceInstrument]):
+        vol_converter = VolumeMacroConverter()
+        # currently active instrument
+        active_ins = None 
+        new_ticks = furnace_ticks
+        for tick_data in new_ticks:
+            note_kind = tick_data.kind()
+            is_new_note = False
+            if note_kind == TickData.NoteKind.NOTE:
+                is_new_note = True
+                new_fur_ins = None
+                for ins in instruments:
+                    if ins.index == tick_data.Ins:
+                        new_fur_ins = ins
+                        break
+
+                if new_fur_ins is not None:
+                    active_ins = new_fur_ins
+
+                if active_ins is None:
+                    self.logger.warning(f"No furnace instrument active in row with Note {tick_data.Note}.")
+
+            tick_data.Vol = vol_converter.get_volume_for_tick(tick_data, is_new_note, active_ins)
+
+        return new_ticks
