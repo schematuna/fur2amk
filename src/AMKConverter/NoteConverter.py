@@ -147,24 +147,9 @@ class NoteConverter():
         # active furnace instrument
         fur_ins = None
         # process notes and pitch commands
-        for tick_data in ticks:
-            # handle portamento before reading this row's note info
-            has_portamento = False
-            if effect := tick_data.get_effect(PortamentoEffect):
-                has_portamento = True
-                if tick_data.kind() == TickData.NoteKind.NOTE:
-                    active_note, portamento_command = self.convert_portamento(tick, active_note, tick_data.Note, effect.speed)
-                    if portamento_command is not None:
-                        if cur_dur is not None:
-                            cur_dur.pitch_bends.append(portamento_command)
-                        else:
-                            self.logger.warning("no active note to portamento from, ignoring portamento command.")
-                else:
-                    self.logger.warning("Portamento effect found on non-note row, ignoring.")
-                
-            # don't make a new note for portamento rows, pitchbend will handle that
+        for tick_data in ticks:                
             note_kind = tick_data.kind()
-            if note_kind == TickData.NoteKind.NOTE and not has_portamento:                    
+            if note_kind == TickData.NoteKind.NOTE:                    
                 new_fur_ins = None
                 for ins in instruments:
                     if ins.index == tick_data.Ins:

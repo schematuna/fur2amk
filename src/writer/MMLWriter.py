@@ -62,7 +62,6 @@ class MMLWord:
         space_after_pitchbend = False
         for cmd in ensuing_commands:
             if cmd.tick == tick and not isinstance(cmd, PitchBend) and not isinstance(cmd, TieBreakCommand) and not isinstance(cmd, HardTieBreakCommand):
-                print(cmd)
                 space_after_pitchbend = True
                 break
 

@@ -1,7 +1,9 @@
 from ..model.ChiptuneData import *
 from .MacroConverter import *
+from ..util.MMLUtil import *
 
 import copy
+import math
 
 # this class abstracts away lots of Furnace-specific stuff like:
 #   - quick legato
@@ -59,6 +61,10 @@ class TickDataResolver():
                     if (new_note_tick < total_ticks):
                         furnace_ticks[new_note_tick].Note = new_note
                         active_note = new_note
+
+        # convert portamento into note slides so AMK Converter doesn't need to worry about porta logic
+        # need to do this after quick legato notes are resolved...
+        furnace_ticks = self.resolve_portamento(furnace_ticks)
 
         return furnace_ticks
     
@@ -129,3 +135,46 @@ class TickDataResolver():
             in_ql_chain = False
 
         return resolved_furnace_ticks
+    
+    def resolve_portamento(self, furnace_ticks: List[TickData]):
+        '''Convert portamentos to note slides for simplicity'''
+        # TODO: this conversion loses precision. Convert all pitch slides to some standard ChiptuneData format instead
+        out_ticks: List[TickData] = []
+        # the current active pitch. Determines starting pitch for portamentos
+        active_note = None
+        for i, tick_data in enumerate(furnace_ticks):
+            new_tick = TickData()
+            if portamento_effect := tick_data.get_effect(PortamentoEffect):
+                if tick_data.kind() == TickData.NoteKind.NOTE:
+                    new_tick = TickData()
+                    # don't copy note to new tick
+                    new_note = tick_data.Note
+                    new_tick.Ins = tick_data.Ins
+                    new_tick.Vol = tick_data.Vol
+                    for effect in tick_data.Effects:
+                        if not isinstance(effect, PortamentoEffect):
+                            new_tick.Effects.append(effect)
+                        else:
+                            note_slide = NoteSlideEffect(0, 0)
+                            note_slide.speed = math.ceil(portamento_effect.speed / 4)
+                            note_slide.semitones = new_note - active_note
+                            new_tick.Effects.append(note_slide)
+
+                    active_note = new_note
+                else:
+                    self.logger.warning("Portamento effect found on non-note row, ignoring.")
+                    new_tick = tick_data
+            else:
+                new_tick = tick_data
+                if tick_data.kind() == TickData.NoteKind.NOTE:
+                    active_note = tick_data.Note
+
+                # note slides affect portamento starting pitch 
+                if noteslide_effect := tick_data.get_effect(NoteSlideEffect):
+                    target_note = active_note + noteslide_effect.semitones
+                    target_note = max(0,min(target_note, MMLUtil.AMK_MAX_PITCH))
+                    active_note = target_note
+
+            out_ticks.append(new_tick)
+                
+        return out_ticks
