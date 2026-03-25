@@ -559,11 +559,6 @@ class FurnaceParser:
                     v = self._ru8(s) if have_value else None
                 if v is None:
                     v = 0
-            if have_type or have_value:
-                if t is None:
-                    t = 0
-                if v is None:
-                    v = 0
                 if t not in FurnaceEffectFactory.effect_map:
                     # print(f"Unknown effect type: {t:02X}")
                     return
