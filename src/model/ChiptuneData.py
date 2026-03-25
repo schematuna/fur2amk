@@ -80,12 +80,35 @@ class TickData:
         return None
 
 @dataclass
+class ChiptuneInstrument:
+    index: int
+    name: str
+    sn_envelope_on: Optional[bool] = True  # whether adsr or gain is enabled
+
+    # SNES ADSR fields
+    # set defaults because furnace file won't have snes values if unchanged from default instrument
+    sn_attack: Optional[int] = 15     # 0..15
+    sn_decay: Optional[int] = 7      # 0..7
+    sn_sustain: Optional[int] = 7    # 0..7
+    sn_release: Optional[int] = 0    # 0..31
+    decay2: Optional[int] = 0        # 0..31, used as R during sustain in modes 1-3
+    sustain_mode: SustainMode = SustainMode.DIRECT  # Controls key-off behavior
+
+    # SNES gain fields
+    gain_mode: GainMode = GainMode.DIRECT  # GAIN register mode when useEnv is False
+    sn_gain: Optional[int] = None    # 0..127 for DIRECT, 0..31 for others
+
+    # Sample mapping from INS2 'SM'
+    initial_sample: Optional[int] = 0  # sample 0 by default
+
+    snes_macro_data: FurnaceSNESMacroData = field(default_factory=FurnaceSNESMacroData)
+
+@dataclass
 class ChiptuneData:
     song_info: ChiptuneSongInfo = field(default_factory=ChiptuneSongInfo)
     structure: ChiptuneStructure = field(default_factory=ChiptuneStructure)
     sample_info: List[ChiptuneSampleInfo] = field(default_factory=list)
-    # I'm lazy, just pass FurnaceInstrument object through
-    instruments: List[FurnaceInstrument] = field(default_factory=list)
+    instruments: List[ChiptuneInstrument] = field(default_factory=list)
     echo_data: SNESEchoData = field(default_factory=list)
     # per-channel tick data
     tick_data: List[List[TickData]] = field(default_factory=list)

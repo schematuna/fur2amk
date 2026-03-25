@@ -9,6 +9,8 @@ from ..util import *
 class FurnaceConverter:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
+
+        self.instrument_info : Dict[int, FurInstrumentInfo] = {}
     
     def get_song_info(self, module: FurnaceModule):
         info = ChiptuneSongInfo()
@@ -26,6 +28,65 @@ class FurnaceConverter:
             samps.append(ChiptuneSampleInfo(s.index, fname, s.c4_rate))
 
         return samps
+    
+    def get_instruments(self, module: FurnaceModule, num_samples: int) -> List[ChiptuneInstrument]:
+        '''Decomposes sample maps to get flat list of all SNES instruments needed for this port
+           Also stores sample map info for later use when resolving furnace notes'''
+        chip_instruments: List[ChiptuneInstrument] = []
+        chip_ins_idx = 0
+        for ins in module.Instruments:
+            ins_info = FurInstrumentInfo()
+            if ins.use_sample_map:
+                for i, mapping in enumerate(ins.sample_table):
+                    idx = mapping[1]
+                    if idx != 65535:
+                        chip_ins = self.fur_ins_to_chip_ins(ins, chip_ins_idx)
+                        sample_index = mapping[1]
+                        if sample_index >= num_samples:
+                            sample_index = 0
+                            self.logger.warning(f"Instrument {ins.index} has sample index {sample_index} which is greater than the number of samples {num_samples}. Using sample index 0 instead. Please check your sample index in Furnace.")
+                        chip_ins.initial_sample = sample_index
+                        chip_instruments.append(chip_ins)
+                        # Store the note -> AMK instrument mapping for later
+                        # Convert from 0:C-(-5) for furnace note to 0:C-0 for sample map
+                        note = i + 60
+                        note_to_play = mapping[0] + 60
+                        ins_info.ins_map[note] = MappingInfo(chip_ins_idx, note_to_play)
+                        chip_ins_idx += 1
+            else:
+                chip_ins = self.fur_ins_to_chip_ins(ins, chip_ins_idx)
+                sample_index = ins.initial_sample
+                if sample_index >= num_samples:
+                    sample_index = 0
+                    self.logger.warning(f"Instrument {ins.index} has sample index {sample_index} which is greater than the number of samples {num_samples}. Using sample index 0 instead. Please check your sample index in Furnace.")
+                chip_ins.initial_sample = sample_index
+                chip_instruments.append(chip_ins)
+                ins_info.default_ins = chip_ins_idx
+                chip_ins_idx += 1
+
+            self.instrument_info[ins.index] = ins_info
+
+        return chip_instruments
+    
+    def fur_ins_to_chip_ins(self, fur_ins: FurnaceInstrument, chip_ins_idx: int) -> ChiptuneInstrument:
+        chip_ins = ChiptuneInstrument(chip_ins_idx, fur_ins.name)
+        chip_ins.sn_envelope_on = fur_ins.sn_envelope_on
+
+        chip_ins.sn_attack = fur_ins.sn_attack
+        chip_ins.sn_decay = fur_ins.sn_decay
+        chip_ins.sn_sustain = fur_ins.sn_sustain
+        chip_ins.sn_release = fur_ins.sn_release
+        chip_ins.decay2 = fur_ins.decay2
+        chip_ins.sustain_mode = fur_ins.sustain_mode
+
+        chip_ins.gain_mode = fur_ins.gain_mode
+        chip_ins.sn_gain = fur_ins.sn_gain
+
+        chip_ins.initial_sample = fur_ins.initial_sample
+
+        chip_ins.snes_macro_data = fur_ins.snes_macro_data
+
+        return chip_ins
 
     def get_global_volume(self, module: FurnaceModule):
         # global volume is average of left/right furnace volumes
@@ -53,7 +114,7 @@ class FurnaceConverter:
 
         chiptune_data.song_info = self.get_song_info(module)
         chiptune_data.sample_info = self.get_sample_info(module)
-        chiptune_data.instruments = module.Instruments
+        chiptune_data.instruments = self.get_instruments(module, len(chiptune_data.sample_info))
         chiptune_data.tick_rate = module.TicksPerSecond
         chiptune_data.global_volume = self.get_global_volume(module)
         chiptune_data.echo_data = self.get_echo_data(module)
@@ -74,6 +135,6 @@ class FurnaceConverter:
         # simplify ticks, resolving furnace-specific effects
         resolver = TickDataResolver()
         for channel_ticks in furnace_ticks:
-            chiptune_data.tick_data.append(resolver.resolve_ticks(channel_ticks, module.Instruments))
+            chiptune_data.tick_data.append(resolver.resolve_ticks(channel_ticks, module.Instruments, self.instrument_info))
 
         return chiptune_data

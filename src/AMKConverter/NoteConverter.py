@@ -9,20 +9,9 @@ from ..model.AMKData import *
 from .ConverterUtil import *
 from ..util.MMLUtil import *
 
-@dataclass
-class MappingInfo:
-    amk_ins_idx: int
-    note_to_play: int
-
 # conversion helper data class
 @dataclass
 class InstrumentInfo:
-    # default amk instrument
-    amk_ins: Optional[int] = None
-
-    # sample map data
-    # note -> mapping_info
-    ins_map: Dict[int, MappingInfo] = field(default_factory=dict)
     # list of remote command indices associated with this instrument
     remote_commands: List[AMKRemoteDef] = field(default_factory=list)
 
@@ -38,24 +27,24 @@ class NoteConverter():
         #init logger
         self.logger = logging.getLogger(__name__)
 
-    def get_pre_note_commands(self, fur_ins: FurnaceInstrument, ins_info: Dict[int, InstrumentInfo], state: FurnaceState, note_tick: int) -> List[MMLCommand]:
+    def get_pre_note_commands(self, chip_ins: ChiptuneInstrument, ins_info: Dict[int, InstrumentInfo], state: FurnaceState, note_tick: int) -> List[MMLCommand]:
         # instrument echo
         pre_note_commands = []
-        if fur_ins.snes_macro_data.is_echo != state.is_echo:
+        if chip_ins.snes_macro_data.is_echo != state.is_echo:
             pre_note_commands.append(EchoToggle(note_tick))
-            state.is_echo = fur_ins.snes_macro_data.is_echo
+            state.is_echo = chip_ins.snes_macro_data.is_echo
 
         # if new instrument, set up remote commands for this instrument
         remote_commands = []
-        if fur_ins.index in ins_info:
-            for remote_cmd in ins_info[fur_ins.index].remote_commands:
+        if chip_ins.index in ins_info:
+            for remote_cmd in ins_info[chip_ins.index].remote_commands:
                 if remote_cmd.wait_ticks is not None:
                     remote_commands.append(RemoteCommand(note_tick, remote_cmd.command_idx, remote_cmd.timing, remote_cmd.wait_ticks))
                 else:
                     remote_commands.append(RemoteCommand(note_tick, remote_cmd.command_idx, remote_cmd.timing))
 
         if len(remote_commands) > 2:
-            self.logger.warning(f"Too many remote commands for Furnace instrument {fur_ins.index}, only 2 can be active at a time (one key on and one other)")
+            self.logger.warning(f"Too many remote commands for instrument {chip_ins.index}, only 2 can be active at a time (one key on and one other)")
 
         # TODO: use (!!) syntax and only stop events that need to be stopped
         # Only emit remote command if it changed
@@ -69,40 +58,7 @@ class NoteConverter():
 
         return pre_note_commands
 
-    def get_note_info(self, fur_ins_idx: int, note: int, ins_info: Dict[int, InstrumentInfo], use_sample_map: bool) -> Tuple[int, int]:
-        note_to_play = note
-        amk_ins_idx = None
-        if fur_ins_idx not in ins_info:
-            self.logger.error(f"No instrument info found for Furnace instrument {fur_ins_idx}, this is not right.")
-            return None, None
-        # Get the AMK instrument index using ins_map
-        if use_sample_map:
-            note_map = ins_info[fur_ins_idx].ins_map
-            # Try to find exact note match first
-            if note in note_map:
-                amk_ins_idx = note_map[note].amk_ins_idx
-                note_to_play = note_map[note].note_to_play
-            else:
-                # No mapping found, use Furnace instrument index as fallback
-                self.logger.warning(f"No instrument mapping found for Furnace instrument {fur_ins_idx}, note {note}.")
-                amk_ins_idx = 0
-        else:
-            amk_ins_idx = ins_info[fur_ins_idx].amk_ins
-
-        return note_to_play, amk_ins_idx
-
-    def convert_portamento(self, tick: int, active_note: int, target_note: int, speed: int) -> Tuple[int, MMLCommand]:
-        semitones = target_note - active_note
-        ticks_to_slide = FurnaceUtil.ticks_from_speed(speed, semitones)
-        amk_duration = max(2, int(ticks_to_slide * self.tick_ratio))
-        max_duration = PitchSlider.get_max_duration()
-        if amk_duration > max_duration:
-            self.logger.warning(f"Portamento duration {amk_duration} is greater than the longest tick duration {max_duration}.")
-        command = PitchBend(tick, amk_duration, target_note)
-
-        return target_note, command
-
-    def convert_pitch_slides(self, tick: int, row: FurnaceRow, slide_helper: PitchSlider, active_note: Optional[int]) -> Tuple[Optional[int], List[MMLCommand]]:
+    def convert_pitch_slides(self, tick: int, row: TickData, slide_helper: PitchSlider, active_note: Optional[int]) -> Tuple[Optional[int], List[MMLCommand]]:
         commands: List[MMLCommand] = []
         new_active_note = active_note
         if effect := row.get_effect(NoteSlideEffect):
@@ -133,7 +89,7 @@ class NoteConverter():
         return new_active_note, commands
 
     # get notes and pitch-related commands
-    def convert(self, ticks: List[TickData], ins_info: Dict[int, InstrumentInfo], instruments: List[FurnaceInstrument]) -> Tuple[List[MMLNote], List[MMLCommand]]:
+    def convert(self, ticks: List[TickData], ins_info: Dict[int, InstrumentInfo], instruments: List[ChiptuneInstrument]) -> Tuple[List[MMLNote], List[MMLCommand]]:
         notes: List[MMLNote] = []
         commands: List[MMLCommand] = []
         tick = 0
@@ -144,35 +100,30 @@ class NoteConverter():
         cur_dur: Optional[MMLNote] = None
         # the current active pitch, considering both pitch commands and explicit notes
         active_note = None
-        # active furnace instrument
-        fur_ins = None
+        # active chiptune instrument
+        chip_ins = None
         # process notes and pitch commands
         for tick_data in ticks:                
             note_kind = tick_data.kind()
-            if note_kind == TickData.NoteKind.NOTE:                    
-                new_fur_ins = None
+            if note_kind == TickData.NoteKind.NOTE:   
+                new_chip_ins = None
                 for ins in instruments:
                     if ins.index == tick_data.Ins:
-                        new_fur_ins = ins
+                        new_chip_ins = ins
                         break
 
-                if new_fur_ins is not None:
-                    fur_ins = new_fur_ins
+                if new_chip_ins is not None:
+                    chip_ins = new_chip_ins
 
-                if fur_ins is None:
-                    self.logger.error(f"No furnace instrument active in row with Note {tick_data.Note}.")
+                if chip_ins is None:
+                    self.logger.error(f"No instrument active in row with Note {tick_data.Note}.")
                     continue
 
                 pre_note_commands = []
                 # we only have to set up pre-note commands for new instruments
-                if fur_ins.index != state.fur_ins_idx:
-                    pre_note_commands = self.get_pre_note_commands(fur_ins, ins_info, state, tick)
-                    state.fur_ins_idx = fur_ins.index   
-
-                note_to_play, amk_ins_idx = self.get_note_info(fur_ins.index, tick_data.Note, ins_info, fur_ins.use_sample_map)
-                if note_to_play is None or amk_ins_idx is None:
-                    self.logger.error(f"No note to play or AMK instrument index found for Furnace instrument {fur_ins.index}, note {tick_data.Note}.")
-                    continue
+                if chip_ins.index != state.fur_ins_idx:
+                    pre_note_commands = self.get_pre_note_commands(chip_ins, ins_info, state, tick)
+                    state.fur_ins_idx = chip_ins.index   
 
                 pitch_command = None
                 if cur_dur is not None:
@@ -181,8 +132,8 @@ class NoteConverter():
                     if pitch_command is not None:
                         cur_dur.pitch_bends.append(pitch_command)
                     notes.append(cur_dur)
-                cur_dur = MMLNote(tick, 0, note_to_play, amk_ins_idx, pre_note_commands)
-                active_note = note_to_play
+                cur_dur = MMLNote(tick, 0, tick_data.Note, chip_ins.index, pre_note_commands)
+                active_note = tick_data.Note
 
                 slide_helper.set_target(active_note)
                 # if this note interrupted a pitch slide, start a new one
@@ -191,9 +142,9 @@ class NoteConverter():
                     slide_helper.start_slide()
 
             elif note_kind == TickData.NoteKind.RELEASE:
-                if fur_ins is not None and fur_ins.sn_envelope_on and fur_ins.sustain_mode == SustainMode.DELAYED:
+                if chip_ins is not None and chip_ins.sn_envelope_on and chip_ins.sustain_mode == SustainMode.DELAYED:
                     # the delayed adsr mode sets the release time to the release value on key off
-                    adsr = ADSR(fur_ins.sn_attack, fur_ins.sn_decay, fur_ins.sn_sustain, fur_ins.sn_release)
+                    adsr = ADSR(chip_ins.sn_attack, chip_ins.sn_decay, chip_ins.sn_sustain, chip_ins.sn_release)
                     commands.append(CustomADSR(tick, adsr))
                     state.adsr = adsr
                 else:
