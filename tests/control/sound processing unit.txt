@@ -44,7 +44,7 @@
     "12_tamborine_revb.brr"        $FF $EC $80 $00 $F5 ;@42
 }
 
-; created with fur2amk 0.5.0
+; created with fur2amk 0.5.1
 
 w254 t25
 
@@ -52,8 +52,8 @@ $EF $00 $00 $00
 $F1 $00 $00 $01
 $F5 $00 $00 $00 $00 $00 $00 $00 $00
 
-(!1)[$FA$01$AB] ;Remote gain command for Furnace instrument 8: _O
-(!2)[$ED$70$E0] ;Restore ADSR for Furnace instrument 8: _O
+(!1)[$FA$01$AB] ;Remote gain command for instrument 11: _O
+(!2)[$ED$70$E0] ;Restore ADSR for instrument 11: _O
 
 
 #0

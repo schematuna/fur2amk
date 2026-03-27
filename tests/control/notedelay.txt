@@ -51,7 +51,7 @@
     "03_S4_SoftTrb.brr"           $00 $00 $3A $05 $63 ;@50
 }
 
-; created with fur2amk 0.5.0
+; created with fur2amk 0.5.1
 
 w194 t34
 
@@ -59,8 +59,8 @@ $EF $FF $50 $B0
 $F1 $00 $80 $01
 $F5 $4D $11 $FA $F4 $FA $FB $FA $00
 
-(!1)[$FA$01$BE] ;Gain toggle for Furnace instrument 7: NoiseHHat
-(!2)[$FA$01$B1] ;Gain toggle for Furnace instrument 18: noizcymbal
+(!1)[$FA$01$BE] ;Gain toggle for instrument 7: NoiseHHat
+(!2)[$FA$01$B1] ;Gain toggle for instrument 18: noizcymbal
 
 
 #0
