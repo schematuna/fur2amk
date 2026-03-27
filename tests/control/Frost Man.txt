@@ -34,15 +34,15 @@
     "07_DKC-Tambourine_mod.brr"  $FF $ED $80 $05 $1C ;@37
 }
 
-; created with fur2amk 0.5.0
+; created with fur2amk 0.5.1
 
 w128 t30
 
 $EF $F8 $C0 $3F
 $F1 $03 $40 $01
 
-(!1)[$FA$01$92] ;Remote gain command for Furnace instrument 3: MM8 Slap Bass
-(!2)[$ED$0F$00] ;Restore ADSR for Furnace instrument 3: MM8 Slap Bass
+(!1)[$FA$01$92] ;Remote gain command for instrument 3: MM8 Slap Bass
+(!2)[$ED$0F$00] ;Restore ADSR for instrument 3: MM8 Slap Bass
 
 
 #0

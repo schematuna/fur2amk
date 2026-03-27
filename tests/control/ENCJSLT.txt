@@ -51,7 +51,7 @@
     "09_jsma502a__2024-06-24_182000_.brr"         $FF $EE $80 $02 $A3 ;@46
 }
 
-; created with fur2amk 0.5.0
+; created with fur2amk 0.5.1
 
 w254 t76
 
@@ -59,10 +59,10 @@ $EF $40 $48 $48
 $F1 $05 $6C $01
 $F5 $58 $21 $EB $00 $00 $00 $00 $01
 
-(!1)[$FA$01$BF] ;Remote gain command for Furnace instrument 7: saw5st
-(!2)[$ED$7F$E0] ;Restore ADSR for Furnace instrument 7: saw5st
-(!3)[$FA$01$AC] ;Remote gain command for Furnace instrument 8: casio cz ambi
-(!4)[$ED$72$E0] ;Restore ADSR for Furnace instrument 8: casio cz ambi
+(!1)[$FA$01$BF] ;Remote gain command for instrument 14: saw5st
+(!2)[$ED$7F$E0] ;Restore ADSR for instrument 14: saw5st
+(!3)[$FA$01$AC] ;Remote gain command for instrument 15: casio cz ambi
+(!4)[$ED$72$E0] ;Restore ADSR for instrument 15: casio cz ambi
 
 
 #0

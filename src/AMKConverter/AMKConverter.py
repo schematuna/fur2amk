@@ -136,7 +136,6 @@ class AMKConverter:
     def convert_tempo(self, chiptune_data: ChiptuneData) -> int:
         return FurnaceUtil.tick_rate_to_amk_tempo(chiptune_data.structure, self.row_converter.amk_ticks_per_row, chiptune_data.tick_rate)
 
-    # TODO: need to convert to AMK ticks
     def convert_mml_data(self, chiptune_data: ChiptuneData) -> MMLData:
         mml_data = MMLData()
         mml_data.num_channels = chiptune_data.structure.num_channels

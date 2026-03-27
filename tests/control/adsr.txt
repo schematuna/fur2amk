@@ -35,7 +35,7 @@
     "14_Sample14.brr"     $C9 $A3 $80 $0A $03 ;@32
 }
 
-; created with fur2amk 0.5.0
+; created with fur2amk 0.5.1
 
 w194 t52
 
@@ -43,9 +43,9 @@ $EF $FF $50 $B0
 $F1 $00 $80 $01
 $F5 $4D $11 $FA $F4 $FA $FB $FA $00
 
-(!1)[$ED$3C$A1] ;Restore ADSR for Furnace instrument 0: GlocknFlute
-(!2)[$FA$01$88] ;Remote gain command for Furnace instrument 2: square
-(!3)[$ED$49$A3] ;Restore ADSR for Furnace instrument 2: square
+(!1)[$ED$3C$A1] ;Restore ADSR for instrument 0: GlocknFlute
+(!2)[$FA$01$88] ;Remote gain command for instrument 2: square
+(!3)[$ED$49$A3] ;Restore ADSR for instrument 2: square
 
 
 #0
