@@ -33,36 +33,47 @@ class FurnaceConverter:
         '''Decomposes sample maps to get flat list of all SNES instruments needed for this port
            Also stores sample map info for later use when resolving furnace notes'''
         chip_instruments: List[ChiptuneInstrument] = []
-        chip_ins_idx = 0
+        chip_ins_counter = 0
         for ins in module.Instruments:
             ins_info = FurInstrumentInfo()
             if ins.use_sample_map:
+                # sample idx: chip ins idx
+                used_samples: Dict[int, int] = {}
+                chip_ins_idx: int = 0
                 for i, mapping in enumerate(ins.sample_table):
                     idx = mapping[1]
                     if idx != 65535:
-                        chip_ins = self.fur_ins_to_chip_ins(ins, chip_ins_idx)
-                        sample_index = mapping[1]
+                        sample_index = idx
                         if sample_index >= num_samples:
                             sample_index = 0
                             self.logger.warning(f"Instrument {ins.index} has sample index {sample_index} which is greater than the number of samples {num_samples}. Using sample index 0 instead. Please check your sample index in Furnace.")
-                        chip_ins.initial_sample = sample_index
-                        chip_instruments.append(chip_ins)
+                        # only make a new chip instrument for unique samples
+                        if sample_index not in used_samples:
+                            chip_ins = self.fur_ins_to_chip_ins(ins, chip_ins_counter)
+                            chip_ins.initial_sample = sample_index
+                            chip_instruments.append(chip_ins)
+
+                            used_samples[sample_index] = chip_ins.index
+                            chip_ins_idx = chip_ins_counter
+                            chip_ins_counter += 1
+                        else:
+                            chip_ins_idx = used_samples[sample_index]
+                        
                         # Store the note -> AMK instrument mapping for later
                         # Convert from 0:C-(-5) for furnace note to 0:C-0 for sample map
                         note = i + 60
                         note_to_play = mapping[0] + 60
                         ins_info.ins_map[note] = MappingInfo(chip_ins_idx, note_to_play)
-                        chip_ins_idx += 1
             else:
-                chip_ins = self.fur_ins_to_chip_ins(ins, chip_ins_idx)
+                chip_ins = self.fur_ins_to_chip_ins(ins, chip_ins_counter)
                 sample_index = ins.initial_sample
                 if sample_index >= num_samples:
                     sample_index = 0
                     self.logger.warning(f"Instrument {ins.index} has sample index {sample_index} which is greater than the number of samples {num_samples}. Using sample index 0 instead. Please check your sample index in Furnace.")
                 chip_ins.initial_sample = sample_index
                 chip_instruments.append(chip_ins)
-                ins_info.default_ins = chip_ins_idx
-                chip_ins_idx += 1
+                ins_info.default_ins = chip_ins_counter
+                chip_ins_counter += 1
 
             self.instrument_info[ins.index] = ins_info
 
