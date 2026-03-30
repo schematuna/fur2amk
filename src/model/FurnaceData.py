@@ -198,6 +198,46 @@ class FurnaceRow:
 
         return ret
 
+# class representing all events that occur during a single tick
+@dataclass
+class FurnaceTickData:
+    Note: Optional[int] = None
+    Ins: Optional[int] = None
+    Vol: Optional[int] = None   # 0..64
+    Effects: List[FurnaceEffect] = field(default_factory=list)
+
+    # enum for note kinds
+    class NoteKind(Enum):
+        NOTE = 0
+        RELEASE = 1
+        EMPTY = 2
+
+    # Classify this tick by note type
+    def kind(self) -> NoteKind:
+        n = self.Note
+        if n is None:
+            return self.NoteKind.EMPTY
+        
+        try:
+            v = int(n)
+        except Exception:
+            return self.NoteKind.EMPTY
+        
+        # for snes, note release and note off are the same
+        if v == 180 or v == 181:
+            return self.NoteKind.RELEASE
+        if 0 <= v <= 179:
+            return self.NoteKind.NOTE
+        
+        # no macro releases considered here, those are abstracted away at this point
+        return self.NoteKind.EMPTY
+
+    def get_effect(self, command_type: type[FurnaceEffect]) -> Optional[FurnaceEffect]:
+        for effect in self.Effects:
+            if isinstance(effect, command_type):
+                return effect
+        return None
+
 
 @dataclass
 class FurnacePattern:

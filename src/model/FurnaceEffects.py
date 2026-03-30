@@ -140,6 +140,16 @@ class FineVolumeSlideEffect(FurnaceEffect):
             if raw_value > 0:
                 self.change_per_tick = -(speed / 256)
 
+class SingleTickPitchEffect(FurnaceEffect):
+    """Changes pitch up or down by a set amount. Value is amount to change pitch by."""
+
+    def __init__(self, raw_value: int, is_up: bool):
+        # 0x20 per semitone 
+        self.pitch_change = raw_value
+
+        if not is_up:
+            self.pitch_change = -self.pitch_change
+
 class SingleTickVolumeEffect(FurnaceEffect):
     """Changes volume up or down by a set amount. Value is amount to change volume by."""
 
@@ -219,6 +229,8 @@ class FurnaceEffectFactory:
             0xED: NoteDelayEffect,
             0xEE: SendExternalEffect,
             0xF0: lambda v: SetTickRateEffect(v, True),
+            0xF1: lambda v: SingleTickPitchEffect(v, True),
+            0xF2: lambda v: SingleTickPitchEffect(v, True),
             0xF3: lambda v: FineVolumeSlideEffect(v, True),
             0xF4: lambda v: FineVolumeSlideEffect(v, False),
             0xF8: lambda v: SingleTickVolumeEffect(v, True),

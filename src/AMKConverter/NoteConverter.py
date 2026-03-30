@@ -58,10 +58,10 @@ class NoteConverter():
 
         return pre_note_commands
 
-    def convert_pitch_slides(self, tick: int, row: TickData, slide_helper: PitchSlider, active_note: Optional[int]) -> Tuple[Optional[int], List[MMLCommand]]:
+    def convert_pitch_slides(self, tick: int, row: ChiptuneTickData, slide_helper: PitchSlider, active_note: Optional[int]) -> Tuple[Optional[int], List[MMLCommand]]:
         commands: List[MMLCommand] = []
         new_active_note = active_note
-        if effect := row.get_effect(NoteSlideEffect):
+        if effect := row.get_command(NoteSlideCommand):
             if active_note is None:
                 self.logger.warning("Pitch slide effect found on non-note row, ignoring.")
             else:
@@ -77,7 +77,7 @@ class NoteConverter():
                 new_active_note = target_note
                 slide_helper.set_target(new_active_note)
 
-        if effect := row.get_effect(PitchSlideEffect):
+        if effect := row.get_command(PitchSlideCommand):
             if new_command := slide_helper.handle_new_effect(effect):
                 new_active_note = new_command.note
                 commands.append(new_command)
@@ -89,7 +89,7 @@ class NoteConverter():
         return new_active_note, commands
 
     # get notes and pitch-related commands
-    def convert(self, ticks: List[TickData], ins_info: Dict[int, InstrumentInfo], instruments: List[ChiptuneInstrument]) -> Tuple[List[MMLNote], List[MMLCommand]]:
+    def convert(self, ticks: List[ChiptuneTickData], ins_info: Dict[int, InstrumentInfo], instruments: List[ChiptuneInstrument]) -> Tuple[List[MMLNote], List[MMLCommand]]:
         notes: List[MMLNote] = []
         commands: List[MMLCommand] = []
         tick = 0
@@ -105,7 +105,7 @@ class NoteConverter():
         # process notes and pitch commands
         for tick_data in ticks:
             note_kind = tick_data.kind()
-            if note_kind == TickData.NoteKind.NOTE:   
+            if note_kind == ChiptuneTickData.NoteKind.NOTE:   
                 new_chip_ins = None
                 for ins in instruments:
                     if ins.index == tick_data.Ins:
@@ -138,11 +138,11 @@ class NoteConverter():
 
                 slide_helper.set_target(active_note)
                 # if this note interrupted a pitch slide, start a new one
-                # unless there is a pitch slide effect on this row, in which case we'll let that handle it
-                if pitch_command is not None and not tick_data.get_effect(PitchSlideEffect):
+                # unless there is a pitch slide command on this row, in which case we'll let that handle it
+                if pitch_command is not None and not tick_data.get_command(PitchSlideCommand):
                     slide_helper.start_slide()
 
-            elif note_kind == TickData.NoteKind.RELEASE:
+            elif note_kind == ChiptuneTickData.NoteKind.RELEASE:
                 if chip_ins is not None and chip_ins.sn_envelope_on and chip_ins.sustain_mode == SustainMode.DELAYED:
                     # the delayed adsr mode sets the release time to the release value on key off
                     adsr = ADSR(chip_ins.sn_attack, chip_ins.sn_decay, chip_ins.sn_sustain, chip_ins.sn_release)
@@ -163,7 +163,7 @@ class NoteConverter():
                     cur_dur = None
                     active_note = None
 
-            if effect := tick_data.get_effect(SendExternalEffect):
+            if effect := tick_data.get_command(SendExternalCommand):
                 if effect.value == 0 and cur_dur is not None:
                     cur_dur.no_gap = True
                 else:
