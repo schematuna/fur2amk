@@ -103,7 +103,7 @@ class NoteConverter():
         # active chiptune instrument
         chip_ins = None
         # process notes and pitch commands
-        for tick_data in ticks:                
+        for tick_data in ticks:
             note_kind = tick_data.kind()
             if note_kind == TickData.NoteKind.NOTE:   
                 new_chip_ins = None
@@ -132,6 +132,7 @@ class NoteConverter():
                     if pitch_command is not None:
                         cur_dur.pitch_bends.append(pitch_command)
                     notes.append(cur_dur)
+                
                 cur_dur = MMLNote(tick, 0, tick_data.Note, chip_ins.index, pre_note_commands)
                 active_note = tick_data.Note
 

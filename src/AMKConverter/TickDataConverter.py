@@ -65,33 +65,32 @@ class TickDataConverter:
         # process rows into notes and commands
         notes: List[MMLNote] = []
         commands: List[MMLCommand] = []
-
+        proc_ticks = ticks
         tick = 0
 
-        # initialize converters
-        note_converter = NoteConverter(self.tick_ratio)
-
         # convert notes
-        new_notes, new_commands = note_converter.convert(ticks, ins_info, chiptune_data.instruments)
-        commands.extend(new_commands)
-        notes.extend(new_notes)
+        note_converter      = NoteConverter(self.tick_ratio)
+        notes, commands = note_converter.convert(proc_ticks, ins_info, chiptune_data.instruments)
+
+        # convert fine tune to legato + fine tune commands since AMK can't change tuning mid-note
+        tuning_converter    = TuningConverter()
+        tuning_commands, proc_ticks, notes = tuning_converter.convert(proc_ticks, notes)
+        commands.extend(tuning_commands)
 
         # convert commands
         legato_converter    = LegatoConverter()
-        commands.extend(legato_converter.convert(ticks, notes))
+        commands.extend(legato_converter.convert(proc_ticks, notes))
         
         tempo_converter     = TempoConverter(chiptune_data.structure, self.amk_ticks_per_row)
         volume_converter    = VolumeConverter(self.tick_ratio)
         pan_converter       = PanConverter(self.tick_ratio)
         vibrato_converter   = VibratoConverter(self.tick_ratio)
-        tuning_converter    = TuningConverter()
         state = FurnaceState()
-        for tick_data in ticks:
+        for tick_data in proc_ticks:
             commands.extend(tempo_converter.convert_tick(tick_data, tick, state))
             commands.extend(volume_converter.convert_tick(tick_data, tick, state))
             commands.extend(pan_converter.convert_tick(tick_data, tick, state))
             commands.extend(vibrato_converter.convert_tick(tick_data, tick, state))
-            commands.extend(tuning_converter.convert_tick(tick_data, tick, state))
 
             tick += 1
 
