@@ -18,9 +18,6 @@ class FurnaceState:
     is_echo: bool = True
     adsr: ADSR = None
     fur_ins_idx: int = None
-    # channel tuning state
-    fine_tune: int = 0
-    semitone_tune: int = 0
 
 class FurnaceUtil:
     PITCH_STEPS_PER_OCTAVE = 384
@@ -76,6 +73,25 @@ class FurnaceUtil:
         bpm = int(round(60 * beats_per_second))
         amk_tempo = int(round(bpm * 0.4096 - 1))
         return amk_tempo
+    
+    @staticmethod
+    def get_note_active_at(tick: int, notes: List[MMLNote]) -> Tuple[Optional[MMLNote], Optional[int]]:
+        """Find the note that is active (playing) at the given tick."""
+        for i, note in enumerate(notes):
+            if note.duration is None:
+                continue
+            # at note boundaries, defer to the earlier note
+            if note.tick < tick <= note.tick + note.duration:
+                return note, i
+        return None, None
+
+    @staticmethod
+    def get_note_starting_at(tick: int, notes: List[MMLNote]) -> Optional[MMLNote]:
+        """Find the note that starts at the given tick."""
+        for note in notes:
+            if note.tick == tick:
+                return note
+        return None
 
 # Create this before iterating through rows, and call tick() for each row
 # call handle_new_command whenever a relevant slide command is encountered
