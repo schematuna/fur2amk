@@ -4,6 +4,7 @@ from ..model.FurnaceData import *
 from ..model.ChiptuneData import *
 from .RowConverter import *
 from .TickDataResolver import *
+from .TickDataConverter import *
 from ..util import *
 
 class FurnaceConverter:
@@ -145,7 +146,12 @@ class FurnaceConverter:
 
         # simplify ticks, resolving furnace-specific effects
         resolver = TickDataResolver()
+        for ch, channel_ticks in enumerate(furnace_ticks):
+            furnace_ticks[ch] = resolver.resolve_ticks(channel_ticks, module.Instruments, self.instrument_info)
+
+        # convert furnace tickdata to chiptune tickdata
+        tickDataConverter = TickDataConverter()
         for channel_ticks in furnace_ticks:
-            chiptune_data.tick_data.append(resolver.resolve_ticks(channel_ticks, module.Instruments, self.instrument_info))
+            chiptune_data.tick_data.append(tickDataConverter.convert(channel_ticks))
 
         return chiptune_data

@@ -16,7 +16,7 @@ class VolumeConverter():
         self.tick_ratio = tick_ratio
         self.volume_slider = VolumeSlider(tick_ratio, 0)
 
-    def convert_tick(self, tick_data: TickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
+    def convert_tick(self, tick_data: ChiptuneTickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
         new_vol = tick_data.Vol
         slide_command = None
@@ -27,7 +27,7 @@ class VolumeConverter():
             self.volume_slider.set_target(new_vol)
             commands.append(VolumeChange(tick, MMLUtil.find_v(new_vol)))
 
-        if effect := tick_data.get_effect(VolumeSlideEffect) or tick_data.get_effect(FineVolumeSlideEffect):
+        if effect := tick_data.get_command(VolumeSlideCommand) or tick_data.get_command(FineVolumeSlideCommand):
             if new_command := self.volume_slider.handle_new_effect(effect):
                 commands.append(new_command)
         elif slide_command is not None:
@@ -44,20 +44,20 @@ class PanConverter():
         self.tick_ratio = tick_ratio
         self.pan_slider = PanSlider(tick_ratio, 0)
 
-    def convert_tick(self, tick_data: TickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
+    def convert_tick(self, tick_data: ChiptuneTickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
-        if effect := tick_data.get_effect(PanEffect):
+        if effect := tick_data.get_command(PanCommand):
             self.pan_slider.set_target(effect.pan_position)
             amk_pan = FurnaceUtil.unity_to_amk_pan(effect.pan_position)
             commands.append(PanChange(tick, amk_pan))
         
-        if effect := tick_data.get_effect(StereoPanEffect):
+        if effect := tick_data.get_command(StereoPanCommand):
             cur_pan = FurnaceUtil.stereo_to_unity_pan(effect.left_volume, effect.right_volume)
             self.pan_slider.set_target(cur_pan)
             amk_pan = FurnaceUtil.stereo_to_amk_pan(effect.left_volume, effect.right_volume)
             commands.append(PanChange(tick, amk_pan))
         
-        if effect := tick_data.get_effect(PanSlideEffect):
+        if effect := tick_data.get_command(PanSlideCommand):
             if new_command := self.pan_slider.handle_new_effect(effect):
                 commands.append(new_command)
                     
@@ -70,9 +70,9 @@ class VibratoConverter():
     def __init__(self, tick_ratio: float) -> None:
         self.tick_ratio = tick_ratio
         
-    def convert_tick(self, tick_data: TickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
+    def convert_tick(self, tick_data: ChiptuneTickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
-        if effect := tick_data.get_effect(VibratoEffect):
+        if effect := tick_data.get_command(VibratoCommand):
             # Vibrato off when both speed and depth are 0
             if effect.speed == 0 and effect.depth == 0:
                 commands.append(DisableVibrato(tick))
@@ -101,9 +101,9 @@ class TempoConverter():
         self.structure = structure
         self.amk_ticks_per_row = amk_ticks_per_row
 
-    def convert_tick(self, tick_data: TickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
+    def convert_tick(self, tick_data: ChiptuneTickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
-        if effect := tick_data.get_effect(SetTickRateEffect):
+        if effect := tick_data.get_command(SetTickRateCommand):
             commands.append(TempoChange(tick, FurnaceUtil.tick_rate_to_amk_tempo(self.structure, self.amk_ticks_per_row, effect.tick_rate)))
 
         return commands
@@ -112,7 +112,7 @@ class TuningConverter():
     def __init__(self) -> None:
         self.logger = logging.getLogger(__name__)
 
-    def convert(self, ticks: List[TickData], notes: List[MMLNote]) -> Tuple[List[MMLCommand], List[TickData], List[MMLNote]]:
+    def convert(self, ticks: List[ChiptuneTickData], notes: List[MMLNote]) -> Tuple[List[MMLCommand], List[ChiptuneTickData], List[MMLNote]]:
         tuning_commands = self.convert_finetune(ticks)
         legatofied_ticks = self.convert_legato(ticks, notes)
         # TODO: split notes won't account for pitchbends across the split.
@@ -120,12 +120,12 @@ class TuningConverter():
 
         return tuning_commands, legatofied_ticks, split_notes
     
-    def convert_finetune(self, ticks: List[TickData]) -> List[MMLCommand]:
+    def convert_finetune(self, ticks: List[ChiptuneTickData]) -> List[MMLCommand]:
         fine_tune_state: int = 0
         semitone_tune_state: int = 0
         commands: List[MMLCommand] = []
         for tick, tick_data in enumerate(ticks):
-            if effect := tick_data.get_effect(SetPitchEffect):
+            if effect := tick_data.get_command(SetPitchCommand):
                 # get into AMK range, 0->FF
                 pitch_change = effect.pitch * 2
                 semitone_tune = 0
@@ -150,13 +150,13 @@ class TuningConverter():
 
         return commands
 
-    def convert_legato(self, ticks: List[TickData], notes: List[MMLNote]) -> List[TickData]:
+    def convert_legato(self, ticks: List[ChiptuneTickData], notes: List[MMLNote]) -> List[ChiptuneTickData]:
         global_legato_enabled: bool = False
         # tracks fine tune chains, which create localized legato regions
         in_fine_tune_chain: bool = False
         for tick, tick_data in enumerate(ticks):
             # track global legato changes
-            if legato_effect := tick_data.get_effect(LegatoEffect):
+            if legato_effect := tick_data.get_command(LegatoCommand):
                 global_legato_enabled = legato_effect.legato_on
 
             # when portamento happens, there isn't actually a note onset to end the ql chain
@@ -167,9 +167,9 @@ class TuningConverter():
                 in_fine_tune_chain = False
                 # turn legato off if we aren't already in a global legato region
                 if not global_legato_enabled:
-                    ticks[tick].Effects.append(LegatoEffect(0))
+                    ticks[tick].Commands.append(LegatoCommand(0))
 
-            fine_tune_effect = tick_data.get_effect(SetPitchEffect)
+            fine_tune_effect = tick_data.get_command(SetPitchCommand)
             retuned_note, _ = FurnaceUtil.get_note_active_at(tick, notes)
             # only turn on legato if a pitch effect happens for the first time in a note duration
             if fine_tune_effect and retuned_note and not in_fine_tune_chain:
@@ -178,16 +178,16 @@ class TuningConverter():
                 if not global_legato_enabled:
                     # turn on legato on the tick before new note would start
                     if tick - 1 > 0:
-                        ticks[tick - 1].Effects.append(LegatoEffect(1))
+                        ticks[tick - 1].Commands.append(LegatoCommand(1))
                     else:
                         self.logger.warning("Cannot convert fine tune because we cannot enable legato before tick 0.")
 
         return ticks
     
-    def convert_notes(self, ticks: List[TickData], notes: List[MMLNote]) -> List[MMLNote]:
+    def convert_notes(self, ticks: List[ChiptuneTickData], notes: List[MMLNote]) -> List[MMLNote]:
         split_notes: List[MMLNote] = notes
         for tick, tick_data in enumerate(ticks):
-            if tick_data.get_effect(SetPitchEffect):
+            if tick_data.get_command(SetPitchCommand):
                 retuned_note, idx = FurnaceUtil.get_note_active_at(tick, split_notes)
                 if not retuned_note:
                     continue
@@ -217,7 +217,7 @@ class LegatoConverter:
     def __init__(self) -> None:
         self.logger = logging.getLogger(__name__)
 
-    def convert(self, ticks: List[TickData], notes: List[MMLNote]) -> List[MMLCommand]:
+    def convert(self, ticks: List[ChiptuneTickData], notes: List[MMLNote]) -> List[MMLCommand]:
         # Build legato regions
         regions = self.build_legato_regions(ticks)
 
@@ -226,7 +226,7 @@ class LegatoConverter:
 
         return commands
 
-    def build_legato_regions(self, ticks: List[TickData]) -> List[LegatoRegion]:
+    def build_legato_regions(self, ticks: List[ChiptuneTickData]) -> List[LegatoRegion]:
         """
         Build a list of tick ranges where legato should be active.
         """
@@ -236,7 +236,7 @@ class LegatoConverter:
 
         tick = 0
         for tick_data in ticks:
-            if legato_effect := tick_data.get_effect(LegatoEffect):
+            if legato_effect := tick_data.get_command(LegatoCommand):
                 if legato_effect.legato_on and not legato_on:
                     # Legato turning ON
                     legato_on = True

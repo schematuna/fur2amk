@@ -1,4 +1,3 @@
-from ..model.ChiptuneData import *
 from .MacroConverter import *
 from ..util.MMLUtil import *
 
@@ -29,7 +28,7 @@ class TickDataResolver():
     def __init__(self):
         self.logger = logging.getLogger(__name__)
 
-    def resolve_ticks(self, ticks: List[TickData], instruments: List[FurnaceInstrument], ins_info: Dict[int, FurInstrumentInfo]) -> List[TickData]:
+    def resolve_ticks(self, ticks: List[FurnaceTickData], instruments: List[FurnaceInstrument], ins_info: Dict[int, FurInstrumentInfo]) -> List[FurnaceTickData]:
         furnace_ticks = ticks
         # Speed changes and jump commands are already handled by the time we get here
         # virtual tempo changes must also be resolved before note delay is handled
@@ -51,20 +50,20 @@ class TickDataResolver():
 
         return furnace_ticks
     
-    def resolve_note_delay(self, furnace_ticks: List[TickData]) -> List[TickData]:
-        out_ticks: List[TickData] = [TickData()] * len(furnace_ticks)
+    def resolve_note_delay(self, furnace_ticks: List[FurnaceTickData]) -> List[FurnaceTickData]:
+        out_ticks: List[FurnaceTickData] = [FurnaceTickData()] * len(furnace_ticks)
         for i, tick_data in enumerate(furnace_ticks):
             if note_delay_effect := tick_data.get_effect(NoteDelayEffect):
                 delay = note_delay_effect.delay_ticks
                 out_ticks[i + delay] = tick_data
             else:
                 # only populate if this tick isn't already populated by a delayed tick
-                if out_ticks[i] == TickData():
+                if out_ticks[i] == FurnaceTickData():
                     out_ticks[i] = tick_data
 
         return out_ticks
 
-    def resolve_ql_legato(self, furnace_ticks: List[TickData]) -> List[TickData]:
+    def resolve_ql_legato(self, furnace_ticks: List[FurnaceTickData]) -> List[FurnaceTickData]:
         """
         Resolve Quick Legato commands into legato commands
 
@@ -119,14 +118,14 @@ class TickDataResolver():
 
         return resolved_furnace_ticks
     
-    def resolve_ql_notes(self, furnace_ticks: List[TickData]) -> List[TickData]:
+    def resolve_ql_notes(self, furnace_ticks: List[FurnaceTickData]) -> List[FurnaceTickData]:
         # currently active instrument
         active_note = None
         total_ticks = len(furnace_ticks)
         new_ticks = furnace_ticks
         for i, tick_data in enumerate(furnace_ticks):
             note_kind = tick_data.kind()
-            if note_kind == TickData.NoteKind.NOTE:
+            if note_kind == FurnaceTickData.NoteKind.NOTE:
                 # TODO: this should take sample mapping into account
                 # also should probably be setting active note to None on note releases
                 # ALSO the active note should change with note slide commands
@@ -145,23 +144,23 @@ class TickDataResolver():
 
         return new_ticks
 
-    def resolve_quick_legato(self, furnace_ticks: List[TickData]) -> List[TickData]:
+    def resolve_quick_legato(self, furnace_ticks: List[FurnaceTickData]) -> List[FurnaceTickData]:
         resolved_ticks = furnace_ticks
         resolved_ticks = self.resolve_ql_legato(resolved_ticks)
         resolved_ticks = self.resolve_ql_notes(resolved_ticks)
         return resolved_ticks
     
-    def resolve_portamento(self, furnace_ticks: List[TickData]):
+    def resolve_portamento(self, furnace_ticks: List[FurnaceTickData]):
         '''Convert portamentos to note slides for simplicity'''
         # TODO: this conversion loses precision. Convert all pitch slides to some standard ChiptuneData format instead
-        out_ticks: List[TickData] = []
+        out_ticks: List[FurnaceTickData] = []
         # the current active pitch. Determines starting pitch for portamentos
         active_note = None
         for i, tick_data in enumerate(furnace_ticks):
-            new_tick = TickData()
+            new_tick = FurnaceTickData()
             if portamento_effect := tick_data.get_effect(PortamentoEffect):
-                if tick_data.kind() == TickData.NoteKind.NOTE:
-                    new_tick = TickData()
+                if tick_data.kind() == FurnaceTickData.NoteKind.NOTE:
+                    new_tick = FurnaceTickData()
                     # don't copy note to new tick
                     new_note = tick_data.Note
                     new_tick.Ins = tick_data.Ins
@@ -181,7 +180,7 @@ class TickDataResolver():
                     new_tick = tick_data
             else:
                 new_tick = tick_data
-                if tick_data.kind() == TickData.NoteKind.NOTE:
+                if tick_data.kind() == FurnaceTickData.NoteKind.NOTE:
                     active_note = tick_data.Note
 
                 # note slides affect portamento starting pitch 
@@ -195,7 +194,7 @@ class TickDataResolver():
         return out_ticks
     
 
-    def resolve_macros(self, furnace_ticks: List[TickData], instruments: List[FurnaceInstrument]):
+    def resolve_macros(self, furnace_ticks: List[FurnaceTickData], instruments: List[FurnaceInstrument]):
         vol_converter = VolumeMacroConverter()
         # currently active instrument
         active_ins = None 
@@ -203,7 +202,7 @@ class TickDataResolver():
         for tick_data in new_ticks:
             note_kind = tick_data.kind()
             is_new_note = False
-            if note_kind == TickData.NoteKind.NOTE:
+            if note_kind == FurnaceTickData.NoteKind.NOTE:
                 is_new_note = True
                 new_fur_ins = None
                 for ins in instruments:
@@ -221,11 +220,11 @@ class TickDataResolver():
 
         return new_ticks
     
-    def resolve_sample_maps(self, furnace_ticks: List[TickData], instruments: List[FurnaceInstrument], ins_info: Dict[int, FurInstrumentInfo]):
-        '''Updates tickdata with sample-mapped instruments and notes, abstracting away sample maps'''
+    def resolve_sample_maps(self, furnace_ticks: List[FurnaceTickData], instruments: List[FurnaceInstrument], ins_info: Dict[int, FurInstrumentInfo]):
+        '''Updates FurnaceTickData with sample-mapped instruments and notes, abstracting away sample maps'''
         # currently active instrument
         active_ins: FurnaceInstrument = None 
-        new_ticks: List[TickData] = furnace_ticks
+        new_ticks: List[FurnaceTickData] = furnace_ticks
         for i, tick_data in enumerate(furnace_ticks):
             new_fur_ins = None
             for ins in instruments:
@@ -236,7 +235,7 @@ class TickDataResolver():
             if new_fur_ins is not None:
                 active_ins = new_fur_ins
 
-            if tick_data.kind() == TickData.NoteKind.NOTE:
+            if tick_data.kind() == FurnaceTickData.NoteKind.NOTE:
                 if active_ins is None:
                     self.logger.warning(f"No furnace instrument active in row with Note {tick_data.Note}, tick {i}.")
                     break
@@ -254,7 +253,7 @@ class TickDataResolver():
                         note_to_play = note
 
                     new_ticks[i].Note = note_to_play
-                    # FIXME: this assignment fundamentally changes the meaning of TickData::Ins from furnace ins to chiptune ins
+                    # FIXME: this assignment fundamentally changes the meaning of FurnaceTickData::Ins from furnace ins to chiptune ins
                     # should really be a new data structure for clarity
                     new_ticks[i].Ins = chip_ins_idx
                 else:

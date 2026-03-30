@@ -1,7 +1,6 @@
 import logging
 
 from ..model.FurnaceData import *
-from ..model.ChiptuneData import *
 
 class VolumeMacroConverter:
     def __init__(self):
@@ -10,7 +9,7 @@ class VolumeMacroConverter:
         self.primary_vol = 127
         self.macro_mult = 1
 
-    def get_volume_for_tick(self, tick_data: TickData, is_new_note: bool, active_ins: FurnaceInstrument):
+    def get_volume_for_tick(self, tick_data: FurnaceTickData, is_new_note: bool, active_ins: FurnaceInstrument):
         new_vol = tick_data.Vol
         if tick_data.Vol is not None:
             self.primary_vol = new_vol

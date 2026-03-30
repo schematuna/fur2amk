@@ -2,7 +2,6 @@
 # and decomposing them into ticks
 
 from ..model.FurnaceData import *
-from ..model.ChiptuneData import *
 
 class RowConverter():
     def __init__(self, module: FurnaceModule):
@@ -11,7 +10,7 @@ class RowConverter():
         self.loop_tick: int = None
         self.pattern_lengths_ticks: List[int] = None
     
-    def get_ticks(self) -> List[List[TickData]]:
+    def get_ticks(self) -> List[List[FurnaceTickData]]:
         # first, naively flatten rows
         flat_song_rows = self._flatten_rows()
 
@@ -28,7 +27,7 @@ class RowConverter():
         # Convert pattern lengths to ticks
         self.pattern_lengths_ticks = self._get_pattern_lengths_ticks(pattern_lengths_rows, self.ticks_per_row)
 
-        furnace_ticks: List[List[TickData]] = []
+        furnace_ticks: List[List[FurnaceTickData]] = []
         for channel_rows in condensed_rows:
             furnace_ticks.append(self._rows_to_ticks(channel_rows, self.ticks_per_row))
 
@@ -77,10 +76,10 @@ class RowConverter():
 
     def _rows_to_ticks(self, flat_rows: List[FurnaceRow], ticks_per_row: List[int]):
         # first, do basic expansion from rows to ticks
-        furnace_ticks: List[TickData] = []
+        furnace_ticks: List[FurnaceTickData] = []
         for i, row in enumerate(flat_rows):
             # copy row info into first tick of row
-            first_tick = TickData()
+            first_tick = FurnaceTickData()
             first_tick.Note = row.Note
             first_tick.Ins = row.Ins
             first_tick.Vol = row.Vol
@@ -89,7 +88,7 @@ class RowConverter():
 
             # and create empty ticks for rest of row
             for i in range(ticks_per_row[i] - 1):
-                furnace_ticks.append(TickData())
+                furnace_ticks.append(FurnaceTickData())
 
         return furnace_ticks
 

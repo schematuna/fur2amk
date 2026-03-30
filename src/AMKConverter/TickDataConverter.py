@@ -48,20 +48,20 @@ class TickDataConverter:
     # there will (or at least should) always be the same or more AMK ticks than Furnace ticks per beat
     # so we iterate over all Furnace ticks and place its notes and commands in the nearest AMK tick
     # TODO: don't we have to update all FurnaceEffects with tick-based data to account for the expansion?
-    def expand_ticks(self, ticks: List[TickData]):
+    def expand_ticks(self, ticks: List[ChiptuneTickData]):
         song_length = self.to_amk_ticks(len(ticks))
-        amk_ticks = [TickData() for _ in range(song_length)]
+        amk_ticks = [ChiptuneTickData() for _ in range(song_length)]
         for tick, tick_data in enumerate(ticks):
             amk_tick = self.to_amk_ticks(tick)
             # should never have to condense here - an AMK tick should always correspond to only one furnace tick
-            if amk_ticks[amk_tick] != TickData():
+            if amk_ticks[amk_tick] != ChiptuneTickData():
                 self.logger.warning("Two Furnace ticks round to one AMK tick. This should never happen.")
                                     
             amk_ticks[amk_tick] = tick_data
         
         return amk_ticks
 
-    def convert(self, ticks: List[TickData], chiptune_data: ChiptuneData, ins_info: Dict[int, InstrumentInfo]) -> Tuple[List[MMLNote], List[MMLCommand]]:
+    def convert(self, ticks: List[ChiptuneTickData], chiptune_data: ChiptuneData, ins_info: Dict[int, InstrumentInfo]) -> Tuple[List[MMLNote], List[MMLCommand]]:
         # process rows into notes and commands
         notes: List[MMLNote] = []
         commands: List[MMLCommand] = []
@@ -72,7 +72,9 @@ class TickDataConverter:
         note_converter      = NoteConverter(self.tick_ratio)
         notes, commands = note_converter.convert(proc_ticks, ins_info, chiptune_data.instruments)
 
-        # convert fine tune to legato + fine tune commands since AMK can't change tuning mid-note
+        # convert fine tune commands 
+        # since AMK can't change tuning mid-note, we also split notes and wrap in legato when fine tune changes mid-note
+        # update ticks with legato effects here instead of making legato commands since they'll get properlymtaken care of by LegatoConverter anyways
         tuning_converter    = TuningConverter()
         tuning_commands, proc_ticks, notes = tuning_converter.convert(proc_ticks, notes)
         commands.extend(tuning_commands)
