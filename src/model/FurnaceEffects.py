@@ -230,7 +230,7 @@ class FurnaceEffectFactory:
             0xEE: SendExternalEffect,
             0xF0: lambda v: SetTickRateEffect(v, True),
             0xF1: lambda v: SingleTickPitchEffect(v, True),
-            0xF2: lambda v: SingleTickPitchEffect(v, True),
+            0xF2: lambda v: SingleTickPitchEffect(v, False),
             0xF3: lambda v: FineVolumeSlideEffect(v, True),
             0xF4: lambda v: FineVolumeSlideEffect(v, False),
             0xF8: lambda v: SingleTickVolumeEffect(v, True),

@@ -1,5 +1,6 @@
 from typing import List, Optional
 from dataclasses import dataclass
+from math import floor
 import logging
 
 from ..model.FurnaceData import *
@@ -125,20 +126,11 @@ class TuningConverter():
         semitone_tune_state: int = 0
         commands: List[MMLCommand] = []
         for tick, tick_data in enumerate(ticks):
-            if effect := tick_data.get_command(SetPitchCommand):
-                # get into AMK range, 0->FF
-                pitch_change = effect.pitch * 2
-                semitone_tune = 0
-                fine_tune = 0
-                if pitch_change < 0:
-                    # compress to -255 -> 0
-                    pitch_change = round(pitch_change * 255/256)
-                    semitone_tune = -1
-                    fine_tune = (0xFF + pitch_change)
-                else:
-                    # expand to 255 -> 0
-                    pitch_change = round(pitch_change * 255/254)
-                    fine_tune = pitch_change
+            if effect := tick_data.get_command(TuningCommand):
+                # can only fine-tune upwards in AMK so shift to nearest semitone value and fine-tune up from there
+                semitone_tune = floor(effect.tuning)
+                # get tuning into AMK range, 0->FF
+                fine_tune = int((effect.tuning - semitone_tune) * 0xFF)
 
                 if fine_tune != fine_tune_state:
                     commands.append(FineTune(tick, fine_tune))
@@ -159,7 +151,6 @@ class TuningConverter():
             if legato_effect := tick_data.get_command(LegatoCommand):
                 global_legato_enabled = legato_effect.legato_on
 
-            # when portamento happens, there isn't actually a note onset to end the ql chain
             tick_has_note = tick_data.Note is not None
 
             # fine tune chain ends when a note happens
@@ -169,10 +160,11 @@ class TuningConverter():
                 if not global_legato_enabled:
                     ticks[tick].Commands.append(LegatoCommand(0))
 
-            fine_tune_effect = tick_data.get_command(SetPitchCommand)
+            fine_tune_effect = tick_data.get_command(TuningCommand)
             retuned_note, _ = FurnaceUtil.get_note_active_at(tick, notes)
+            is_mid_note = retuned_note and tick_data.kind() != ChiptuneTickData.NoteKind.NOTE
             # only turn on legato if a pitch effect happens for the first time in a note duration
-            if fine_tune_effect and retuned_note and not in_fine_tune_chain:
+            if fine_tune_effect and is_mid_note and not in_fine_tune_chain:
                 in_fine_tune_chain = True
                 # turn legato on if we aren't already in a global legato region
                 if not global_legato_enabled:
@@ -187,7 +179,7 @@ class TuningConverter():
     def convert_notes(self, ticks: List[ChiptuneTickData], notes: List[MMLNote]) -> List[MMLNote]:
         split_notes: List[MMLNote] = notes
         for tick, tick_data in enumerate(ticks):
-            if tick_data.get_command(SetPitchCommand):
+            if tick_data.get_command(TuningCommand):
                 retuned_note, idx = FurnaceUtil.get_note_active_at(tick, split_notes)
                 if not retuned_note:
                     continue
