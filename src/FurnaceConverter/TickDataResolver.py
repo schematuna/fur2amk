@@ -196,6 +196,7 @@ class TickDataResolver():
 
     def resolve_macros(self, furnace_ticks: List[FurnaceTickData], instruments: List[FurnaceInstrument]):
         vol_converter = VolumeMacroConverter()
+        echo_converter = EchoMacroConverter()
         # currently active instrument
         active_ins = None 
         new_ticks = furnace_ticks
@@ -217,6 +218,9 @@ class TickDataResolver():
                     self.logger.warning(f"No furnace instrument active in row with Note {tick_data.Note}.")
 
             tick_data.Vol = vol_converter.get_volume_for_tick(tick_data, is_new_note, active_ins)
+
+            if echo_effect := echo_converter.get_echo_for_tick(tick_data, is_new_note, active_ins):
+                tick_data.Effects.append(echo_effect)
 
         return new_ticks
     

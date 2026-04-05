@@ -168,6 +168,10 @@ class VibratoEffect(FurnaceEffect):
         # max depth is +/-1 semitone
         self.depth = raw_value & 0x0F
 
+class EchoEffect(FurnaceEffect):
+    """Turns echo on or off for this channel"""
+    def __init__(self, raw_value: int):
+        self.echo_on = bool(raw_value)
 
 class JumpToOrderEffect(FurnaceEffect):
     """Jump to order effect (0x0B). Value is order number."""
@@ -216,6 +220,7 @@ class FurnaceEffectFactory:
             0x0B: JumpToOrderEffect,
             0x0D: JumpToNextPatternEffect,
             0x0F: SetSpeedEffect,
+            0x12: EchoEffect,
             0x80: PanEffect,
             0x83: PanSlideEffect,
             0xC0: lambda v: SetTickRateEffect(v, False),

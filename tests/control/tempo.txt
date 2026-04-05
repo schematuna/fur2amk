@@ -67,6 +67,6 @@ $F5 $4D $11 $FA $F4 $FA $FB $FA $00
 ; enable light staccato
 $F4$02 
 ; section 00
-$F4$03 @39 v202 o3 c4 c4 c4 c4 t10 c4 c4 c4 c4 t223 c4 c4 c4 c4 c4 c4 c4 c4
+@39 $F4$03 v202 o3 c4 c4 c4 c4 t10 c4 c4 c4 c4 t223 c4 c4 c4 c4 c4 c4 c4 c4
 
 

@@ -11,28 +11,16 @@
 #samples
 {
     #optimized
-    "00_Bell_8850.brr"
-    "01_S4_MltFlute.brr"
-    "02_S4_Music_Box.brr"
-    "03_S4_SoftTrb.brr"
-    "04_S4_Snr1.brr"
-    "05_S4_Xylophone.brr"
-    "06_SRM_Waterways_Minor.brr"
-    "07_AD4_BigOKick_Looped.brr"
-    "08_KT7_PrimeBass_Harm.brr"
-    "09_K1_Choir_Min9.brr"
-    "10_emu2shaku.brr"
-    "11_emuShaku2.brr"
-    "12_k1choir-major.brr"
-    "13_Sample13.brr"
-    "14_Sample14.brr"
+    "00_S4_MltFlute.brr"
+    "01_Sample1.brr"
+    "02_Sample2.brr"
 }
 
 #instruments
 {
-    "01_S4_MltFlute.brr"  $BC $A1 $80 $05 $AB ;@30
-    "13_Sample13.brr"     $00 $00 $7F $01 $EA ;@31
-    "14_Sample14.brr"     $C9 $A3 $80 $0A $03 ;@32
+    "00_S4_MltFlute.brr"  $BC $A1 $80 $05 $AB ;@30
+    "01_Sample1.brr"      $00 $00 $7F $01 $EA ;@31
+    "02_Sample2.brr"      $C9 $A3 $80 $0A $03 ;@32
 }
 
 ; created with fur2amk 0.5.1
@@ -40,7 +28,7 @@
 w194 t52
 
 $EF $FF $50 $B0
-$F1 $00 $80 $01
+$F1 $0F $80 $01
 $F5 $4D $11 $FA $F4 $FA $FB $FA $00
 
 (!1)[$ED$3C$A1] ;Restore ADSR for instrument 0: GlocknFlute
@@ -61,7 +49,7 @@ v255 e1 $ED$3C$AD ^1 e1 (!99, 0) (!2, 3) (!3, -1) @32 c1
 
 #1
 ; section 00
-$F4$03 @31 o3 c1 c1 c1 c1
+@31 $F4$03 o3 c1 c1 c1 c1
 ; section 01
 c1 c1 c1 c1
 

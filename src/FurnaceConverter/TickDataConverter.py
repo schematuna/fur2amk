@@ -36,7 +36,9 @@ class TickDataConverter:
         elif isinstance(effect, PanSlideEffect):
             return PanSlideCommand(effect.change_per_tick)
         elif isinstance(effect, LegatoEffect):
-            return LegatoCommand(effect.legato_on)
+            return LegatoEnableCommand(effect.legato_on)
+        elif isinstance(effect, EchoEffect):
+            return EchoEnableCommand(effect.echo_on)
         elif isinstance(effect, VolumeSlideEffect):
             return VolumeSlideCommand(effect.change_per_tick)
         elif isinstance(effect, FineVolumeSlideEffect):

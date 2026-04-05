@@ -49,11 +49,11 @@ class FurnaceSample:
 
 @dataclass
 class FurnaceSNESMacroData:
-    is_noise: bool = False
-    is_echo: bool = True # per-instrument echo enablement
-    is_pitch_mod: bool = False
-    invert_right: bool = False # not sure
-    invert_left: bool = False  # what these are for
+    is_noise: bool = None
+    is_echo: bool = None # per-instrument echo enablement
+    is_pitch_mod: bool = None
+    invert_right: bool = None # surround
+    invert_left: bool = None  # surround
     noise_freq: Optional[int] = None # ranges 0 to 32
     gain_values: Optional[List[int]] = None  # snes gain values
     gain_speed: Optional[int] = None  # ticks between each gain change

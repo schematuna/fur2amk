@@ -61,7 +61,7 @@ class TickDataConverter:
         
         return amk_ticks
 
-    def convert(self, ticks: List[ChiptuneTickData], chiptune_data: ChiptuneData, ins_info: Dict[int, InstrumentInfo]) -> Tuple[List[MMLNote], List[MMLCommand]]:
+    def convert(self, ticks: List[ChiptuneTickData], chiptune_data: ChiptuneData, ins_info: Dict[int, InstrumentInfo], channel: int) -> Tuple[List[MMLNote], List[MMLCommand]]:
         # process rows into notes and commands
         notes: List[MMLNote] = []
         commands: List[MMLCommand] = []
@@ -74,14 +74,16 @@ class TickDataConverter:
 
         # convert fine tune commands 
         # since AMK can't change tuning mid-note, we also split notes and wrap in legato when fine tune changes mid-note
-        # update ticks with legato effects here instead of making legato commands since they'll get properlymtaken care of by LegatoConverter anyways
+        # update ticks with legato effects here instead of making legato commands since they'll get properly taken care of by LegatoConverter anyways
         tuning_converter    = TuningConverter()
         tuning_commands, proc_ticks, notes = tuning_converter.convert(proc_ticks, notes)
         commands.extend(tuning_commands)
 
-        # convert commands
         legato_converter    = LegatoConverter()
-        commands.extend(legato_converter.convert(proc_ticks, notes))
+        commands.extend(legato_converter.convert(proc_ticks, notes))    
+
+        echo_converter      = EchoConverter(chiptune_data.echo_data, channel)
+        commands.extend(echo_converter.convert(proc_ticks))    
         
         tempo_converter     = TempoConverter(chiptune_data.structure, self.amk_ticks_per_row)
         volume_converter    = VolumeConverter(self.tick_ratio)

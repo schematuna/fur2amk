@@ -15,7 +15,7 @@ from ..util import *
 class AMKConverter:
     def __init__(self) -> None:
         self.logger = logging.getLogger(__name__)
-        self.row_converter = None
+        self.tickdata_converter = None
         # mapping of instrument index to conversion info
         self.instrument_info : Dict[int, InstrumentInfo] = {}
 
@@ -134,29 +134,29 @@ class AMKConverter:
         return command_num
 
     def convert_tempo(self, chiptune_data: ChiptuneData) -> int:
-        return FurnaceUtil.tick_rate_to_amk_tempo(chiptune_data.structure, self.row_converter.amk_ticks_per_row, chiptune_data.tick_rate)
+        return FurnaceUtil.tick_rate_to_amk_tempo(chiptune_data.structure, self.tickdata_converter.amk_ticks_per_row, chiptune_data.tick_rate)
 
     def convert_mml_data(self, chiptune_data: ChiptuneData) -> MMLData:
         mml_data = MMLData()
         mml_data.num_channels = chiptune_data.structure.num_channels
         # for formatting and duration calculations
         # lengths are in ticks
-        mml_data.measure_length = self.row_converter.to_amk_ticks(chiptune_data.structure.measure_length)
+        mml_data.measure_length = self.tickdata_converter.to_amk_ticks(chiptune_data.structure.measure_length)
 
         # Convert to ticks and store
-        mml_data.section_lengths = [self.row_converter.to_amk_ticks(length) for length in chiptune_data.structure.section_lengths]
+        mml_data.section_lengths = [self.tickdata_converter.to_amk_ticks(length) for length in chiptune_data.structure.section_lengths]
         # TODO: consider changes in ticks_per_step when calculating song length
-        mml_data.song_length = self.row_converter.to_amk_ticks(chiptune_data.structure.song_length)
-        mml_data.loop_tick = self.row_converter.to_amk_ticks(chiptune_data.structure.loop_tick)
+        mml_data.song_length = self.tickdata_converter.to_amk_ticks(chiptune_data.structure.song_length)
+        mml_data.loop_tick = self.tickdata_converter.to_amk_ticks(chiptune_data.structure.loop_tick)
 
         for ch, ticks in enumerate(chiptune_data.tick_data):
-            amk_ticks = self.row_converter.expand_ticks(ticks)
-            mml_data.notes[ch], mml_data.commands[ch] = self.row_converter.convert(amk_ticks, chiptune_data, self.instrument_info)
+            amk_ticks = self.tickdata_converter.expand_ticks(ticks)
+            mml_data.notes[ch], mml_data.commands[ch] = self.tickdata_converter.convert(amk_ticks, chiptune_data, self.instrument_info, ch)
 
         return mml_data
 
     def convert(self, chiptune_data: ChiptuneData) -> AMKData:
-        self.row_converter = TickDataConverter(chiptune_data.structure.ticks_per_step[0])
+        self.tickdata_converter = TickDataConverter(chiptune_data.structure.ticks_per_step[0])
 
         amk_data = AMKData()
         amk_data.spc_info     = self.convert_spc_info(chiptune_data)

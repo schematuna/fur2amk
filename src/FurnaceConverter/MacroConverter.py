@@ -41,3 +41,23 @@ class VolumeMacroConverter:
             new_vol = min(max(0, new_vol), 254)
 
         return new_vol
+    
+class EchoMacroConverter:
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+        # TODO: implement echo command 12XX, accounting for channel echo initialization in chip settings
+        # self.global_echo: bool = 1
+        self.ins_echo: bool = None
+
+    def get_echo_for_tick(self, tick_data: FurnaceTickData, is_new_note: bool, active_ins: FurnaceInstrument):
+        echo_effect = None
+        if is_new_note:
+            echo_macro = active_ins.snes_macro_data.is_echo
+            if echo_macro is not None:
+                new_ins_echo = active_ins.snes_macro_data.is_echo
+
+                if new_ins_echo != self.ins_echo:
+                    self.ins_echo = new_ins_echo
+                    echo_effect = EchoEffect(new_ins_echo)
+
+        return echo_effect
