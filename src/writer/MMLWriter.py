@@ -478,19 +478,24 @@ class MMLWriter:
         cur_remote_commands = []
         legato_on = False
         legato_on_at_loop = False  # was legato on when we crossed the loop point?
+        echo_toggled = False
+        echo_toggled_at_loop = False  # was echo toggled when we crossed the loop point?
 
         for word in words:
             is_post_loop = self.mml_data.loop_tick is None or word.tick >= self.mml_data.loop_tick
             first_note_after_loop = is_post_loop and word.note is not None
 
-            # Capture legato state at first word after loop
+            # Capture toggle states at first word after loop
             if first_note_after_loop:
                 legato_on_at_loop = legato_on
+                echo_toggled_at_loop = echo_toggled
 
-            # Track legato state from LegatoToggle commands
+            # Track toggle states
             for command in word.commands:
                 if isinstance(command, LegatoToggle):
                     legato_on = not legato_on
+                if isinstance(command, EchoToggle):
+                    echo_toggled = not echo_toggled
 
             # need to explicitly handle instrument change at loop point, so it's correct on loop
             if first_note_after_loop:
@@ -527,6 +532,13 @@ class MMLWriter:
         if legato_on_at_loop and self.mml_data.loop_tick is not None:
             pre_loop_commands.append(LegatoToggle(self.mml_data.loop_tick - 1))
             post_loop_commands.insert(0, LegatoToggle(self.mml_data.loop_tick))
+
+        # Handle echo state at loop point
+        # If echo is toggled from channel default in the intro as it passes the loop point, we need to
+        # toggle it before and after the loop point
+        if echo_toggled_at_loop and self.mml_data.loop_tick is not None:
+            pre_loop_commands.append(EchoToggle(self.mml_data.loop_tick - 1))
+            post_loop_commands.insert(0, EchoToggle(self.mml_data.loop_tick))
 
         return pre_loop_commands, post_loop_commands
 

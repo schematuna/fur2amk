@@ -281,16 +281,28 @@ class LegatoConverter:
         return commands
     
 class EchoConverter:
-    def __init__(self, echo_data: SNESEchoData, channel: int) -> None:
-        self.logger = logging.getLogger(__name__)        
-        self.echo_state = echo_data.echoMask & (0x01 << channel) != 0
+    def __init__(self, echo_data: SNESEchoData, channel: int, has_loop: bool) -> None:
+        self.logger = logging.getLogger(__name__)
+        # initial state is set per-channel by the chip config
+        self.default_channel_echo = echo_data.echoMask & (0x01 << channel) != 0
+        self.echo_state = self.default_channel_echo
+        self.has_loop = has_loop
 
     def convert(self, ticks: List[ChiptuneTickData]) -> List[MMLCommand]:
         echo_commands: List[EchoToggle] = []
+        # is echo toggled from channel default?
         for i, tick_data in enumerate(ticks):
             if echo_command := tick_data.get_command(EchoEnableCommand):
                 if echo_command.echo_on != self.echo_state:
                     self.echo_state = echo_command.echo_on
                     echo_commands.append(EchoToggle(i))
+
+        # Make sure to reset echo on loop
+        # only necessary if there is an explicit loop point. AMK resets echo for us on natural loops
+        if self.echo_state != self.default_channel_echo and self.has_loop:
+            if len(ticks) > 0:
+                echo_commands.append(EchoToggle(len(ticks) - 1))
+            else:
+                self.logger.warning("Can't process echo on zero-tick channel.")
 
         return echo_commands

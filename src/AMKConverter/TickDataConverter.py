@@ -82,7 +82,7 @@ class TickDataConverter:
         legato_converter    = LegatoConverter()
         commands.extend(legato_converter.convert(proc_ticks, notes))    
 
-        echo_converter      = EchoConverter(chiptune_data.echo_data, channel)
+        echo_converter      = EchoConverter(chiptune_data.echo_data, channel, chiptune_data.structure.loop_tick is not None)
         commands.extend(echo_converter.convert(proc_ticks))    
         
         tempo_converter     = TempoConverter(chiptune_data.structure, self.amk_ticks_per_row)
