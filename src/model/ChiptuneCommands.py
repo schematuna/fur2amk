@@ -17,11 +17,11 @@ class NoteSlideCommand(ChiptuneCommand):
         self.speed = speed
         self.semitones = semitones
 
-class SetPitchCommand(ChiptuneCommand):
-    """Sets global pitch modifier for the channel, from -1 to +1 semitone."""
+class TuningCommand(ChiptuneCommand):
+    """Sets tuning for the channel. Use decimals for in-between semitones."""
 
-    def __init__(self, pitch: int):
-        self.pitch = pitch
+    def __init__(self, tuning: float):
+        self.tuning = tuning
 
 class StereoPanCommand(ChiptuneCommand):
     """Stereo pan Command (0x08). Value encodes left (upper nibble) and right (lower nibble) volumes."""

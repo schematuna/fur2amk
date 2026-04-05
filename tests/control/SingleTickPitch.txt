@@ -1,0 +1,74 @@
+#amk 4
+
+#spc
+{
+    #title   "Single Tick Pitch Test"
+    #author  "tuna"
+}
+
+#path "SingleTickPitch"
+
+#samples
+{
+    #optimized
+    "00_Bell_8850.brr"
+    "01_S4_MltFlute.brr"
+    "02_S4_Music_Box.brr"
+    "03_S4_SoftTrb.brr"
+    "04_S4_Snr1.brr"
+    "05_S4_Xylophone.brr"
+    "06_SRM_Waterways_Minor.brr"
+    "07_AD4_BigOKick_Looped.brr"
+    "08_KT7_PrimeBass_Harm.brr"
+    "09_K1_Choir_Min9.brr"
+    "10_emu2shaku.brr"
+    "11_emuShaku2.brr"
+    "12_k1choir-major.brr"
+}
+
+#instruments
+{
+    "03_S4_SoftTrb.brr"  $00 $00 $7F $05 $63 ;@30
+}
+
+; created with fur2amk 0.5.1
+
+w194 t52
+
+$EF $FF $50 $B0
+$F1 $02 $80 $01
+$F5 $4D $11 $FA $F4 $FA $FB $FA $00
+
+
+
+#0
+; enable light staccato
+$F4$02 
+; section 00
+$F4$01 @30 o3 c8 $EE$7F c8
+$EE$00 $FA$02$01 c8 $EE$7F c8
+$F4$01 $F4$01 $EE$00 $FA$02$00 c8 $EE$7F $FA$02$FF c8
+$EE$00 c8 $EE$7F $FA$02$FE c8
+$F4$01 $F4$01 $EE$00 $FA$02$00 c8 $EE$07 $FA$02$F8 c8
+$EE$00 $FA$02$00 c8 $EE$F7 $FA$02$07 c8
+$EE$00 $FA$02$00 c8 c8
+$F4$01 $F4$01 c8 $FA$02$FF c8
+$F4$01 $F4$01 c8 $EE$7F c8
+$EE$00 $FA$02$00 c8 $EE$7F c8
+$F4$01 $F4$01 $EE$00 $FA$02$FF c8 $EE$7F $FA$02$FE c8
+$EE$00 c8 $EE$7F $FA$02$FD c8
+$F4$01 $F4$01 $EE$00 $FA$02$01 c8 $EE$07 $FA$02$F9 c8
+$EE$00 $FA$02$01 c8 $EE$F7 $FA$02$08 c8
+$EE$00 $FA$02$01 c8 c8
+$F4$01 $FA$02$00 c4
+; section 01
+$F4$01 c8 $FA$02$01 c8
+$FA$02$00 c8 $FA$02$01 c8
+$FA$02$02 c8 $FA$02$03 c8
+$FA$02$04 c8 $FA$02$05 c8
+$FA$02$06 c8 $FA$02$07 c8
+$FA$02$08 c8 $FA$02$09 c8
+$FA$02$0A c8 $FA$02$0B c8
+$FA$02$0C c8 $F4$01 $FA$02$00 o4 c1^1^8
+
+

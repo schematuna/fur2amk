@@ -67,9 +67,9 @@ $F5 $4D $11 $FA $F4 $FA $FB $FA $00
 ; enable light staccato
 $F4$02 
 ; section 00
-@34 o3 f4 $F4$01 c4 $EE$FF c4 $EE$00 $FA$02$FF c4
+@34 o3 f4 $F4$01 c4 $FA$02$01 c4 $FA$02$FF c4
 $FA$02$00 c8 $F4$01 r8
-$F4$01 g8 $EE$81 r8
+$F4$01 g8 $EE$80 r8
 $F4$01 $F4$01 g8 $EE$7F $FA$02$FF r8
 $F4$01 $F4$01 g8 $EE$00 $FA$02$00 g8^16
 ; reset state before loop
