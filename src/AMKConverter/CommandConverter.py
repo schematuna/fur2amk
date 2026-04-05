@@ -148,7 +148,7 @@ class TuningConverter():
         in_fine_tune_chain: bool = False
         for tick, tick_data in enumerate(ticks):
             # track global legato changes
-            if legato_effect := tick_data.get_command(LegatoCommand):
+            if legato_effect := tick_data.get_command(LegatoEnableCommand):
                 global_legato_enabled = legato_effect.legato_on
 
             tick_has_note = tick_data.Note is not None
@@ -158,7 +158,7 @@ class TuningConverter():
                 in_fine_tune_chain = False
                 # turn legato off if we aren't already in a global legato region
                 if not global_legato_enabled:
-                    ticks[tick].Commands.append(LegatoCommand(0))
+                    ticks[tick].Commands.append(LegatoEnableCommand(0))
 
             fine_tune_effect = tick_data.get_command(TuningCommand)
             retuned_note, _ = FurnaceUtil.get_note_active_at(tick, notes)
@@ -170,7 +170,7 @@ class TuningConverter():
                 if not global_legato_enabled:
                     # turn on legato on the tick before new note would start
                     if tick - 1 > 0:
-                        ticks[tick - 1].Commands.append(LegatoCommand(1))
+                        ticks[tick - 1].Commands.append(LegatoEnableCommand(1))
                     else:
                         self.logger.warning("Cannot convert fine tune because we cannot enable legato before tick 0.")
 
@@ -228,7 +228,7 @@ class LegatoConverter:
 
         tick = 0
         for tick_data in ticks:
-            if legato_effect := tick_data.get_command(LegatoCommand):
+            if legato_effect := tick_data.get_command(LegatoEnableCommand):
                 if legato_effect.legato_on and not legato_on:
                     # Legato turning ON
                     legato_on = True
@@ -279,3 +279,18 @@ class LegatoConverter:
                     commands.append(LegatoToggle(region.end_tick))
 
         return commands
+    
+class EchoConverter:
+    def __init__(self, echo_data: SNESEchoData, channel: int) -> None:
+        self.logger = logging.getLogger(__name__)        
+        self.echo_state = echo_data.echoMask & (0x01 << channel) != 0
+
+    def convert(self, ticks: List[ChiptuneTickData]) -> List[MMLCommand]:
+        echo_commands: List[EchoToggle] = []
+        for i, tick_data in enumerate(ticks):
+            if echo_command := tick_data.get_command(EchoEnableCommand):
+                if echo_command.echo_on != self.echo_state:
+                    self.echo_state = echo_command.echo_on
+                    echo_commands.append(EchoToggle(i))
+
+        return echo_commands

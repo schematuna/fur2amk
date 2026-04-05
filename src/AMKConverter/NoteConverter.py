@@ -28,12 +28,6 @@ class NoteConverter():
         self.logger = logging.getLogger(__name__)
 
     def get_pre_note_commands(self, chip_ins: ChiptuneInstrument, ins_info: Dict[int, InstrumentInfo], state: FurnaceState, note_tick: int) -> List[MMLCommand]:
-        # instrument echo
-        pre_note_commands = []
-        if chip_ins.snes_macro_data.is_echo != state.is_echo:
-            pre_note_commands.append(EchoToggle(note_tick))
-            state.is_echo = chip_ins.snes_macro_data.is_echo
-
         # if new instrument, set up remote commands for this instrument
         remote_commands = []
         if chip_ins.index in ins_info:
@@ -48,6 +42,7 @@ class NoteConverter():
 
         # TODO: use (!!) syntax and only stop events that need to be stopped
         # Only emit remote command if it changed
+        pre_note_commands = []
         if remote_commands != state.remote_commands and len(state.remote_commands) > 0:
             pre_note_commands.append(RemoteCommand(note_tick, 99, RemoteCommandTiming.DISABLE))
 

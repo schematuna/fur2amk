@@ -42,8 +42,8 @@ class PanSlideCommand(ChiptuneCommand):
     def __init__(self, change_per_tick):
         self.change_per_tick = change_per_tick
 
-class LegatoCommand(ChiptuneCommand):
-    """Legato Command (0xEA). legato_on is True to enable, False to disable."""
+class LegatoEnableCommand(ChiptuneCommand):
+    """Enables or disables legato for this channel."""
 
     def __init__(self, legato_on: bool):
         self.legato_on = legato_on
@@ -64,6 +64,12 @@ class VibratoCommand(ChiptuneCommand):
     def __init__(self, speed: int, depth: int):
         self.speed = speed
         self.depth = depth
+
+class EchoEnableCommand(ChiptuneCommand):
+    """Enables or disables echo for this channel"""
+
+    def __init__(self, echo_on: bool):
+        self.echo_on = echo_on
 
 class SetTickRateCommand(ChiptuneCommand):
     """Sets the Tick Rate. tick_rate is from 000 to 3FF in Hz."""
