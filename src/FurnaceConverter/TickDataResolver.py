@@ -39,6 +39,7 @@ class TickDataResolver():
         furnace_ticks = self.resolve_quick_legato(furnace_ticks)
 
         # convert portamento into note slides so AMK Converter doesn't need to worry about porta logic
+        # Note: portamentos are unaffected by smaple mapped note changes. This is how it works in Furnace.
         furnace_ticks = self.resolve_portamento(furnace_ticks)
 
         # convert macros into plain commands
