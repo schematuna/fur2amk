@@ -54,6 +54,8 @@ which has high moderation standards.
 - ED: Note Delay
 - EE: Send External Command (for fur2amk hints, see below)
 - F0: Set Tick Rate (BPM)
+- F1: Single tick pitch up
+- F2: Single tick pitch down
 - F3: Fine Volume Slide Up
 - F4: Fine Volume Slide Down
 - F8: Single tick volume up
@@ -86,7 +88,6 @@ AMK only supports C1 -> A6. If any notes are out of this range they will be octa
 - **Most Macros** are not yet supported. Only 1 Volume value, 1 Noise Freq value, up to 2 Gain values, and the Special Echo and Noise flags are supported. 
 - **Alternating Speeds and Grooves** are not supported.
 - **Compatibility Flags** are not supported. Conversion assumes that all compatibility flags are disabled.
-- **E5: Set Pitch** will not work when used mid-note. Use legato and new notes for this.
 
 ## Removing the N-SPC 1-tick gap
 
