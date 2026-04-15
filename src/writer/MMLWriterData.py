@@ -64,8 +64,16 @@ class MMLWord:
 
         return space_after_pitchbend
 
+
     def to_mml(self, mml_state: MMLState) -> str:
         word_txt = ''
+        # special case for 0-tick words
+        if self.duration == 0:
+            for cmd in self.commands:
+                word_txt += cmd.get_text(mml_state)
+
+            return word_txt
+
         command_idx = 0
         cur_tick = self.tick
         # sort commands by tick, since we will iterate through them in order
