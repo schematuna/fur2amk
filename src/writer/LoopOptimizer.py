@@ -58,14 +58,13 @@ class LoopOptimizer:
             sentence.words[0].commands.insert(0, cmd)
 
         return sentence
-
     
     @staticmethod 
     def fudge_equality(group1: List[MMLSentence], group2: List[MMLSentence]) -> Tuple[bool, List[MMLSentence], List[MMLSentence]]:
         '''Compares two MML sections, returns whether they're equal.
            If equal, also returns new MMLSections with unique initial commands split off into
            a new initial sentence. '''
-        
+
         group1_local = copy.deepcopy(group1)
         group2_local = copy.deepcopy(group2)
 
@@ -89,15 +88,20 @@ class LoopOptimizer:
                 group1_local.insert(0, MMLSentence([initial_word1]))
 
             if len(unique2) > 0:
-                # don't allow this case for now
-                # would need to accommadate in optimization algo
-                return False, None, None
                 initial_word2 = MMLWord(group2_local[0].words[0].tick, 0, None, unique2)
                 group2_local.insert(0, MMLSentence([initial_word2]))
 
             return True, group1_local, group2_local
         else:
             return False, None, None
+        
+    @staticmethod
+    def fudge_group_in_dict(group: List[MMLSentence], groups: Dict[int, List[MMLSentence]]) -> bool:
+        for grp in groups.values():
+            if LoopOptimizer.fudge_equality(grp, group)[0]:
+                return True
+            
+        return False
 
 
     def optimize_loops_v2(self, sections: List[MMLSection], label_count: int) -> int:
@@ -108,19 +112,11 @@ class LoopOptimizer:
             group = section.sentences
             # Check if this section matches any prior seen sections
             # accounting for any extra commands at start of first section
-            matched_sec = None
-            for grp in unique_groups.values():
-                if self.fudge_equality(grp, group)[0]:
-                    matched_sec = grp
-                    break
-            if matched_sec is None:
+            if not LoopOptimizer.fudge_group_in_dict(group, unique_groups):
                 unique_groups[i] = group
                 section.loopInfo = [LoopInfo(range(len(group)))]
-            elif group not in labels_assigned.values():
-                # Assign a label to this repeated pattern
-                labels_assigned[label_count] = group
-                section.loopInfo = [LoopInfo(range(len(group)), label_count, True)]
-                # and mark the first occurrence
+            elif not LoopOptimizer.fudge_group_in_dict(group, labels_assigned):
+                # find the first occurrence
                 for order, uniq_grp in unique_groups.items():
                     eq, uniq_grp, grp = self.fudge_equality(uniq_grp, group)
                     if eq:
@@ -128,17 +124,37 @@ class LoopOptimizer:
                         sections[order].sentences = uniq_grp
                         section.sentences = grp
                         # and mark initial unique section with label
+                        core_sentences = uniq_grp
                         if uniq_grp[0].words[0].duration == 0:
+                            # grab the common sentence group
+                            core_sentences = uniq_grp[1:]
+                            # and update the initial section's loop info
                             sections[order].loopInfo.insert(0, LoopInfo([0]))
                             sections[order].loopInfo[1].sentenceIndices = range(1, len(uniq_grp))
                         sections[order].loopInfo[-1].label = label_count
+
+                        # Assign a label to this repeated pattern
+                        labels_assigned[label_count] = core_sentences
+                        # and configure this section's loop info
+                        # separating out initial commands if applicable
+                        if grp[0].words[0].duration == 0:
+                            section.loopInfo = [LoopInfo([0]), LoopInfo([1, len(group)], label_count, True)]
+                        else:
+                            section.loopInfo = [LoopInfo([0, len(group)], label_count, True)]
+
                         break
                 label_count += 1
             else:
                 # Find the existing label for this pattern
                 for lbl, assigned_grp in labels_assigned.items():
-                    eq, _, _ = self.fudge_equality(assigned_grp, group)
+                    eq, _, grp = self.fudge_equality(assigned_grp, group)
                     if eq:
-                        section.loopInfo = [LoopInfo(range(len(group)), lbl, True)]
+                        section.sentences = grp
+                        # set the loop info for this repeated pattern
+                        if grp[0].words[0].duration == 0:
+                            section.loopInfo = [LoopInfo([0]), LoopInfo([1, len(grp)], lbl, True)]
+                        else:
+                            section.loopInfo = [LoopInfo([0, len(grp)], lbl, True)]
+
                         break
         return label_count
