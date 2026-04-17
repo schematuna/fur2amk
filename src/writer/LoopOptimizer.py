@@ -172,40 +172,49 @@ class LoopOptimizer:
                     for idx in loop.sentenceIndices:
                         looped_sentences.append(section.sentences[idx])
 
+                    loop.subLoops = []
+
                     search_buffer: List[MMLSentence] = []
                     lookahead_buffer: List[MMLSentence] = looped_sentences
                     last_match: List[MMLSentence] = None
+                    # search buffer position relative to section start
+                    cur_buffer_pos = loop.sentenceIndices[0]
                     while len(lookahead_buffer) > 0:
                         search_sentence = lookahead_buffer[0]
+                        found_match = False
                         for i, buffer_sentence in enumerate(search_buffer):
-                            found_match = False
                             if buffer_sentence == search_sentence:
                                 # buffer must have a match from matched sentence to end of buffer
                                 # since matches have to be consecutive
                                 search_match = search_buffer[i:]
-                                if search_match == last_match:
-                                    # we have 3 or more consecutive matches
-                                    # increase numRepeats on subloop
-                                    # loop.subLoops[].numRepeats += 1
+                                # if search_match == last_match:
+                                #     # we have 2 or more consecutive matches
+                                #     # increase numRepeats on subloop
+                                #     # loop.subLoops[].numRepeats += 1
+                                #     found_match = True
+                                #     break
+                                # else:
+                                # can't match a pattern greater than the number of sentences left to check
+                                match_len = len(search_match)
+                                if match_len > len(lookahead_buffer):
+                                    continue
+                                lookahead_match = lookahead_buffer[:match_len]
+
+                                if search_match == lookahead_match:
+                                    # we have a consecutive match
+                                    last_match = search_match
+                                    # set loop info
+                                    relative_pos = cur_buffer_pos + i
+                                    if i > 0:
+                                        loop.subLoops.append(SubLoopInfo(list(range(cur_buffer_pos, relative_pos))))
+                                    loop.subLoops.append(SubLoopInfo(list(range(relative_pos, relative_pos + match_len)), 2))
                                     found_match = True
                                     break
-                                else:
-                                    # can't match a pattern greater than the number of sentences left to check
-                                    match_len = len(search_match)
-                                    if match_len > len(lookahead_buffer):
-                                        continue
-                                    lookahead_match = lookahead_buffer[0:match_len-1]
-
-                                    if search_match == lookahead_match:
-                                        # we have a consecutive match
-                                        last_match = search_match
-                                        # set loop info
-                                        # loop.subLoops.append(SubLoopInfo())
-                                        found_match = True
-                                        break
 
                         # update state after this check
                         if found_match:
+                            # track buffer position relative to main loop start
+                            cur_buffer_pos += len(search_buffer) + len(last_match)
                             # can't match anything but the last match from the existing search buffer
                             search_buffer.clear()
                             # remove match from lookahead
@@ -213,6 +222,8 @@ class LoopOptimizer:
                         else:
                             search_buffer.append(lookahead_buffer.pop(0))
 
+                    if len(search_buffer) > 0:
+                        loop.subLoops.append(SubLoopInfo(list(range(cur_buffer_pos, cur_buffer_pos + len(search_buffer)))))
 
 
                         
