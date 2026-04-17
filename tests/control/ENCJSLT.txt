@@ -51,7 +51,7 @@
     "09_jsma502a__2024-06-24_182000_.brr"         $FF $EE $80 $02 $A3 ;@46
 }
 
-; created with fur2amk 0.5.1
+; created with fur2amk 0.5.2
 
 w254 t76
 
@@ -76,6 +76,7 @@ v70 c64 v70 c64 v70 c64 v70 c64 v70 c64 v77 c64 v77 c64 v77 c64 v82 c64 v82 c64 
 v87 c64 v91 c64 v91 c64 v91 c64 v95 c64 v95 c64 v95 c64 v95 c64 v99 c64 v99 c64 v99 c64 v99 c64 v99 c64 v99 c64 v99 c64 v99 c64
 v104 c64 v104 c64 v104 c64 v104 c64 v104 c64 v104 c64 v104 c64 v108 c64 v108 c64 v108 c64 v111 c64 v111 c64 v111 c64 v111 c64 v111 c64 v111 c64
 ; section 01
+(5)[
 v187 c16 c16 @33 c16 @30 c16
 c8 c16 @33 c16
 c16 @30 c16 @33 c8
@@ -88,51 +89,53 @@ v187 c64 @30 v99 c64 @33 v104 c64 @30 v99 c64 @33 v187 c64 @30 v111 c64 @33 v104
 @33 c8 c16 @30 c16
 @33 v187 c64 @30 v131 c64 v121 c64 v115 c64 @33 v187 c64 @30 v104 c64 v99 c64 v77 c64 @33 v187 c8
 v187 c64 @30 v131 c64 v121 c64 v115 c64 v111 c64 v104 c64 v99 c64 v77 c64 @33 v187 c8
-; section 02
-(5)[
-@30 v187 c16 c16 @33 c16 @30 c16
-c8 c16 @33 c16
-c16 @30 c16 @33 c8
-@30 c8 v64 c64 v77 c64 v82 c64 v91 c64 v99 c64 v104 c64 v111 c64 v115 c64
-@33 v187 c16 @30 c16 @33 c16 @32 c16
-@33 c16 @30 c16 @33 c16 @31 c64 c64 c64 c64
-@33 v187 c32 v104 c32 v187 c32 v104 c32 v187 c32 v104 c32 v187 c32 v104 c32
-v187 c64 @30 v99 c64 @33 v104 c64 @30 v99 c64 @33 v187 c64 @30 v111 c64 @33 v104 c64 @30 v121 c64 @33 v187 c64 @30 v131 c64 @33 v104 c64 @30 v134 c64 @33 v187 c64 @30 v144 c64 @33 v104 c64 @30 v162 c64
-@33 v187 c8 c16 @30 c16
-@33 c8 c16 @30 c16
-@33 v187 c64 @30 v131 c64 v121 c64 v115 c64 @33 v187 c64 @30 v104 c64 v99 c64 v77 c64 @33 v187 c8
-v187 c64 @30 v131 c64 v121 c64 v115 c64 v111 c64 v104 c64 v99 c64 v77 c64 @33 v187 c8
 ]
+; section 02
+@30
+(5)
 ; section 03
+@30
 (5)
 ; section 04
+@30
 (5)
 ; section 05
+@30
 (5)
 ; section 06
+@30
 (5)
 ; section 07
+@30
 (5)
 ; section 08
+@30
 (5)
 ; section 09
+@30
 (5)
 ; section 0A
+@30
 (5)
 ; section 0B
+@30
 (5)
 ; section 0C
+@30
 (5)
 ; section 0D
-(!3, 3) (!4, -1) @45 v187 o3 b1^1 o4 f+1
-; section 0E
+(!3, 3) (!4, -1) @45
 (6)[
+v187 o3 b1^1 o4 f+1
+]
+; section 0E
+(7)[
 r1 b1^1
 ]
 ; section 0F
-v187 o3 b1^1 o4 f+1
-; section 10
 (6)
+; section 10
+(7)
 ; section 11
 r1^1^1
 
@@ -146,7 +149,7 @@ v187 c32 v164 c32 v99 c32 v99 c32 v187 c32 v164 c32 v99 c32 v99 c32
 v64 c32 v70 c32 v82 c32 v91 c32 v95 c32 v99 c32 v104 c32 v111 c32
 c32 c32 c32 c32 c32 c32 c32 c32
 ; section 01
-(7)[
+(8)[
 @34 v255 c16 @37 v164 c16 v164 c8
 @35 v206 c8 @34 v255 c8
 @36 v255 c8 @35 v137 c8
@@ -161,27 +164,27 @@ c32 c32 c32 c32 c32 c32 c32 c32
 @35 v164 c8 @36 v255 c8
 ]
 ; section 02
-(7)
+(8)
 ; section 03
-(7)
+(8)
 ; section 04
-(7)
+(8)
 ; section 05
-(7)
+(8)
 ; section 06
-(7)
+(8)
 ; section 07
-(7)
+(8)
 ; section 08
-(7)
+(8)
 ; section 09
-(7)
+(8)
 ; section 0A
-(7)
+(8)
 ; section 0B
-(7)
+(8)
 ; section 0C
-(7)
+(8)
 ; section 0D
 r1 (!3, 3) (!4, -1) @45 v187 b1^2 o5 f+2
 ; section 0E
@@ -198,31 +201,35 @@ r1^1^1^1^1^1
 ; section 00
 @37 v196 o4 c8 v196 c8 v196 c8 v196 c8 v196 c8 v196 c8 v196 c8 v196 c8
 ; section 01
-@39 v137 o6 d2 $DD$00$60 c+^2 $DD$00$60 c^2 $DD$00$60 o5 b^2 $DD$00$60 a+^2 $DD$00$60 a^2 $DD$00$60 g+
+@39
+(9)[
+v137 o6 d2 $DD$00$60 c+^2 $DD$00$60 c^2 $DD$00$60 o5 b^2 $DD$00$60 a+^2 $DD$00$60 a^2 $DD$00$60 g+
+]
 ; section 02
-(8)[
+(10)[
 c+2 $DD$00$60 c^2 $DD$00$60 o4 b^2 $DD$00$60 a+^2 $DD$00$60 a^2 $DD$00$60 g+^2 $DD$00$60 g
 ]
 ; section 03
-v137 o6 d2 $DD$00$60 c+^2 $DD$00$60 c^2 $DD$00$60 o5 b^2 $DD$00$60 a+^2 $DD$00$60 a^2 $DD$00$60 g+
+(9)
 ; section 04
-(8)
+(10)
 ; section 05
-@43 v255 o1 d+1^1^1
-; section 06
-(9)[
-v255 d+1^1^1
+@43
+(11)[
+v255 o1 d+1^1^1
 ]
+; section 06
+(11)
 ; section 07
-(9)
+(11)
 ; section 08
-(9)
+(11)
 ; section 09
-(10)[
+(12)[
 v255 g+1^1^1
 ]
 ; section 0A
-(10)
+(12)
 ; section 0B
 v255 a+1^1^1
 ; section 0C
@@ -230,13 +237,13 @@ v255 o2 c1^2 o1 f1^2
 ; section 0D
 r1^2 (!3, 3) (!4, -1) @45 v164 o6 c+1^2
 ; section 0E
-(11)[
+(13)[
 o3 b1^1^1
 ]
 ; section 0F
 r1^2 v164 o6 c+1^2
 ; section 10
-(11)
+(13)
 ; section 11
 r1^1^1
 
@@ -247,41 +254,48 @@ r1^1^1
 ; section 00
 r1
 ; section 01
-@39 v137 o5 a2 $DD$00$60 g+^2 $DD$00$60 g^2 $DD$00$60 f+^2 $DD$00$60 f^2 $DD$00$60 e^2 $DD$00$60 d+
+@39
+(14)[
+v137 o5 a2 $DD$00$60 g+^2 $DD$00$60 g^2 $DD$00$60 f+^2 $DD$00$60 f^2 $DD$00$60 e^2 $DD$00$60 d+
+]
 ; section 02
-(12)[
+(15)[
 o4 g+2 $DD$00$60 g^2 $DD$00$60 f+^2 $DD$00$60 f^2 $DD$00$60 e^2 $DD$00$60 d+^2 $DD$00$60 d
 ]
 ; section 03
-v137 o5 a2 $DD$00$60 g+^2 $DD$00$60 g^2 $DD$00$60 f+^2 $DD$00$60 f^2 $DD$00$60 e^2 $DD$00$60 d+
+(14)
 ; section 04
-(12)
+(15)
 ; section 05
-(!3, 3) (!4, -1) @45 v190 o3 b1^1 o4 f+1
+(!3, 3) (!4, -1) @45
+(16)[
+v190 o3 b1^1 o4 f+1
+]
 ; section 06
-(13)[
+(17)[
 o3 b1^1^1
 ]
 ; section 07
-(14)[
-v190 b1^1 o4 f+1
-]
+(16)
 ; section 08
-(13)
+(17)
 ; section 09
-(14)
+(16)
 ; section 0A
-(13)
+(17)
 ; section 0B
-(14)
+(16)
 ; section 0C
-(13)
+(17)
 ; section 0D
-(!99, 0) @46 v187 c4^8 g4^8 o3 g4^8 a4^8 o4 e2 c4^8 d8 a4^8 o3 g8
+(!99, 0) @46
+(18)[
+v187 o4 c4^8 g4^8 o3 g4^8 a4^8 o4 e2 c4^8 d8 a4^8 o3 g8
+]
 ; section 0E
 r1^1^1
 ; section 0F
-v187 o4 c4^8 g4^8 o3 g4^8 a4^8 o4 e2 c4^8 d8 a4^8 o3 g8
+(18)
 ; section 10
 r1^1^1^1^1^1
 
@@ -292,41 +306,46 @@ r1^1^1^1^1^1
 ; section 00
 r1
 ; section 01
-@40 v99 o3 a1^1^1
-; section 02
-(15)[
-v99 a1^1^1
+@40
+(19)[
+v99 o3 a1^1^1
 ]
+; section 02
+(19)
 ; section 03
-(15)
+(19)
 ; section 04
 v99 a1^1^1^1
 ; section 05
-(!3, 3) (!4, -1) @45 v190 o5 c+2 v137 o6 c+1 o5 f+1^2^4
+(!3, 3) (!4, -1) @45
+(20)[
+v190 o5 c+2 v137 o6 c+1 o5 f+1^2^4
+]
 ; section 06
-(16)[
+(21)[
 o4 b1^1^2^4
 ]
 ; section 07
-(17)[
-v190 o5 c+2 v137 o6 c+1 o5 f+1^2^4
-]
+(20)
 ; section 08
-(16)
+(21)
 ; section 09
-(17)
+(20)
 ; section 0A
-(16)
+(21)
 ; section 0B
-(17)
+(20)
 ; section 0C
-o4 b1^2^4
+b1^2^4
 ; section 0D
-(!99, 0) @46 v187 f4^8 o5 c4^8 o4 c4^8 d4^8 a2 f4^8 g8 o5 d4^8 o4 c8
+(!99, 0) @46
+(22)[
+v187 f4^8 o5 c4^8 o4 c4^8 d4^8 a2 f4^8 g8 o5 d4^8 o4 c8
+]
 ; section 0E
 r1^1^1
 ; section 0F
-v187 f4^8 o5 c4^8 o4 c4^8 d4^8 a2 f4^8 g8 o5 d4^8 o4 c8
+(22)
 ; section 10
 r1^1^1^1^1^1
 
@@ -335,20 +354,8 @@ r1^1^1^1^1^1
 ; section 00
 r1
 ; section 01
-@41 v187 o4 e16 r16 v187 o3 a16 r16
-v99 o4 e16 r16 v187 e8
-v187 o3 a8 v137 a16 r16
-v99 o4 e16 r16 v187 e32 r32 v77 e32 r32
-v187 e8 o3 a16 v187 o4 e16
-v137 b32 r32 v187 e16 e32 r32 v137 e32 r32
-v187 e8 o3 a8
-v137 o4 b16 e32 r32 o3 a32 r32 a32 r32
-o4 e16 r16 o3 a16 o4 b32 r32
-v137 e16 r16 v187 e8
-v187 o3 a8 v137 a8
-v99 o4 e32 r16^32 v99 o3 a32 r16^32
-; section 02
-(18)[
+@41
+(23)[
 v187 o4 e16 r16 v187 o3 a16 r16
 v99 o4 e16 r16 v187 e8
 v187 o3 a8 v137 a16 r16
@@ -362,24 +369,26 @@ v137 e16 r16 v187 e8
 v187 o3 a8 v137 a8
 v99 o4 e32 r16^32 v99 o3 a32 r16^32
 ]
+; section 02
+(23)
 ; section 03
-(18)
+(23)
 ; section 04
-(18)
+(23)
 ; section 05
-(18)
+(23)
 ; section 06
-(18)
+(23)
 ; section 07
-(18)
+(23)
 ; section 08
-(18)
+(23)
 ; section 09
-(18)
+(23)
 ; section 0A
-(18)
+(23)
 ; section 0B
-(18)
+(23)
 ; section 0C
 v187 o4 e16 r16 v187 o3 a16 r16
 v99 o4 e16 r16 v187 e8
@@ -401,15 +410,18 @@ v99 o4 e32 r16^32 v99 o3 a32 r1^1^1^1^1^1^1^1^1^1^1^1^1^1^1^16^32
 ; section 00
 r1^1^1^1^1^1^1^1^1^1^1^1^1
 ; section 05
-(!1, 3) (!2, -1) @44 v137 o4 a+8 o5 f8
+(!1, 3) (!2, -1) @44
+(24)[
+v137 o4 a+8 o5 f8
 a+8 c+8 d+8 g+8
 c+8 d+8 g+8 f8
 o4 g+8 a+8
 o5 d+8 c8 o4 a+8 o5 f8
 o6 c8 o5 f8
 g+8 a+8 o6 f8 o5 a+8 o6 c8 d+8
+]
 ; section 06
-(19)[
+(25)[
 o5 a+8 f8 g+8 d+8
 c+8 d+8 c8 c+8
 g+8 f8 d+8 o4 a+8
@@ -419,25 +431,17 @@ c+8 d+8 o4 a+8 g+8
 o5 f8 a+8 d+8 f8
 ]
 ; section 07
-(20)[
-v137 o4 a+8 o5 f8
-a+8 c+8 d+8 g+8
-c+8 d+8 g+8 f8
-o4 g+8 a+8
-o5 d+8 c8 o4 a+8 o5 f8
-o6 c8 o5 f8
-g+8 a+8 o6 f8 o5 a+8 o6 c8 d+8
-]
+(24)
 ; section 08
-(19)
+(25)
 ; section 09
-(20)
+(24)
 ; section 0A
-(19)
+(25)
 ; section 0B
-(20)
+(24)
 ; section 0C
-(19)
+(25)
 ; section 0D
 r1^1^1^1^1^1^1^1^1^1^1^1^1^1^1
 
@@ -446,23 +450,25 @@ r1^1^1^1^1^1^1^1^1^1^1^1^1^1^1
 ; section 00
 r1
 ; section 01
-@42 v58 o4 c1^1^1
+@42
+(26)[
+v58 o4 c1^1^1
+]
 ; section 02
-(21)[
-v58 c1^1^1
-]
+(26)
 ; section 03
-(21)
+(26)
 ; section 04
-(21)
+(26)
 ; section 05
-@46 v255 c4^8 g4^8 o3 g4^8 a4^8 o4 e2 c4^8 d8 a4^8 o3 g1^1^1^8
-; section 07
-(22)[
-v255 o4 c4^8 g4^8 o3 g4^8 a4^8 o4 e2 c4^8 d8 a4^8 o3 g1^1^1^8
+@46
+(27)[
+v255 c4^8 g4^8 o3 g4^8 a4^8 o4 e2 c4^8 d8 a4^8 o3 g1^1^1^8
 ]
+; section 07
+(27)
 ; section 09
-(22)
+(27)
 ; section 0B
 v255 o4 c4^8
 g4^8 o3 g4^8
