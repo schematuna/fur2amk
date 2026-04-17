@@ -54,9 +54,7 @@ class LoopOptimizer:
     
     @staticmethod
     def rehead_sentence(sentence: MMLSentence, cmds: List[MMLCommand]) -> MMLSection:
-        for cmd in cmds:
-            sentence.words[0].commands.insert(0, cmd)
-
+        sentence.words[0].commands = cmds + sentence.words[0].commands
         return sentence
     
     @staticmethod 
