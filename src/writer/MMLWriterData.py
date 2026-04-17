@@ -158,6 +158,13 @@ class MMLSentence:
             sentence_txt += word.to_mml(mml_state) + ' '
         return sentence_txt.rstrip()
 
+@dataclass
+class SubLoopInfo:
+    # indices of looped sentences, relative to parent loop
+    sentenceIndices: List[int]
+    # How many times this loops
+    numLoops: int
+
 # loop info for a group of sentences which may be:
 #   - an unlooped set of sentences
 #   - a looped set of sentences
@@ -173,6 +180,8 @@ class LoopInfo:
     isRepeat: int = False
     # how many times this group is looped, if at all
     numLoops: int = None
+    # subloops within this loop (uses AMK superloops)
+    subLoops: List[SubLoopInfo] = None
 
 # a segment of MML usually representing a musical section
 # the MMLSection will be labelled in the MML with the section number
