@@ -51,7 +51,7 @@
     "03_S4_SoftTrb.brr"           $00 $00 $3A $05 $63 ;@50
 }
 
-; created with fur2amk 0.5.1
+; created with fur2amk 0.5.2
 
 w194 t52
 
@@ -77,11 +77,14 @@ v202 y20 f2 @34 v159 y0 o3 e2
 
 #1
 ; section 00
-@39 v202 o3 c1
+@39
+(3)[
+v202 o3 c1
+]
 /
 ; reset state on loop
 @39 
 ; section 01
-v202 c1
+(3)
 
 
