@@ -182,18 +182,24 @@ class LoopOptimizer:
                     while len(lookahead_buffer) > 0:
                         search_sentence = lookahead_buffer[0]
                         found_match = False
+                        # check if this is another consecutive repeat of the last match
+                        if last_match and len(lookahead_buffer) > len(last_match) \
+                                      and lookahead_buffer[:len(last_match)] == last_match:
+                            # search buffer should be empty here since we're coming fresh off a match
+                            assert(len(search_buffer) == 0)
+                            loop.subLoops[-1].numLoops += 1
+                            found_match = True
+                        else:
+                            # end match chain as soon as it is broken
+                            # since matches must be consecutive
+                            last_match = None
+
+                        # check for any consecutive matches in search buffer
                         for i, buffer_sentence in enumerate(search_buffer):
                             if buffer_sentence == search_sentence:
                                 # buffer must have a match from matched sentence to end of buffer
                                 # since matches have to be consecutive
                                 search_match = search_buffer[i:]
-                                # if search_match == last_match:
-                                #     # we have 2 or more consecutive matches
-                                #     # increase numRepeats on subloop
-                                #     # loop.subLoops[].numRepeats += 1
-                                #     found_match = True
-                                #     break
-                                # else:
                                 # can't match a pattern greater than the number of sentences left to check
                                 match_len = len(search_match)
                                 if match_len > len(lookahead_buffer):

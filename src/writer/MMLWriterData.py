@@ -163,7 +163,7 @@ class SubLoopInfo:
     # indices of looped sentences, relative to parent loop
     sentenceIndices: List[int]
     # How many times this loops
-    numLoops: int = None
+    numLoops: int = 1
 
 # loop info for a group of sentences which may be:
 #   - an unlooped set of sentences
@@ -310,11 +310,11 @@ class MMLSection:
                 else:
                     line_txt += f"({info.label})[\n"
                     for subloop in info.subLoops:
-                        if subloop.numLoops:
+                        if subloop.numLoops > 1:
                             line_txt += f"[[\n"
                         for idx in subloop.sentenceIndices:
                             line_txt += self.sentences[idx].to_mml(mml_state) + '\n'
-                        if subloop.numLoops:
+                        if subloop.numLoops > 1:
                             line_txt += f"]]{subloop.numLoops}\n"
                     line_txt += "]"
             else:

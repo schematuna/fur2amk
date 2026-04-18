@@ -42,7 +42,7 @@
     @15  $8E $E0 $80 $01 $E4 ;@53
 }
 
-; created with fur2amk 0.5.1
+; created with fur2amk 0.5.2
 
 w254 t38
 
@@ -56,10 +56,10 @@ $F1 $00 $00 $01
 $F4$02 
 ; section 00
 (1)[
+[[
 @44 v221 o4 c8^16 c8 c16 @45 o3 c4 v159 c16 v131 c32 v183 c32
 @44 v221 o4 c4^16 v131 c16 @45 v221 o3 c8^16 v159 c8 v115 c16
-@44 v221 o4 c8^16 c8 c16 @45 o3 c4 v159 c16 v131 c32 v183 c32
-@44 v221 o4 c4^16 v131 c16 @45 v221 o3 c8^16 v159 c8 v115 c16
+]]2
 ]
 /
 ; reset state on loop
