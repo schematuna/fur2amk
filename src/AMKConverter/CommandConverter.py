@@ -191,6 +191,8 @@ class TuningConverter():
                 note2 = copy.deepcopy(retuned_note)
                 note2.tick = tick
                 note2.duration = retuned_note.duration - note1.duration
+                # only first note keeps the pre-note commands
+                note2.pre_note_commands = []
                 split_notes.pop(idx)
                 split_notes.insert(idx, note1)
                 split_notes.insert(idx + 1, note2)
