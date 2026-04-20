@@ -179,7 +179,7 @@ class LoopInfo:
     # whether this is a repeat of a previous loop, in which case only the label will be shown
     isRepeat: int = False
     # how many times this group is looped, if at all
-    numLoops: int = None
+    numLoops: int = 1
     # subloops within this loop (uses AMK superloops)
     subLoops: List[SubLoopInfo] = None
 
@@ -318,8 +318,12 @@ class MMLSection:
                             line_txt += f"]]{subloop.numLoops}\n"
                     line_txt += "]"
             else:
+                if info.numLoops > 1:
+                    line_txt += f"[\n"
                 for idx in info.sentenceIndices:
                     line_txt += self.sentences[idx].to_mml(mml_state) + '\n'
+                if info.numLoops > 1:
+                    line_txt += f"]{info.numLoops}\n"
 
         # don't want last newline, strip it
         return line_txt.rstrip()

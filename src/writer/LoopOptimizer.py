@@ -3,37 +3,7 @@ import copy
 
 from .MMLWriterData import *
 
-class LoopOptimizer:
-    def __init__(self):
-        pass
-
-    def optimize_loops(self, sections: List[MMLSection], label_count: int) -> int:
-        # Identify and label loops in the channel lines
-        labels_assigned: Dict[int, MMLSection] = {}
-        unique_sections: Dict[int, MMLSection] = {}
-        for i, section in enumerate(sections):
-            # Check for repeated patterns
-            if section not in unique_sections.values():
-                unique_sections[i] = section
-                section.loopInfo = [LoopInfo(range(len(section.sentences)))]
-            elif section not in labels_assigned.values():
-                # Assign a label to this repeated pattern
-                labels_assigned[label_count] = section
-                section.loopInfo = [LoopInfo(range(len(section.sentences)), label_count, True)]
-                # and mark the first occurrence
-                for order, section2 in unique_sections.items():
-                    if section2 == section:
-                        sections[order].loopInfo[0].label = label_count
-                        break
-                label_count += 1
-            else:
-                # Find the existing label for this pattern
-                for lbl, section2 in labels_assigned.items():
-                    if section2 == section:
-                        section.loopInfo = [LoopInfo(range(len(section.sentences)), lbl, True)]
-                        break
-        return label_count
-    
+class LoopOptimizer:    
     @staticmethod
     def behead_sentence(sentence: MMLSentence) -> Tuple[MMLSentence, List[MMLCommand]]:
         sentence_local = copy.deepcopy(sentence)
@@ -101,8 +71,7 @@ class LoopOptimizer:
             
         return False
 
-
-    def optimize_loops_v2(self, sections: List[MMLSection], label_count: int) -> int:
+    def label_repeated_sections(self, sections: List[MMLSection], label_count: int) -> int:
         """Iterates through the sections, identifying duplicates and assigning loop metadata.
            Uses 'fudge' comparisons between sentence groups, recognizing equality even if 
            initial 0-tick commands differ. These commands then get split out of the loop."""
@@ -172,64 +141,90 @@ class LoopOptimizer:
                     for idx in loop.sentenceIndices:
                         looped_sentences.append(section.sentences[idx])
 
-                    loop.subLoops = []
+                    loopInfo = self.lz77(looped_sentences)
+                    # apply loop sentence offset
+                    idx_offset = loop.sentenceIndices[0]
+                    for info in loopInfo:
+                        info.sentenceIndices = [x + idx_offset for x in info.sentenceIndices]
 
-                    search_buffer: List[MMLSentence] = []
-                    lookahead_buffer: List[MMLSentence] = looped_sentences
-                    last_match: List[MMLSentence] = None
-                    # search buffer position relative to section start
-                    cur_buffer_pos = loop.sentenceIndices[0]
-                    while len(lookahead_buffer) > 0:
-                        search_sentence = lookahead_buffer[0]
-                        found_match = False
-                        # check if this is another consecutive repeat of the last match
-                        if last_match and len(lookahead_buffer) > len(last_match) \
-                                      and lookahead_buffer[:len(last_match)] == last_match:
-                            # search buffer should be empty here since we're coming fresh off a match
-                            assert(len(search_buffer) == 0)
-                            loop.subLoops[-1].numLoops += 1
-                            found_match = True
-                        else:
-                            # end match chain as soon as it is broken
-                            # since matches must be consecutive
-                            last_match = None
+                    loop.subLoops = loopInfo
 
-                        # check for any consecutive matches in search buffer
-                        for i, buffer_sentence in enumerate(search_buffer):
-                            if buffer_sentence == search_sentence:
-                                # buffer must have a match from matched sentence to end of buffer
-                                # since matches have to be consecutive
-                                search_match = search_buffer[i:]
-                                # can't match a pattern greater than the number of sentences left to check
-                                match_len = len(search_match)
-                                if match_len > len(lookahead_buffer):
-                                    continue
-                                lookahead_match = lookahead_buffer[:match_len]
+    def optimize_loops(self, sections: List[MMLSection]):
+        """optimize finer tuned intra-section loops
+           Uses a modified LZ77 alg, only allowing consecutive repeats"""
 
-                                if search_match == lookahead_match:
-                                    # we have a consecutive match
-                                    last_match = search_match
-                                    # set loop info
-                                    relative_pos = cur_buffer_pos + i
-                                    if i > 0:
-                                        loop.subLoops.append(SubLoopInfo(list(range(cur_buffer_pos, relative_pos))))
-                                    loop.subLoops.append(SubLoopInfo(list(range(relative_pos, relative_pos + match_len)), 2))
-                                    found_match = True
-                                    break
+        for i, section in enumerate(sections):
+            # Only optimize section if it hasn't been touched yet. i.e. doesn't have a label
+            if len(section.loopInfo) == 1 and section.loopInfo[0].label is None:
+                subloops = self.lz77(section.sentences)
 
-                        # update state after this check
-                        if found_match:
-                            # track buffer position relative to main loop start
-                            cur_buffer_pos += len(search_buffer) + len(last_match)
-                            # can't match anything but the last match from the existing search buffer
-                            search_buffer.clear()
-                            # remove match from lookahead
-                            lookahead_buffer = lookahead_buffer[len(last_match):]
-                        else:
-                            search_buffer.append(lookahead_buffer.pop(0))
+                loopInfo: List[LoopInfo] = []
+                for info in subloops:
+                    loopInfo.append(LoopInfo(info.sentenceIndices, None, False, info.numLoops))
 
-                    if len(search_buffer) > 0:
-                        loop.subLoops.append(SubLoopInfo(list(range(cur_buffer_pos, cur_buffer_pos + len(search_buffer)))))
+                section.loopInfo = loopInfo
 
+    def lz77(self, sentences: List[MMLSentence]) -> List[SubLoopInfo]:
+        """lz77 alg for MML sentences
+           Identifies consecutive repeated sentences and returns loop info for them"""
+        
+        loopInfo: List[SubLoopInfo] = []
 
-                        
+        search_buffer: List[MMLSentence] = []
+        lookahead_buffer: List[MMLSentence] = copy.deepcopy(sentences)
+        last_match: List[MMLSentence] = None
+        # search buffer position
+        cur_buffer_pos = 0
+        while len(lookahead_buffer) > 0:
+            search_sentence = lookahead_buffer[0]
+            found_match = False
+            # check if this is another consecutive repeat of the last match
+            if last_match and len(lookahead_buffer) >= len(last_match) \
+                          and lookahead_buffer[:len(last_match)] == last_match:
+                # search buffer should be empty here since we're coming fresh off a match
+                assert(len(search_buffer) == 0)
+                loopInfo[-1].numLoops += 1
+                found_match = True
+            else:
+                # end match chain as soon as it is broken
+                # since matches must be consecutive
+                last_match = None
+
+            # check for any consecutive matches in search buffer
+            for i, buffer_sentence in enumerate(search_buffer):
+                if buffer_sentence == search_sentence:
+                    # buffer must have a match from matched sentence to end of buffer
+                    # since matches have to be consecutive
+                    search_match = search_buffer[i:]
+                    # can't match a pattern greater than the number of sentences left to check
+                    match_len = len(search_match)
+                    if match_len > len(lookahead_buffer):
+                        continue
+                    lookahead_match = lookahead_buffer[:match_len]
+
+                    if search_match == lookahead_match:
+                        # we have a consecutive match
+                        last_match = search_match
+                        # set loop info
+                        relative_pos = cur_buffer_pos + i
+                        if i > 0:
+                            loopInfo.append(SubLoopInfo(list(range(cur_buffer_pos, relative_pos))))
+                        loopInfo.append(SubLoopInfo(list(range(relative_pos, relative_pos + match_len)), 2))
+                        found_match = True
+                        break
+
+            # update state after this check
+            if found_match:
+                # track buffer position relative to main loop start
+                cur_buffer_pos += len(search_buffer) + len(last_match)
+                # can't match anything but the last match from the existing search buffer
+                search_buffer.clear()
+                # remove match from lookahead
+                lookahead_buffer = lookahead_buffer[len(last_match):]
+            else:
+                search_buffer.append(lookahead_buffer.pop(0))
+
+        if len(search_buffer) > 0:
+            loopInfo.append(SubLoopInfo(list(range(cur_buffer_pos, cur_buffer_pos + len(search_buffer)))))
+                            
+        return loopInfo
