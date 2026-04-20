@@ -308,8 +308,10 @@ class MMLSection:
                 if info.isRepeat:
                     line_txt += f"({info.label})"
                 else:
-                    line_txt += f"({info.label})[\n"
-                    for subloop in info.subLoops:
+                    line_txt += f"({info.label})["
+                    if len(info.sentenceIndices) > 1:
+                        line_txt += "\n"
+                    for j, subloop in enumerate(info.subLoops):
                         if subloop.numLoops > 1:
                             line_txt += f"[["
                             if len(subloop.sentenceIndices) > 1:
@@ -322,6 +324,9 @@ class MMLSection:
                             if len(subloop.sentenceIndices) > 1:
                                 line_txt += "\n"
                             line_txt += f"]]{subloop.numLoops}"
+                        if j != len(info.subLoops) - 1:
+                            line_txt += "\n"
+                    if len(info.sentenceIndices) > 1:
                         line_txt += "\n"
                     line_txt += "]"
             else:

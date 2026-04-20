@@ -50,9 +50,7 @@ $F1 $03 $40 $01
 $F4$02 
 ; section 00
 @30
-(3)[
-o2 b8 b8 b8 b16 b16 b8 b8 b8 b16 b16
-]
+(3)[o2 b8 b8 b8 b16 b16 b8 b8 b8 b16 b16]
 ; section 01
 b8 b8 b8 b16 b16 b8^16 b8 b8 b16
 ; section 02
@@ -262,13 +260,9 @@ g+64 r64 g+64 r32^64 f+64 r64 e8
 #3
 ; section 00
 @34 v174
-(12)[
-o5 d+1
-]
+(12)[o5 d+1]
 ; section 01
-(13)[
-o4 g+1
-]
+(13)[o4 g+1]
 ; section 02
 (12)
 ; section 03
@@ -321,13 +315,9 @@ b8 a32 r16^32 g+16^32 r32 f+32 r32 f+8 g+32 r32 g+4^8
 #4
 ; section 00
 @34 v162 y7
-(16)[
-o4 e1
-]
+(16)[o4 e1]
 ; section 01
-(17)[
-o3 a1
-]
+(17)[o3 a1]
 ; section 02
 (16)
 ; section 03
@@ -337,17 +327,11 @@ o3 a1
 @34 
 ; section 04
 y10
-(18)[
-v156 o5 d+2 e2
-]
+(18)[v156 o5 d+2 e2]
 ; section 05
-(19)[
-f+2 f+2
-]
+(19)[f+2 f+2]
 ; section 06
-(20)[
-c+2 f+2
-]
+(20)[c+2 f+2]
 ; section 07
 c+2^4 d+8^16 e16
 ; section 08
@@ -359,9 +343,7 @@ c+2^4 d+8^16 e16
 ; section 0B
 c+2^4^8 o4 b8
 ; section 0C
-(21)[
-o5 c+1
-]
+(21)[o5 c+1]
 ; section 0D
 (21)
 ; section 0E
@@ -382,17 +364,11 @@ o4 c+2 o3 b1^2
 @34 
 ; section 04
 y7
-(22)[
-v156 o4 e2 g+2
-]
+(22)[v156 o4 e2 g+2]
 ; section 05
-(23)[
-o5 d+2 o4 b2
-]
+(23)[o5 d+2 o4 b2]
 ; section 06
-(24)[
-g+2 b2
-]
+(24)[g+2 b2]
 ; section 07
 e2^4 v104 o5 c+4
 ; section 08
@@ -416,9 +392,7 @@ g+2 o4 c2
 #6
 ; section 00
 @34 v156
-(25)[
-o3 c+1
-]
+(25)[o3 c+1]
 ; section 01
 o2 f+1
 ; section 02
@@ -430,17 +404,11 @@ o3 e1
 @34 
 ; section 04
 y13
-(26)[
-v156 b2 o4 c+2
-]
+(26)[v156 b2 o4 c+2]
 ; section 05
-(27)[
-g+2 f+2
-]
+(27)[g+2 f+2]
 ; section 06
-(28)[
-o3 a2 o4 d+2
-]
+(28)[o3 a2 o4 d+2]
 ; section 07
 c+2^4 v131 b4
 ; section 08
@@ -465,13 +433,9 @@ y7 e2 d+2
 ; section 00
 r8^16 @37 v252 y8 o3 e1
 ; section 01
-(29)[
-y12 o2 b1
-]
+(29)[y12 o2 b1]
 ; section 02
-(30)[
-y8 o3 e1
-]
+(30)[y8 o3 e1]
 ; section 03
 y12 o2 b2^4^16
 /
@@ -485,13 +449,9 @@ r8^16 y8 o3 e2^4^16
 y8 e2 y12 d+2
 ; section 07
 y10
-(31)[
-o2 b1^8^16
-]
+(31)[o2 b1^8^16]
 ; section 08
-(32)[
-y8 o3 e2^4^16
-]
+(32)[y8 o3 e2^4^16]
 ; section 09
 (29)
 ; section 0A
