@@ -253,8 +253,9 @@ class MMLWriter:
             sections.append(MMLSection(section_words, cur_section_num, self.mml_data.measure_length))
 
             optimizer = LoopOptimizer()
-            self.label_count = optimizer.optimize_loops_v2(sections, self.label_count)
+            self.label_count = optimizer.label_repeated_sections(sections, self.label_count)
             optimizer.optimize_subloops(sections)
+            optimizer.optimize_loops(sections)
 
             mml_state = MMLState()
             # light staccato is a global toggle
