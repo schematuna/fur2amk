@@ -311,19 +311,33 @@ class MMLSection:
                     line_txt += f"({info.label})[\n"
                     for subloop in info.subLoops:
                         if subloop.numLoops > 1:
-                            line_txt += f"[[\n"
-                        for idx in subloop.sentenceIndices:
-                            line_txt += self.sentences[idx].to_mml(mml_state) + '\n'
+                            line_txt += f"[["
+                            if len(subloop.sentenceIndices) > 1:
+                                line_txt += "\n"
+                        for i, idx in enumerate(subloop.sentenceIndices):
+                            line_txt += self.sentences[idx].to_mml(mml_state)
+                            if i != len(subloop.sentenceIndices) - 1:
+                                line_txt += "\n"
                         if subloop.numLoops > 1:
-                            line_txt += f"]]{subloop.numLoops}\n"
+                            if len(subloop.sentenceIndices) > 1:
+                                line_txt += "\n"
+                            line_txt += f"]]{subloop.numLoops}"
+                        line_txt += "\n"
                     line_txt += "]"
             else:
                 if info.numLoops > 1:
-                    line_txt += f"[\n"
-                for idx in info.sentenceIndices:
-                    line_txt += self.sentences[idx].to_mml(mml_state) + '\n'
+                    line_txt += "["
+                    if len(info.sentenceIndices) > 1:
+                        line_txt += "\n"
+                for i, idx in enumerate(info.sentenceIndices):
+                    line_txt += self.sentences[idx].to_mml(mml_state)
+                    if i != len(info.sentenceIndices) - 1:
+                        line_txt += "\n"
                 if info.numLoops > 1:
-                    line_txt += f"]{info.numLoops}\n"
+                    if len(info.sentenceIndices) > 1:
+                        line_txt += "\n"
+                    line_txt += f"]{info.numLoops}"
+                line_txt += "\n"
 
         # don't want last newline, strip it
         return line_txt.rstrip()
