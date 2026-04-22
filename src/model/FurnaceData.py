@@ -18,6 +18,23 @@ class SustainMode(Enum):
     EFF_EXP = 2      # Sustain with d2; key-off switches to GAIN exponential decay at rate r
     DELAYED = 3      # Sustain with d2; key-off updates ADSR R field to r
 
+class SNESMacroCode(Enum):
+    Volume = 0
+    Arpeggio = 1
+    NoiseFreq = 2
+    Waveform = 3
+    Pitch = 4
+    Special = 5
+    Gain = 6
+    PanLeft = 12
+    PanRight = 13
+
+class SpecialFlag(Enum):
+    Noise = 0
+    Echo = 1
+    PitchMod = 2
+    InvertRight = 3
+    InvertLeft = 4
 
 @dataclass
 class FurnaceSNESFlags:
@@ -48,17 +65,17 @@ class FurnaceSample:
     loop_end: Optional[int] = None
 
 @dataclass
-class FurnaceSNESMacroData:
-    is_noise: bool = None
-    is_echo: bool = None # per-instrument echo enablement
-    is_pitch_mod: bool = None
-    invert_right: bool = None # surround
-    invert_left: bool = None  # surround
-    noise_freq: Optional[int] = None # ranges 0 to 32
-    gain_values: Optional[List[int]] = None  # snes gain values
-    gain_speed: Optional[int] = None  # ticks between each gain change
-    vol_values: Optional[List[int]] = None # macro volume values
-    vol_speed: Optional[List[int]] = None # ticks between each volume change
+class FurnaceMacro:
+    # Representation of a single macro as parsed from INS2 'MA'
+    code: SNESMacroCode         # macro code
+    length: int                 # number of steps, basically the length of values list
+    loop: int                   # loop position (unused)
+    release: int                # release position (unused)
+    type: int                   # 0=normal,1=ADSR,2=LFO
+    instant_release: bool       # instant release flag (>=182) (unused)
+    delay: int                  # macro delay
+    speed: int                  # step length in ticks
+    values: List[int]           # parsed integer values (length given by entries field)
 
 @dataclass
 class FurnaceInstrument:
@@ -88,37 +105,20 @@ class FurnaceInstrument:
     waveform_length: int = 0  # from SM block
     sample_table: List[Tuple[int, int]] = field(default_factory=lambda: [(0, 1)] * 120)
     
-    # Instrument macros (INS2 'MA'): code -> macro definition
-    macros: Dict[int, "FurnaceMacro"] = field(default_factory=dict)
+    macros: List[FurnaceMacro] = field(default_factory=list)
 
-    snes_macro_data: FurnaceSNESMacroData = field(default_factory=FurnaceSNESMacroData)
-
-    # Parse SNES-specific macro flags from macros
-    # call after all macros have been read
-    def parse_snes_macro_flags(self):
-        self.logger = logging.getLogger(__name__)
-        for macro in self.macros.values():
-            if macro.code == 0:  # code 0 is volume
-                self.snes_macro_data.vol_values = macro.values
-                self.snes_macro_data.vol_speed = macro.speed
-            if macro.code == 2:  # code 2 corresponds to pitch freq
-                self.snes_macro_data.noise_freq = macro.values[0]
-            if macro.code == 5:  # code 5 corresponds to extra1 macro
-                special_snes_flags = macro.values[0]
-                self.snes_macro_data.is_noise = (special_snes_flags & 0x01) != 0
-                self.snes_macro_data.is_echo = (special_snes_flags & 0x02) != 0
-                self.snes_macro_data.is_pitch_mod = (special_snes_flags & 0x04) != 0
-                self.snes_macro_data.invert_right = (special_snes_flags & 0x08) != 0
-                self.snes_macro_data.invert_left = (special_snes_flags & 0x10) != 0
-            if macro.code == 6:  # code 6 corresponds to gain
-                self.snes_macro_data.gain_values = macro.values
-                self.snes_macro_data.gain_speed = macro.speed
-
-            if self.snes_macro_data.is_noise and self.snes_macro_data.noise_freq is None:
-                default_noise_freq = 29
-                self.logger.debug(f"Instrument {self.index:02X} is noise but has no noise_freq set; defaulting to {default_noise_freq}.")
-                self.snes_macro_data.noise_freq = default_noise_freq
-
+    def get_macro(self, macro_code: SNESMacroCode) -> FurnaceMacro:
+        for macro in self.macros:
+            if macro.code == macro_code:
+                return macro
+        return None
+    
+    def get_special_flag(self, flag: SpecialFlag) -> bool:
+        if macro := self.get_macro(SNESMacroCode.Special):
+            return ((macro.values[0] & (1 << flag.value)) != 0)
+        
+        return None
+            
     def get_initial_adsr(self) -> ADSR:
         # For sustain modes 1-3, use decay2 as the release value during note-on
         # (sn_release is only used for DIRECT mode, or when note-off happens in DELAYED mode)
@@ -127,24 +127,6 @@ class FurnaceInstrument:
 
     def get_initial_gain(self) -> SnesGain:
         return SnesGain(self.gain_mode, self.sn_gain)
-
-@dataclass
-class FurnaceMacro:
-    # Representation of a single macro as parsed from INS2 'MA'
-    # for snes, codes are interpreted as:
-    #  duty (2) = pitch freq
-    #  wave (3) = waveform
-    #  extra1 (5) = special
-    #  extra2 (6) = gain
-    code: int                   # macro code (0..21, 255=end)
-    length: int                 # number of steps, basically the length of values list
-    loop: int                   # loop position (unused)
-    release: int                # release position (unused)
-    type: int                   # 0=normal,1=ADSR,2=LFO
-    instant_release: bool       # instant release flag (>=182) (unused)
-    delay: int                  # macro delay
-    speed: int                  # step length in ticks
-    values: List[int]           # parsed integer values (length entries)
 
 # class representing a chunk of time in the Furnace sequencer. Could be a row or just a tick
 @dataclass

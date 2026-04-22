@@ -21,8 +21,8 @@ class VolumeMacroConverter:
         if is_new_note:
             # only consider first tick of volume macro for now
             new_macro_mult = self.macro_mult
-            if active_ins.snes_macro_data.vol_values:
-                new_macro_mult = active_ins.snes_macro_data.vol_values[0] / 127
+            if vol_macro := active_ins.get_macro(SNESMacroCode.Volume):
+                new_macro_mult = vol_macro.values[0] / 127
             else:
                 # mult resets to "normal" if no volume macro for this instrument
                 new_macro_mult = 1
@@ -52,12 +52,10 @@ class EchoMacroConverter:
     def get_echo_for_tick(self, tick_data: FurnaceTickData, is_new_note: bool, active_ins: FurnaceInstrument):
         echo_effect = None
         if is_new_note:
-            echo_macro = active_ins.snes_macro_data.is_echo
-            if echo_macro is not None:
-                new_ins_echo = active_ins.snes_macro_data.is_echo
-
-                if new_ins_echo != self.ins_echo:
-                    self.ins_echo = new_ins_echo
-                    echo_effect = EchoEffect(new_ins_echo)
+            new_echo = active_ins.get_special_flag(SpecialFlag.Echo)
+            if new_echo is not None:
+                if new_echo != self.ins_echo:
+                    self.ins_echo = new_echo
+                    echo_effect = EchoEffect(new_echo)
 
         return echo_effect

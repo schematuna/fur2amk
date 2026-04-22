@@ -513,19 +513,22 @@ class FurnaceParser:
                     values = _read_macro_values(word_kind, macro_length)
 
                     # Store macro by code; last occurrence wins if duplicates
-                    ins.macros[int(macro_code)] = FurnaceMacro(
-                        code=int(macro_code),
-                        length=int(macro_length),
-                        loop=int(macro_loop),
-                        release=int(macro_release),
-                        type=int(macro_type),
-                        instant_release=instant_rel,
-                        delay=int(macro_delay),
-                        speed=int(macro_speed),
-                        values=values,
-                    )
+                    try:
+                        macro_enum = SNESMacroCode(macro_code)
+                        ins.macros.append(FurnaceMacro(
+                            code=macro_enum,
+                            length=int(macro_length),
+                            loop=int(macro_loop),
+                            release=int(macro_release),
+                            type=int(macro_type),
+                            instant_release=instant_rel,
+                            delay=int(macro_delay),
+                            speed=int(macro_speed),
+                            values=values,
+                        ))
+                    except:
+                        self.logger.warning(f"Invalid macro code: {macro_code}")
 
-                    ins.parse_snes_macro_flags()  # to process macros if needed
             elif code == 'EN':
                 break
             else:
