@@ -96,7 +96,14 @@ class FurnaceConverter:
 
         chip_ins.initial_sample = fur_ins.initial_sample
 
-        chip_ins.snes_macro_data = fur_ins.snes_macro_data
+        chip_macros = ChiptuneMacroData()
+        chip_macros.is_noise = fur_ins.get_special_flag(SpecialFlag.Noise)
+        if noise_freq_macro := fur_ins.get_macro(SNESMacroCode.NoiseFreq):
+            chip_macros.noise_freq = noise_freq_macro.values[0]
+        if gain_macro := fur_ins.get_macro(SNESMacroCode.Gain):
+            chip_macros.gain_values = gain_macro.values
+            chip_macros.gain_speed = gain_macro.speed
+        chip_ins.snes_macro_data = chip_macros
 
         return chip_ins
 
