@@ -74,6 +74,15 @@ class VolumeMacroConverter:
 
         return new_vol
     
+# class ArpMacroConverter:
+#     def __init__(self):
+#         self.logger = logging.getLogger(__name__)
+#         # default starting volume is 7F
+#         self.macro_mult = 1
+#         self.timer = None
+
+#     def get_pitch_for_tick(self, tick_data: FurnaceTickData, active_ins: FurnaceInstrument):    
+    
 class EchoMacroConverter:
     def __init__(self):
         self.logger = logging.getLogger(__name__)

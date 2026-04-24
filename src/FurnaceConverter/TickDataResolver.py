@@ -43,10 +43,12 @@ class TickDataResolver():
         furnace_ticks = self.resolve_portamento(furnace_ticks)
 
         # convert macros into plain commands
+        # TODO: break this up and resolve furnace-contained macros here (like volume and echo) and chiptunedata dependent macros elsewhere (like arp and pitch)
         furnace_ticks = self.resolve_macros(furnace_ticks, instruments)
 
         # flatten sample maps into separate instruments
         # Note: after this point the instrument numbers in tick data represent chiptune instrument index, not furnace instrument index
+        # TODO: move sample map resolution to chiptune data conversion step
         furnace_ticks = self.resolve_sample_maps(furnace_ticks, instruments, ins_info)
 
         return furnace_ticks
