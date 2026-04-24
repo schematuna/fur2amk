@@ -29,6 +29,11 @@ class SNESMacroCode(Enum):
     PanLeft = 12
     PanRight = 13
 
+class SNESMacroTypes(Enum):
+    Sequence = 0
+    ADSR = 1
+    LFO = 2
+
 class SpecialFlag(Enum):
     Noise = 0
     Echo = 1
