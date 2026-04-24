@@ -203,9 +203,7 @@ class TickDataResolver():
         new_ticks = furnace_ticks
         for tick_data in new_ticks:
             note_kind = tick_data.kind()
-            is_new_note = False
             if note_kind == FurnaceTickData.NoteKind.NOTE:
-                is_new_note = True
                 new_fur_ins = None
                 for ins in instruments:
                     if ins.index == tick_data.Ins:
@@ -218,9 +216,9 @@ class TickDataResolver():
                 if active_ins is None:
                     self.logger.warning(f"No furnace instrument active in row with Note {tick_data.Note}.")
 
-            tick_data.Vol = vol_converter.get_volume_for_tick(tick_data, is_new_note, active_ins)
+            tick_data.Vol = vol_converter.get_volume_for_tick(tick_data, active_ins)
 
-            if echo_effect := echo_converter.get_echo_for_tick(tick_data, is_new_note, active_ins):
+            if echo_effect := echo_converter.get_echo_for_tick(tick_data, active_ins):
                 tick_data.Effects.append(echo_effect)
 
         return new_ticks
