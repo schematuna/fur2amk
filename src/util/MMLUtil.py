@@ -20,6 +20,7 @@ class MMLUtil:
     # Track out-of-range notes
     _out_of_range_count = 0
     # Convert -128->127 ranged values to 2's complement hex
+    # or 0->255 ranged values to hex
     @staticmethod
     def to_hex(val: int) -> str:
         return f"{(val & 0xFF):02X}" if val >= 0 else f"{((val + 256) & 0xFF):02X}"

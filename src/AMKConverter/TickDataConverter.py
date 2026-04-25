@@ -70,7 +70,14 @@ class TickDataConverter:
 
         # convert notes
         note_converter      = NoteConverter(self.tick_ratio)
-        notes, commands = note_converter.convert(proc_ticks, ins_info, chiptune_data.instruments)
+        notes, commands, pitchbends = note_converter.convert(proc_ticks, ins_info, chiptune_data.instruments)
+
+        for bend in pitchbends:
+            print(f"found bend with duration: {bend.duration} and semitones {bend.semitones}")
+
+        bend_converter      = PitchBendConverter()
+        bend_commands, notes, proc_ticks = bend_converter.convert(pitchbends, notes, proc_ticks)
+        commands.extend(bend_commands)
 
         # convert fine tune commands 
         # since AMK can't change tuning mid-note, we also split notes and wrap in legato when fine tune changes mid-note

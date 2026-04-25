@@ -9,6 +9,8 @@ from ..model.MMLData import *
 from ..model.FurnaceData import *
 from ..model.ChiptuneData import *
 
+import copy
+
 import logging
 
 # persistent channel state for conversion process
@@ -92,6 +94,18 @@ class FurnaceUtil:
             if note.tick == tick:
                 return note
         return None
+    
+    @staticmethod
+    def split_note(note, tick) -> Tuple[MMLNote, MMLNote]:
+        note1 = copy.deepcopy(note)
+        note1.duration = tick - note1.tick
+        note2 = copy.deepcopy(note)
+        note2.tick = tick
+        note2.duration = note.duration - note1.duration
+        # only first note keeps the pre-note commands
+        note2.pre_note_commands = []
+
+        return note1, note2
 
 # Create this before iterating through rows, and call tick() for each row
 # call handle_new_command whenever a relevant slide command is encountered
@@ -196,14 +210,13 @@ class SlideHelper:
         return new_command
 
 class PitchSlider(SlideHelper):
-    # pitchbend can't operate on a whole note, since 1 = 2^2 under the hood
     @staticmethod
     def get_max_duration() -> int:
-        return int(SlideHelper.get_max_duration() / 2)
+        # EB command can max out on duration
+        return 0xFF
 
-    def _get_target_amk(self) -> int:
-        # round to nearest semitone
-        return round(self.target_val)
+    def _get_target_amk(self) -> float:
+        return self.target_val
 
     def _get_change_per_tick(self, effect: FurnaceEffect) -> float:
         if effect.change_per_tick is not None:
@@ -212,10 +225,10 @@ class PitchSlider(SlideHelper):
             return None
 
     def _limit_target_val(self, target_val: float) -> float:
-        return max(MMLUtil.AMK_MIN_PITCH, min(target_val, MMLUtil.AMK_MAX_PITCH))
+        return target_val
 
-    def _get_command(self, tick: int, duration: int, target_note: int) -> MMLCommand:
-        return PitchBend(tick, duration, target_note)
+    def _get_command(self, tick: int, duration: int, target_note: float) -> MMLCommand:
+        return TempPitchBend(tick, duration, target_note)
 
 
 class PanSlider(SlideHelper):
