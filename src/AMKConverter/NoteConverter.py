@@ -166,5 +166,8 @@ class NoteConverter():
         if cur_dur is not None:
             cur_dur.duration = tick - cur_dur.tick
             notes.append(cur_dur)
+            pitch_command = slide_helper.end_slide(None)
+            if pitch_command is not None:
+                pitchbends.append(pitch_command)
 
         return notes, commands, pitchbends

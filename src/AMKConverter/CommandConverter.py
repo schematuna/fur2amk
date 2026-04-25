@@ -312,11 +312,12 @@ class PitchBendConverter:
         # create new notes for multiple bends in the same note, and wrap in legato.
         commands: List[PitchEnvelope] = []
         split_notes: List[MMLNote] = []
-        in_bend_chain = False
+        env_active = False
         for note in notes:
             bends_in_note = [bend for bend in bends if bend.tick >= note.tick and bend.tick < note.tick + note.duration]
             note_notes: List[MMLNote] = []
             if len(bends_in_note) > 0:
+                env_active = True
                 first_bend = bends_in_note[0]
                 delay = first_bend.tick - note.tick
                 bend_amt = round(first_bend.semitones)
@@ -336,6 +337,9 @@ class PitchBendConverter:
                 else:
                     note_notes.append(note)
             else:
+                if env_active:
+                    commands.append(PitchEnvelope(note.tick, 0, 0, 0))
+                    env_active = False
                 note_notes.append(note)
 
             split_notes.extend(note_notes)
