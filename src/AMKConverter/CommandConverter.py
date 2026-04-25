@@ -322,12 +322,9 @@ class PitchBendConverter:
                 bend_amt = round(first_bend.semitones)
                 commands.append(PitchEnvelope(note.tick, delay, first_bend.duration, bend_amt))
                 if len(bends_in_note) > 1:
-                    # legato_on_tick = note.tick
-                    # if legato_on_tick > 0:
-                    #     legato_on_tick -= 1
-                    # ticks[legato_on_tick].Commands.append(LegatoEnableCommand(1))
-                    # if len(ticks) > note.tick + note.duration:
-                    #     ticks[note.tick + note.duration].Commands.append(LegatoEnableCommand(0))
+                    # start tick after cause we still want inital attack
+                    ticks[note.tick + 1].Commands.append(LegatoEnableCommand(1))
+                    ticks[note.tick + note.duration - 1].Commands.append(LegatoEnableCommand(0))
                     last_note = note
                     for bend in bends_in_note[1:]:
                         note1, last_note = FurnaceUtil.split_note(last_note, bend.tick)
