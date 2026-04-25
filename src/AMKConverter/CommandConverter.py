@@ -186,13 +186,7 @@ class TuningConverter():
                 # only want to split the note if fine tune actually happened in middle of note
                 if retuned_note.tick == tick or retuned_note.duration + retuned_note.tick == tick:
                     continue
-                note1 = copy.deepcopy(retuned_note)
-                note1.duration = tick - note1.tick
-                note2 = copy.deepcopy(retuned_note)
-                note2.tick = tick
-                note2.duration = retuned_note.duration - note1.duration
-                # only first note keeps the pre-note commands
-                note2.pre_note_commands = []
+                note1, note2 = FurnaceUtil.split_note(retuned_note, tick)
                 split_notes.pop(idx)
                 split_notes.insert(idx, note1)
                 split_notes.insert(idx + 1, note2)
@@ -308,3 +302,46 @@ class EchoConverter:
                 self.logger.warning("Can't process echo on zero-tick channel.")
 
         return echo_commands
+    
+class PitchBendConverter:
+    def __init__(self) -> None:
+        self.logger = logging.getLogger(__name__)
+
+    def convert(self, bends: List[TempPitchBend], notes: List[MMLNote], ticks: List[ChiptuneTickData]) -> Tuple[List[MMLCommand], List[MMLNote], List[ChiptuneTickData]]:
+        # figure out EB commands from notes and bend info
+        # create new notes for multiple bends in the same note, and wrap in legato.
+        commands: List[PitchEnvelope] = []
+        split_notes: List[MMLNote] = []
+        in_bend_chain = False
+        for note in notes:
+            bends_in_note = [bend for bend in bends if bend.tick >= note.tick and bend.tick < note.tick + note.duration]
+            note_notes: List[MMLNote] = []
+            if len(bends_in_note) > 0:
+                first_bend = bends_in_note[0]
+                delay = first_bend.tick - note.tick
+                bend_amt = round(first_bend.semitones)
+                commands.append(PitchEnvelope(note.tick, delay, first_bend.duration, bend_amt))
+                if len(bends_in_note) > 1:
+                    # legato_on_tick = note.tick
+                    # if legato_on_tick > 0:
+                    #     legato_on_tick -= 1
+                    # ticks[legato_on_tick].Commands.append(LegatoEnableCommand(1))
+                    # if len(ticks) > note.tick + note.duration:
+                    #     ticks[note.tick + note.duration].Commands.append(LegatoEnableCommand(0))
+                    last_note = note
+                    for bend in bends_in_note[1:]:
+                        note1, last_note = FurnaceUtil.split_note(last_note, bend.tick)
+                        last_note.note += bend_amt
+                        bend_amt = round(bend.semitones)
+                        commands.append(PitchEnvelope(bend.tick, 0, bend.duration, bend_amt))
+                        note_notes.append(note1)
+                    note_notes.append(last_note)
+                else:
+                    note_notes.append(note)
+            else:
+                note_notes.append(note)
+
+            split_notes.extend(note_notes)
+
+        # return notes unaltered for now, just handled first bend of note
+        return commands, split_notes, ticks

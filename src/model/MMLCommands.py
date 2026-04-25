@@ -91,6 +91,32 @@ class PitchBend(MMLCommand):
         return f"$DD$00${MMLUtil.to_hex(self.duration)} {bend_note}"
 
 @dataclass
+class TempPitchBend(MMLCommand):
+    '''Intermediary pitchbend command
+       After conversion from chiptune data
+       but before conversion to PitchEnvelope'''
+    
+    duration: int
+    semitones: float
+
+    def to_mml(self, mml_state: 'MMLState' = None) -> str:
+        return "PLACEHOLDER"
+
+@dataclass
+class PitchEnvelope(MMLCommand):
+    # Attack Pitch Envelope
+    # Prefer this to regular PitchBend command because it doesn't require special duration formatting
+
+    delay: int     # 0 -> 255
+    duration: int  # 0 -> 255
+    semitones: int # -127 -> 128
+
+    def to_mml(self, mml_state: 'MMLState' = None) -> str:
+        return f"$EB${MMLUtil.to_hex(self.delay)}${MMLUtil.to_hex(self.duration)}${MMLUtil.to_hex(self.semitones)}"
+
+   
+
+@dataclass
 class VolumeFade(MMLCommand):
     duration: int = 0
     target_volume: int = 0
