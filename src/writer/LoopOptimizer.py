@@ -3,7 +3,10 @@ import copy
 
 from .MMLWriterData import *
 
-class LoopOptimizer:    
+class LoopOptimizer:
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+
     @staticmethod
     def behead_sentence(sentence: MMLSentence) -> Tuple[MMLSentence, List[MMLCommand]]:
         sentence_local = copy.deepcopy(sentence)
@@ -41,15 +44,31 @@ class LoopOptimizer:
 
         # check for equality without initial commands
         if group1_local == group2_local:
-            common_cmds = [item for item in initial_cmds1 if item in initial_cmds2]
+            tmp_cmds = initial_cmds2.copy()
+            common_cmds: list[MMLCommand] = []
+            for cmd in initial_cmds1:
+                if cmd in tmp_cmds:
+                    common_cmds.append(cmd)
+                    tmp_cmds.remove(cmd)
 
             # rebuild sections with split initial commands
             if len(common_cmds) > 0:
                 group1_local[0] = LoopOptimizer.rehead_sentence(group1_local[0], common_cmds)
                 group2_local[0] = LoopOptimizer.rehead_sentence(group2_local[0], common_cmds)
 
-            unique1 = [item for item in initial_cmds1 if item not in initial_cmds2]
-            unique2 = [item for item in initial_cmds2 if item not in initial_cmds1]
+            unique1 = initial_cmds1.copy()
+            for cmd in common_cmds:
+                if cmd in unique1:
+                    unique1.remove(cmd)
+                else:
+                    print("Expected to find command in loop optimization. Something went wrong.")
+
+            unique2 = initial_cmds2.copy()
+            for cmd in common_cmds:
+                if cmd in unique2:
+                    unique2.remove(cmd)
+                else:
+                    print("Expected to find command in loop optimization. Something went wrong.")
 
             if len(unique1) > 0:
                 initial_word1 = MMLWord(group1_local[0].words[0].tick, 0, None, unique1)
