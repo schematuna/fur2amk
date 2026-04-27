@@ -97,7 +97,7 @@ class TempPitchBend(MMLCommand):
        but before conversion to PitchEnvelope'''
     
     duration: int
-    semitones: float
+    target_note: float
 
     def to_mml(self, mml_state: 'MMLState' = None) -> str:
         return "PLACEHOLDER"

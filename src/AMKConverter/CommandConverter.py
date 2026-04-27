@@ -313,15 +313,18 @@ class PitchBendConverter:
         commands: List[PitchEnvelope] = []
         split_notes: List[MMLNote] = []
         env_active = False
+        current_note: int = None
         for note in notes:
+            current_note = note.note
             bends_in_note = [bend for bend in bends if (bend.tick >= note.tick and bend.tick < note.tick + note.duration)]
             note_notes: List[MMLNote] = []
             if len(bends_in_note) > 0:
                 env_active = True
                 first_bend = bends_in_note[0]
                 delay = first_bend.tick - note.tick
-                bend_amt = round(first_bend.semitones)
+                bend_amt = round(first_bend.target_note) - current_note
                 commands.append(PitchEnvelope(note.tick, delay, first_bend.duration, bend_amt))
+                current_note += bend_amt
                 if len(bends_in_note) > 1:
                     # start legato 1 tick after cause we still want inital attack
                     ticks[note.tick + 1].Commands.append(LegatoEnableCommand(1))
@@ -331,8 +334,9 @@ class PitchBendConverter:
                     for bend in bends_in_note[1:]:
                         note1, last_note = FurnaceUtil.split_note(last_note, bend.tick)
                         last_note.note += bend_amt
-                        bend_amt = round(bend.semitones)
+                        bend_amt = round(bend.target_note) - current_note
                         commands.append(PitchEnvelope(bend.tick, 0, bend.duration, bend_amt))
+                        current_note += bend_amt
                         note_notes.append(note1)
                     note_notes.append(last_note)
                 else:
