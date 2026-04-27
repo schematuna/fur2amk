@@ -314,7 +314,7 @@ class PitchBendConverter:
         split_notes: List[MMLNote] = []
         env_active = False
         for note in notes:
-            bends_in_note = [bend for bend in bends if bend.tick >= note.tick and bend.tick < note.tick + note.duration]
+            bends_in_note = [bend for bend in bends if (bend.tick >= note.tick and bend.tick < note.tick + note.duration)]
             note_notes: List[MMLNote] = []
             if len(bends_in_note) > 0:
                 env_active = True
@@ -323,9 +323,10 @@ class PitchBendConverter:
                 bend_amt = round(first_bend.semitones)
                 commands.append(PitchEnvelope(note.tick, delay, first_bend.duration, bend_amt))
                 if len(bends_in_note) > 1:
-                    # start tick after cause we still want inital attack
+                    # start legato 1 tick after cause we still want inital attack
                     ticks[note.tick + 1].Commands.append(LegatoEnableCommand(1))
-                    ticks[note.tick + note.duration - 1].Commands.append(LegatoEnableCommand(0))
+                    if len(ticks) > note.tick + note.duration:
+                        ticks[note.tick + note.duration].Commands.append(LegatoEnableCommand(0))
                     last_note = note
                     for bend in bends_in_note[1:]:
                         note1, last_note = FurnaceUtil.split_note(last_note, bend.tick)
@@ -344,5 +345,4 @@ class PitchBendConverter:
 
             split_notes.extend(note_notes)
 
-        # return notes unaltered for now, just handled first bend of note
         return commands, split_notes, ticks

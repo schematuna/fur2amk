@@ -125,7 +125,7 @@ class NoteConverter():
                 slide_helper.set_target(0)
                 # if this note interrupted a pitch slide, start a new one
                 # unless there is a pitch slide command on this row, in which case we'll let that handle it
-                if pitch_command is not None and not tick_data.get_command(PitchSlideCommand):
+                if pitch_command is not None and not tick_data.get_command(PitchSlideCommand) and not tick_data.get_command(NoteSlideCommand):
                     slide_helper.start_slide()
 
             elif note_kind == ChiptuneTickData.NoteKind.RELEASE:

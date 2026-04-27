@@ -424,9 +424,9 @@ c+1
 ; section 0D
 y7 a+2 f+2
 ; section 0E
-y13 g+2 o5 c=8 $DD$00$08 c+^4^8^16^64^=1
+y13 g+2 $EB$00$08$01 o5 c2
 ; section 0F
-y7 e2 d+2
+$EB$00$00$00 y7 e2 d+2
 
 
 #7
