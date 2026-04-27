@@ -225,7 +225,7 @@ class PitchSlider(SlideHelper):
             return None
 
     def _limit_target_val(self, target_val: float) -> float:
-        return target_val
+        return max(MMLUtil.AMK_MIN_PITCH, min(target_val, MMLUtil.AMK_MAX_PITCH))
 
     def _get_command(self, tick: int, duration: int, target_note: float) -> MMLCommand:
         return TempPitchBend(tick, duration, target_note)
