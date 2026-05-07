@@ -42,7 +42,7 @@ class VolumeMacroConverter:
 
     def get_volume_for_tick(self, tick_data: FurnaceTickData, active_ins: FurnaceInstrument):
         emit_vol_change = False
-        if new_vol := tick_data.Vol:
+        if (new_vol := tick_data.Vol) is not None:
             self.primary_vol = new_vol
             emit_vol_change = True
 
