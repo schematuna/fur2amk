@@ -1,16 +1,26 @@
+import logging
+
 from ..model.FurnaceData import *
 from ..model.FurnaceEffects import *
 from ..model.ChiptuneData import *
 from ..model.ChiptuneCommands import *
+from .InstrumentInfo import FurInstrumentInfo
 
 class TickDataConverter:
-    def convert(self, furnace_ticks: List[FurnaceTickData]) -> List[ChiptuneTickData]:
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+
+    def convert(self, furnace_ticks: List[FurnaceTickData], instruments: List[FurnaceInstrument], ins_info: Dict[int, FurInstrumentInfo]) -> List[ChiptuneTickData]:
         chiptune_ticks: List[ChiptuneTickData] = []
         tuningConverter = TuningConverter()
+        active_ins: FurnaceInstrument = None
         for fur_tick in furnace_ticks:
+            for ins in instruments:
+                if ins.index == fur_tick.Ins:
+                    active_ins = ins
+                    break
+
             chip_tick = ChiptuneTickData()
-            chip_tick.Note = fur_tick.Note
-            chip_tick.Ins = fur_tick.Ins
             chip_tick.Vol = fur_tick.Vol
             for effect in fur_tick.Effects:
                 chip_cmd = self.convert_effect(effect)
@@ -19,10 +29,31 @@ class TickDataConverter:
 
             if tuning_command := tuningConverter.convert_tuning_effects(fur_tick):
                 chip_tick.Commands.append(tuning_command)
-                
+
+            chip_tick.Note, chip_tick.Ins = self.apply_sample_map(fur_tick, active_ins, ins_info)
             chiptune_ticks.append(chip_tick)
-        
+
         return chiptune_ticks
+
+    def apply_sample_map(self, fur_tick: FurnaceTickData, active_ins: FurnaceInstrument, ins_info: Dict[int, FurInstrumentInfo]) -> Tuple[any, any]:
+        if fur_tick.kind() == FurnaceTickData.NoteKind.NOTE:
+            if active_ins is None:
+                self.logger.warning(f"No furnace instrument active in row with Note {fur_tick.Note}.")
+            elif active_ins.use_sample_map:
+                note = fur_tick.Note
+                note_map = ins_info[active_ins.index].ins_map
+                if note in note_map:
+                    return note_map[note].note_to_play, note_map[note].amk_ins_idx
+                else:
+                    self.logger.warning(f"No instrument mapping found for Furnace instrument {active_ins.index}, note {note}.")
+                    return fur_tick.Note, 0
+            else:
+                # still need to update instrument index for non-sample mapped instruments
+                # since they may ave been bumped up by prior sample-mapped instruments
+                return fur_tick.Note, ins_info[active_ins.index].default_ins
+            
+        return fur_tick.Note, fur_tick.Ins
+
     
     def convert_effect(self, effect: FurnaceEffect) -> ChiptuneCommand | None:
         if isinstance(effect, PitchSlideEffect):

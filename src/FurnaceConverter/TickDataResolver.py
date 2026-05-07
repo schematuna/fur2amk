@@ -8,27 +8,12 @@ import math
 #   - quick legato
 #   - macros
 
-@dataclass
-class MappingInfo:
-    amk_ins_idx: int
-    note_to_play: int
-
-# conversion helper with sample mapping info
-# TODO: just make a utility function for this that takes a note and a FurnaceInstrument?
-@dataclass
-class FurInstrumentInfo:
-    # for non-sample map instruments, the chiptune instrument index
-    default_ins: int = 0
-
-    # sample map data
-    # note -> mapping_info
-    ins_map: Dict[int, MappingInfo] = field(default_factory=dict)
 
 class TickDataResolver():
     def __init__(self):
         self.logger = logging.getLogger(__name__)
 
-    def resolve_ticks(self, ticks: List[FurnaceTickData], instruments: List[FurnaceInstrument], ins_info: Dict[int, FurInstrumentInfo]) -> List[FurnaceTickData]:
+    def resolve_ticks(self, ticks: List[FurnaceTickData], instruments: List[FurnaceInstrument]) -> List[FurnaceTickData]:
         furnace_ticks = ticks
         # Speed changes and jump commands are already handled by the time we get here
         # virtual tempo changes must also be resolved before note delay is handled
@@ -45,11 +30,6 @@ class TickDataResolver():
         # convert macros into plain commands
         # TODO: break this up and resolve furnace-contained macros here (like volume and echo) and chiptunedata dependent macros elsewhere (like arp and pitch)
         furnace_ticks = self.resolve_macros(furnace_ticks, instruments)
-
-        # flatten sample maps into separate instruments
-        # Note: after this point the instrument numbers in tick data represent chiptune instrument index, not furnace instrument index
-        # TODO: move sample map resolution to chiptune data conversion step
-        furnace_ticks = self.resolve_sample_maps(furnace_ticks, instruments, ins_info)
 
         return furnace_ticks
     
@@ -225,45 +205,3 @@ class TickDataResolver():
 
         return new_ticks
     
-    def resolve_sample_maps(self, furnace_ticks: List[FurnaceTickData], instruments: List[FurnaceInstrument], ins_info: Dict[int, FurInstrumentInfo]):
-        '''Updates FurnaceTickData with sample-mapped instruments and notes, abstracting away sample maps'''
-        # currently active instrument
-        active_ins: FurnaceInstrument = None 
-        new_ticks: List[FurnaceTickData] = furnace_ticks
-        for i, tick_data in enumerate(furnace_ticks):
-            new_fur_ins = None
-            for ins in instruments:
-                if ins.index == tick_data.Ins:
-                    new_fur_ins = ins
-                    break
-
-            if new_fur_ins is not None:
-                active_ins = new_fur_ins
-
-            if tick_data.kind() == FurnaceTickData.NoteKind.NOTE:
-                if active_ins is None:
-                    self.logger.warning(f"No furnace instrument active in row with Note {tick_data.Note}, tick {i}.")
-                    break
-                note = tick_data.Note
-                # Get the chiptune instrument index using ins_map
-                if ins.use_sample_map:
-                    note_map = ins_info[active_ins.index].ins_map
-                    # Try to find exact note match first
-                    if note in note_map:
-                        chip_ins_idx = note_map[note].amk_ins_idx
-                        note_to_play = note_map[note].note_to_play
-                    else:
-                        self.logger.warning(f"No instrument mapping found for Furnace instrument {chip_ins_idx}, note {note}.")
-                        chip_ins_idx = 0
-                        note_to_play = note
-
-                    new_ticks[i].Note = note_to_play
-                    # FIXME: this assignment fundamentally changes the meaning of FurnaceTickData::Ins from furnace ins to chiptune ins
-                    # should really be a new data structure for clarity
-                    new_ticks[i].Ins = chip_ins_idx
-                else:
-                    # still need to update instrument index for non-sample mapped instruments
-                    # since they may ave been bumped up by prior sample-mapped instruments
-                    new_ticks[i].Ins = ins_info[active_ins.index].default_ins
-
-        return new_ticks
