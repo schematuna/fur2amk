@@ -313,40 +313,60 @@ class PitchBendConverter:
         commands: List[PitchEnvelope] = []
         split_notes: List[MMLNote] = []
         env_active = False
-        current_note: int = None
-        for note in notes:
-            current_note = note.note
-            bends_in_note = [bend for bend in bends if (bend.tick >= note.tick and bend.tick < note.tick + note.duration)]
+        current_pitch: int = None
+        global_legato_enabled: bool = False
+        out_ticks = copy.deepcopy(ticks)
+
+        cur_note: MMLNote = None
+        for i, tick in enumerate(ticks):
+            if tick_legato := tick.get_command(LegatoEnableCommand):
+                global_legato_enabled = tick_legato.legato_on
+
+            cur_note = next((note for note in notes if (i >= note.tick and i < note.tick + note.duration)), None)
+
+            if cur_note is None or i != cur_note.tick:
+                continue
+
+            current_pitch = cur_note.note
+            bends_in_note = [b for b in bends if (b.tick >= cur_note.tick and b.tick < cur_note.tick + cur_note.duration)]
             note_notes: List[MMLNote] = []
             if len(bends_in_note) > 0:
                 env_active = True
                 first_bend = bends_in_note[0]
-                delay = first_bend.tick - note.tick
-                bend_amt = round(first_bend.target_note) - current_note
-                commands.append(PitchEnvelope(note.tick, delay, first_bend.duration, bend_amt))
-                current_note += bend_amt
+                delay = first_bend.tick - cur_note.tick
+                bend_amt = round(first_bend.target_note) - current_pitch
+                commands.append(PitchEnvelope(cur_note.tick, delay, first_bend.duration, bend_amt))
+                current_pitch += bend_amt
                 if len(bends_in_note) > 1:
-                    # start legato 1 tick after cause we still want inital attack
-                    ticks[note.tick + 1].Commands.append(LegatoEnableCommand(1))
-                    if len(ticks) > note.tick + note.duration:
-                        ticks[note.tick + note.duration].Commands.append(LegatoEnableCommand(0))
-                    last_note = note
-                    for bend in bends_in_note[1:]:
-                        note1, last_note = FurnaceUtil.split_note(last_note, bend.tick)
+                    we_enabled_legato = False
+                    if not global_legato_enabled:
+                        # start legato 1 tick after cause we still want inital attack
+                        out_ticks[cur_note.tick + 1].Commands.append(LegatoEnableCommand(1))
+                        we_enabled_legato = True
+                    global_legato_in_note = any(
+                        (cmd := ticks[t].get_command(LegatoEnableCommand)) and cmd.legato_on
+                        for t in range(cur_note.tick + 1, min(cur_note.tick + cur_note.duration + 1, len(ticks)))
+                    )
+                    if we_enabled_legato and not global_legato_in_note:
+                        if len(out_ticks) > cur_note.tick + cur_note.duration:
+                            out_ticks[cur_note.tick + cur_note.duration].Commands.append(LegatoEnableCommand(0))
+                    last_note = cur_note
+                    for b in bends_in_note[1:]:
+                        note1, last_note = FurnaceUtil.split_note(last_note, b.tick)
                         last_note.note += bend_amt
-                        bend_amt = round(bend.target_note) - current_note
-                        commands.append(PitchEnvelope(bend.tick, 0, bend.duration, bend_amt))
-                        current_note += bend_amt
+                        bend_amt = round(b.target_note) - current_pitch
+                        commands.append(PitchEnvelope(b.tick, 0, b.duration, bend_amt))
+                        current_pitch += bend_amt
                         note_notes.append(note1)
                     note_notes.append(last_note)
                 else:
-                    note_notes.append(note)
+                    note_notes.append(cur_note)
             else:
                 if env_active:
-                    commands.append(PitchEnvelope(note.tick, 0, 0, 0))
+                    commands.append(PitchEnvelope(cur_note.tick, 0, 0, 0))
                     env_active = False
-                note_notes.append(note)
+                note_notes.append(cur_note)
 
             split_notes.extend(note_notes)
 
-        return commands, split_notes, ticks
+        return commands, split_notes, out_ticks
