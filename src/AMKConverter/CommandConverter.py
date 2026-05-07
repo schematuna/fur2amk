@@ -20,23 +20,24 @@ class VolumeConverter():
     def convert_tick(self, tick_data: ChiptuneTickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
         new_vol = tick_data.Vol
-        slide_command = None
+        vol_slide: VolumeSlide = None
         if new_vol is not None:
-            slide_command = self.volume_slider.end_slide()
-            if slide_command is not None:
-                commands.append(slide_command)
+            vol_slide = self.volume_slider.end_slide()
+            if vol_slide is not None:
+                commands.append(VolumeFade(vol_slide.tick, vol_slide.duration, vol_slide.target))
             self.volume_slider.set_target(new_vol)
             commands.append(VolumeChange(tick, MMLUtil.find_v(new_vol)))
 
+        new_slide: VolumeSlide = None
         if effect := tick_data.get_command(VolumeSlideCommand) or tick_data.get_command(FineVolumeSlideCommand):
-            if new_command := self.volume_slider.handle_new_effect(effect):
-                commands.append(new_command)
-        elif slide_command is not None:
+            if new_slide := self.volume_slider.handle_new_effect(effect):
+                commands.append(VolumeFade(new_slide.tick, new_slide.duration, new_slide.target))
+        elif vol_slide is not None:
             # restart slide if it was interrupted by a volume command
             self.volume_slider.start_slide()
             
-        if new_command := self.volume_slider.tick(1):
-            commands.append(new_command)
+        if new_slide := self.volume_slider.tick(1):
+            commands.append(VolumeFade(new_slide.tick, new_slide.duration, new_slide.target))
 
         return commands
 
@@ -59,11 +60,12 @@ class PanConverter():
             commands.append(PanChange(tick, amk_pan))
         
         if effect := tick_data.get_command(PanSlideCommand):
-            if new_command := self.pan_slider.handle_new_effect(effect):
-                commands.append(new_command)
+            new_slide: PanSlide = None
+            if new_slide := self.pan_slider.handle_new_effect(effect):
+                commands.append(PanFade(new_slide.tick, new_slide.duration, new_slide.target))
                     
-        if new_command := self.pan_slider.tick(1):
-            commands.append(new_command)
+        if new_slide := self.pan_slider.tick(1):
+            commands.append(PanFade(new_slide.tick, new_slide.duration, new_slide.target))
 
         return commands
 
@@ -307,7 +309,7 @@ class PitchBendConverter:
     def __init__(self) -> None:
         self.logger = logging.getLogger(__name__)
 
-    def convert(self, bends: List[TempPitchBend], notes: List[MMLNote], ticks: List[ChiptuneTickData]) -> Tuple[List[MMLCommand], List[MMLNote], List[ChiptuneTickData]]:
+    def convert(self, bends: List[PitchSlide], notes: List[MMLNote], ticks: List[ChiptuneTickData]) -> Tuple[List[MMLCommand], List[MMLNote], List[ChiptuneTickData]]:
         # figure out EB commands from notes and bend info
         # create new notes for multiple bends in the same note, and wrap in legato.
         commands: List[PitchEnvelope] = []
@@ -334,7 +336,7 @@ class PitchBendConverter:
                 env_active = True
                 first_bend = bends_in_note[0]
                 delay = first_bend.tick - cur_note.tick
-                bend_amt = round(first_bend.target_note) - current_pitch
+                bend_amt = round(first_bend.target) - current_pitch
                 commands.append(PitchEnvelope(cur_note.tick, delay, first_bend.duration, bend_amt))
                 current_pitch += bend_amt
                 if len(bends_in_note) > 1:
@@ -354,7 +356,7 @@ class PitchBendConverter:
                     for b in bends_in_note[1:]:
                         note1, last_note = FurnaceUtil.split_note(last_note, b.tick)
                         last_note.note += bend_amt
-                        bend_amt = round(b.target_note) - current_pitch
+                        bend_amt = round(b.target) - current_pitch
                         commands.append(PitchEnvelope(b.tick, 0, b.duration, bend_amt))
                         current_pitch += bend_amt
                         note_notes.append(note1)
