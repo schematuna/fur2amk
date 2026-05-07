@@ -53,8 +53,8 @@ class NoteConverter():
 
         return pre_note_commands
 
-    def convert_pitch_slides(self, tick: int, row: ChiptuneTickData, slide_helper: PitchSlider, active_note: Optional[int]) -> Tuple[Optional[int], List[MMLCommand]]:
-        commands: List[MMLCommand] = []
+    def convert_pitch_slides(self, tick: int, row: ChiptuneTickData, slide_helper: PitchSlider, active_note: Optional[int]) -> Tuple[Optional[int], List[PitchSlide]]:
+        slides: List[PitchSlide] = []
         new_active_note = active_note
         if effect := row.get_command(NoteSlideCommand):
             target_note = active_note + effect.semitones
@@ -65,26 +65,26 @@ class NoteConverter():
             max_duration = slide_helper.get_max_duration()
             if amk_duration > max_duration:
                 self.logger.warning(f"Pitch slide duration {amk_duration} is greater than the longest tick duration {max_duration}.")
-            commands.append(TempPitchBend(tick, amk_duration, target_note))
+            slides.append(PitchSlide(tick, amk_duration, target_note))
             new_active_note = target_note
             slide_helper.set_target(new_active_note)
 
         if effect := row.get_command(PitchSlideCommand):
-            if new_command := slide_helper.handle_new_effect(effect):
-                new_active_note = new_command.target_note
-                commands.append(new_command)
+            if new_slide := slide_helper.handle_new_effect(effect):
+                new_active_note = new_slide.target
+                slides.append(new_slide)
                         
-        if new_command := slide_helper.tick(1):
-            new_active_note = new_command.target_note
-            commands.append(new_command)
+        if new_slide := slide_helper.tick(1):
+            new_active_note = new_slide.target
+            slides.append(new_slide)
 
-        return new_active_note, commands
+        return new_active_note, slides
 
     # get notes and pitch-related commands
-    def convert(self, ticks: List[ChiptuneTickData], ins_info: Dict[int, InstrumentInfo], instruments: List[ChiptuneInstrument]) -> Tuple[List[MMLNote], List[MMLCommand], List[TempPitchBend]]:
+    def convert(self, ticks: List[ChiptuneTickData], ins_info: Dict[int, InstrumentInfo], instruments: List[ChiptuneInstrument]) -> Tuple[List[MMLNote], List[MMLCommand], List[PitchSlide]]:
         notes: List[MMLNote] = []
         commands: List[MMLCommand] = []
-        pitchbends: List[TempPitchBend] = []
+        pitchbends: List[PitchSlide] = []
         tick = 0
         state = FurnaceState()
         slide_helper = PitchSlider(self.tick_ratio, tick)
@@ -118,12 +118,12 @@ class NoteConverter():
                     pre_note_commands = self.get_pre_note_commands(chip_ins, ins_info, state, tick)
                     state.fur_ins_idx = chip_ins.index   
 
-                pitch_command = None
+                pitch_slide = None
                 if cur_dur is not None:
                     cur_dur.duration = tick - cur_dur.tick
-                    pitch_command = slide_helper.end_slide(None)
-                    if pitch_command is not None:
-                        pitchbends.append(pitch_command)
+                    pitch_slide = slide_helper.end_slide(None)
+                    if pitch_slide is not None:
+                        pitchbends.append(pitch_slide)
                     notes.append(cur_dur)
                 
                 cur_dur = MMLNote(tick, 0, tick_data.Note, chip_ins.index, pre_note_commands)
@@ -132,7 +132,7 @@ class NoteConverter():
                 slide_helper.set_target(active_note)
                 # if this note interrupted a pitch slide, start a new one
                 # unless there is a pitch slide command on this row, in which case we'll let that handle it
-                if pitch_command is not None and not tick_data.get_command(PitchSlideCommand) and not tick_data.get_command(NoteSlideCommand):
+                if pitch_slide is not None and not tick_data.get_command(PitchSlideCommand) and not tick_data.get_command(NoteSlideCommand):
                     slide_helper.start_slide()
 
             elif note_kind == ChiptuneTickData.NoteKind.RELEASE:
@@ -143,15 +143,15 @@ class NoteConverter():
                     state.adsr = adsr
                 else:
                     # finish any pitch slides that are still active
-                    pitch_command = slide_helper.end_slide(None)
+                    pitch_slide = slide_helper.end_slide(None)
                     if cur_dur is not None:
-                        if pitch_command is not None:
-                            pitchbends.append(pitch_command)
+                        if pitch_slide is not None:
+                            pitchbends.append(pitch_slide)
                         cur_dur.duration = tick - cur_dur.tick
                         notes.append(cur_dur)
                     else:
                         self.logger.debug(f"Note off or release was found but no note was playing.")
-                        if pitch_command is not None:
+                        if pitch_slide is not None:
                             self.logger.warning("Lost pitch slide on note off.")
                     cur_dur = None
                     active_note = None
@@ -163,9 +163,9 @@ class NoteConverter():
                     self.logger.warning("Send external effect found outside of a note, ignoring.")
 
             # handle pitch slides after processing this row's note info
-            active_note, pitch_commands = self.convert_pitch_slides(tick, tick_data, slide_helper, active_note)
+            active_note, pitch_slides = self.convert_pitch_slides(tick, tick_data, slide_helper, active_note)
             if cur_dur is not None:
-                pitchbends.extend(pitch_commands)
+                pitchbends.extend(pitch_slides)
 
             # increment tick before next tick
             tick += 1
@@ -174,8 +174,8 @@ class NoteConverter():
         if cur_dur is not None:
             cur_dur.duration = tick - cur_dur.tick
             notes.append(cur_dur)
-            pitch_command = slide_helper.end_slide(None)
-            if pitch_command is not None:
-                pitchbends.append(pitch_command)
+            pitch_slide = slide_helper.end_slide(None)
+            if pitch_slide is not None:
+                pitchbends.append(pitch_slide)
 
         return notes, commands, pitchbends
