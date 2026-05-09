@@ -62,48 +62,73 @@ def run_tests() -> bool:
     return result.returncode == 0
 
 
-def make_release(version: str) -> None:
+def build_gui() -> Path:
+    """Build the GUI exe with PyInstaller. Returns the path to the built exe."""
+    script_dir = Path(__file__).parent
+    gui_dir = script_dir / "gui"
+    print("Building GUI executable...")
+    result = subprocess.run(
+        [sys.executable, "-m", "PyInstaller", "--onefile", "--windowed", "--icon", "fuzzy.ico", "--add-data", "fuzzy.ico;.", "--paths", "..", "fur2amk_gui.py"],
+        cwd=gui_dir,
+    )
+    if result.returncode != 0:
+        print("Error: PyInstaller build failed.")
+        sys.exit(1)
+    exe = gui_dir / "dist" / "fur2amk_gui.exe"
+    if not exe.exists():
+        print(f"Error: Expected exe not found at {exe}")
+        sys.exit(1)
+    print(f"Built: {exe}")
+    return exe
+
+
+def make_release(version: str, gui_exe: Path) -> None:
     """Create a release package for fur2amk."""
     script_dir = Path(__file__).parent
     releases_dir = script_dir / "releases"
     release_name = f"fur2amk_{version}"
     release_dir = releases_dir / release_name
+    python_dir = release_dir / "python"
 
-    # Create releases directory if it doesn't exist
     releases_dir.mkdir(exist_ok=True)
 
-    # Remove existing release directory if it exists
     if release_dir.exists():
         shutil.rmtree(release_dir)
 
     release_dir.mkdir()
+    python_dir.mkdir()
 
-    # Files to copy
-    files_to_copy = [
-        "fur2amk.py",
-        "README.md",
-        "ADVANCED.md",
-        "copy_to_amk.py",
-    ]
-
-    # Copy individual files
-    for filename in files_to_copy:
+    # Top-level: docs and exe only
+    for filename in ["README.md", "ADVANCED.md"]:
         src = script_dir / filename
         if not src.exists():
             print(f"Warning: {filename} not found, skipping")
             continue
         shutil.copy2(src, release_dir / filename)
 
-    # Copy and rename config template
+    shutil.copy2(gui_exe, release_dir / gui_exe.name)
+
+    # python/ subfolder: all CLI scripts and supporting files
+    for filename in ["fur2amk.py", "copy_to_amk.py"]:
+        src = script_dir / filename
+        if not src.exists():
+            print(f"Warning: {filename} not found, skipping")
+            continue
+        shutil.copy2(src, python_dir / filename)
+
     config_template = script_dir / "fur2amk_config.json.template"
     if config_template.exists():
-        shutil.copy2(config_template, release_dir / "fur2amk_config.json")
+        shutil.copy2(config_template, python_dir / "fur2amk_config.json")
     else:
         print("Warning: fur2amk_config.json.template not found")
 
-    # Copy directories (excluding __pycache__)
-    dirs_to_copy = ["src", "examples", "templates"]
-    for dirname in dirs_to_copy:
+    shutil.copytree(
+        script_dir / "src",
+        python_dir / "src",
+        ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
+    )
+
+    for dirname in ["examples", "templates"]:
         src = script_dir / dirname
         if not src.exists():
             print(f"Warning: {dirname}/ not found, skipping")
@@ -114,11 +139,9 @@ def make_release(version: str) -> None:
             ignore=shutil.ignore_patterns("__pycache__", "*.pyc"),
         )
 
-    # Create zip archive (files at root, no nested folder)
     zip_path = releases_dir / release_name
     shutil.make_archive(str(zip_path), "zip", release_dir)
 
-    # Remove the unzipped folder
     shutil.rmtree(release_dir)
 
     print(f"Release created: {zip_path}.zip")
@@ -163,8 +186,10 @@ def main() -> None:
         print("\nTests failed. Aborting release.")
         sys.exit(1)
 
+    exe = build_gui()
+
     print()  # blank line after test output
-    make_release(version)
+    make_release(version, exe)
 
 
 if __name__ == "__main__":
