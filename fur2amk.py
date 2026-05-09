@@ -83,61 +83,46 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     return args
 
 
+def run_conversion(furnace_file: str, out_dir: str, nosmpl: bool = False):
+    """Parse, convert, and write outputs. Returns (mml_path, sample_dir or None)."""
+    song_name = os.path.splitext(os.path.basename(furnace_file.replace('\\', '/')))[0]
+
+    module = FurnaceParser().parse(furnace_file)
+    chiptune_data = FurnaceConverter().convert(module)
+    amk_data = AMKConverter().convert(chiptune_data)
+    amk_writer = AMKWriter(amk_data, song_name)
+
+    os.makedirs(out_dir, exist_ok=True)
+    out_path = os.path.join(out_dir, f'{song_name}.txt')
+    with open(out_path, 'w', encoding='utf-8') as f:
+        f.write(amk_writer.get_text())
+    logging.info(f'Wrote {out_path}')
+
+    sample_dir = None
+    if not nosmpl:
+        sample_dir = os.path.join(out_dir, song_name)
+        os.makedirs(sample_dir, exist_ok=True)
+        samples = [BRRSample(name=s.name, index=s.index, brr_data=s.brr_raw,
+                             loop_start=s.loop_start, loop_end=s.loop_end)
+                   for s in module.Samples]
+        BRRConverter().dump_samples_to_brr(sample_dir, samples)
+
+    return out_path, sample_dir
+
+
 def main() -> None:
     args = parse_args(sys.argv)
-    
-    # Load configuration
     config = load_config()
-    
-    # Configure logging
+
     log_level = logging.DEBUG if args.verbose else logging.INFO
     logging.basicConfig(format='%(levelname)-7s %(message)s', level=log_level)
 
-    furnace_file = args.furnace_file
-    path_name = os.path.splitext(os.path.basename(furnace_file.replace('\\', '/')))[0]
+    song_name = os.path.splitext(os.path.basename(args.furnace_file))[0]
+    out_path, sample_dir = run_conversion(args.furnace_file, 'music', args.nosmpl)
 
-    # Load module (Furnace)
-    parser = FurnaceParser()
-    module = parser.parse(furnace_file)
-
-    # deconstruct Furnace object
-    furnace_converter = FurnaceConverter()
-    chiptune_data = furnace_converter.convert(module)
-
-    # Build AMK object
-    amk_converter = AMKConverter()
-    amk_data = amk_converter.convert(chiptune_data)
-
-    amk_writer = AMKWriter(amk_data, path_name)
-
-    # Output txt file
-    song_name = os.path.splitext(os.path.basename(furnace_file))[0]
-    
-    out_path = os.path.join('music', f'{song_name}.txt')
-    out_dir = os.path.dirname(out_path)
-    if out_dir and not os.path.exists(out_dir):
-        os.makedirs(out_dir, exist_ok=True)
-    with open(out_path, 'w', encoding='utf-8') as f:
-        f.write(amk_writer.get_text())
-        logging.info(f"Wrote {out_path}")
-
-    # Attempt to dump samples to BRR files (unless disabled)
-    if not args.nosmpl:
-        sample_dir = os.path.join('music', path_name)
-        os.makedirs(sample_dir, exist_ok=True)
-        samples = list[BRRSample]()
-        for s in module.Samples:
-            samples.append(BRRSample(name=s.name, index=s.index, brr_data=s.brr_raw, loop_start=s.loop_start, loop_end=s.loop_end))
-        brr_converter = BRRConverter()
-        brr_converter.dump_samples_to_brr(sample_dir, samples)
-
-    # Copy to AddmusicK if configured
     amk_dir = config.get('amk_dir')
     if amk_dir:
-        copy_to_amk_main([
-            '--amk-dir', amk_dir,
-            '--song', song_name
-        ])
+        copy_to_amk_main(['--amk-dir', amk_dir, '--song', song_name])
 
 if __name__ == "__main__":
     main()

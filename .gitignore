@@ -22,3 +22,8 @@ modules/**
 
 # config
 fur2amk_config.json
+
+# PyInstaller
+build/
+dist/
+fur2amk_gui_state.json
