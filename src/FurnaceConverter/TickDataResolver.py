@@ -27,10 +27,22 @@ class TickDataResolver():
         # Note: portamentos are unaffected by smaple mapped note changes. This is how it works in Furnace.
         furnace_ticks = self.resolve_portamento(furnace_ticks)
 
-        # convert macros into plain commands
-        # TODO: break this up and resolve furnace-contained macros here (like volume and echo) and chiptunedata dependent macros elsewhere (like arp and pitch)
+        # Resolves single-tick volume change effects
+        furnace_ticks = self.resolve_volume(furnace_ticks)
+
+        # resolves echo macro
         furnace_ticks = self.resolve_macros(furnace_ticks, instruments)
 
+        return furnace_ticks
+
+    def resolve_volume(self, furnace_ticks: List[FurnaceTickData]) -> List[FurnaceTickData]:
+        primary_vol = 127
+        for tick_data in furnace_ticks:
+            if tick_data.Vol is not None:
+                primary_vol = tick_data.Vol
+            if vol_change_effect := tick_data.get_effect(SingleTickVolumeEffect):
+                primary_vol += vol_change_effect.vol_change
+                tick_data.Vol = primary_vol
         return furnace_ticks
     
     def resolve_note_delay(self, furnace_ticks: List[FurnaceTickData]) -> List[FurnaceTickData]:
@@ -178,10 +190,8 @@ class TickDataResolver():
     
 
     def resolve_macros(self, furnace_ticks: List[FurnaceTickData], instruments: List[FurnaceInstrument]):
-        vol_converter = VolumeMacroConverter()
         echo_converter = EchoMacroConverter()
-        # currently active instrument
-        active_ins = None 
+        active_ins = None
         new_ticks = furnace_ticks
         for tick_data in new_ticks:
             note_kind = tick_data.kind()
@@ -197,8 +207,6 @@ class TickDataResolver():
 
                 if active_ins is None:
                     self.logger.warning(f"No furnace instrument active in row with Note {tick_data.Note}.")
-
-            tick_data.Vol = vol_converter.get_volume_for_tick(tick_data, active_ins)
 
             if echo_effect := echo_converter.get_echo_for_tick(tick_data, active_ins):
                 tick_data.Effects.append(echo_effect)
