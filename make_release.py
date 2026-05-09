@@ -109,6 +109,10 @@ def make_release(version: str, gui_exe: Path) -> None:
     shutil.copy2(gui_exe, release_dir / gui_exe.name)
 
     # python/ subfolder: all CLI scripts and supporting files
+    python_readme = script_dir / "python" / "README.md"
+    if python_readme.exists():
+        shutil.copy2(python_readme, python_dir / "README.md")
+
     for filename in ["fur2amk.py", "copy_to_amk.py"]:
         src = script_dir / filename
         if not src.exists():

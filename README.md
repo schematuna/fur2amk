@@ -2,46 +2,34 @@
 
 Converts a Furnace SNES module to an AddMusicK txt file and corresponding BRR sample files.
 
-See ADVANCED.md for detailed support and usage documentation.
+Open fur2amk_gui.exe to get started.
 
-This tool must be run at the command line!
+Alternatively, you can run the python scripts manually if desired. See the README in the python directory.
+
+See ADVANCED.md for detailed support and usage documentation.
 
 ## Quick Start
 
 ### Prerequisites
 
-- **Python 3.9 or higher**
-  - Download from [python.org](https://www.python.org/downloads/)
-  - **Important:** During installation, check "Add Python to PATH" to use the `python` command
-  - Open a command prompt, such as Powershell on Windows
-  - Verify installation: `python --version` should show Python 3.9 or higher
 - **Furnace 0.6 or later** : https://tildearrow.org/furnace/
 - **AddmusicK 1.0.11** : https://www.smwcentral.net/?p=section&a=details&id=37906
 
+### Prepare your Furnace file
 
-### Usage
+- Must use the SNES system
+- Must have only BRR samples (convert all samples to BRR format in Furnace)
+- Should be fairly optimized (see [ADVANCED.md](ADVANCED.md) for optimization methods)
 
-1. **Prepare your Furnace file:**
-   - Must use the SNES system
-   - Must have only BRR samples (convert all samples to BRR format in Furnace)
-   - Should be fairly optimized (see [ADVANCED.md](ADVANCED.md) for optimization methods)
+### Using the GUI
 
-2. **Convert a `.fur` file to MML + BRRs:**
-   ```powershell
-   python .\fur2amk.py ".\examples\Frost Man.fur"
-   ```
+1. Run `fur2amk_gui.exe`
+2. Browse for your `.fur` file
+3. Optionally set the **AMK directory** — if set, outputs are copied to AddmusicK automatically
+4. Click **Convert**
 
-You can optionally edit `fur2amk_config.json` to set the AddmusicK directory path. If `amk_dir` is set, the output will automatically be copied to AddmusicK after conversion:
+Outputs are placed in the `music\` folder:
 
-```json
-{
-    "amk_dir": "../AddmusicK_1.0.11"
-}
-```
+- **MML:** `music\Frost Man.txt`
+- **Samples:** `music\Frost Man\*.brr`
 
-Leave `amk_dir` as `null` to disable automatic copying.
-
-## Outputs
-
-- **MML:** `.\music\Frost Man.txt`
-- **Samples:** `.\music\Frost Man\*.brr`
