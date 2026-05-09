@@ -46,10 +46,6 @@ class VolumeMacroConverter:
             self.primary_vol = new_vol
             emit_vol_change = True
 
-        if vol_change_effect := tick_data.get_effect(SingleTickVolumeEffect):
-            self.primary_vol += vol_change_effect.vol_change
-            emit_vol_change = True
-
         if tick_data.kind() == FurnaceTickData.NoteKind.NOTE:
             vol_macro = active_ins.get_macro(SNESMacroCode.Volume)
             if vol_macro and vol_macro.type == SNESMacroTypes.Sequence.value:

@@ -5,6 +5,7 @@ from ..model.FurnaceEffects import *
 from ..model.ChiptuneData import *
 from ..model.ChiptuneCommands import *
 from .InstrumentInfo import FurInstrumentInfo
+from .MacroConverter import VolumeMacroConverter
 
 class TickDataConverter:
     def __init__(self):
@@ -13,6 +14,7 @@ class TickDataConverter:
     def convert(self, furnace_ticks: List[FurnaceTickData], instruments: List[FurnaceInstrument], ins_info: Dict[int, FurInstrumentInfo]) -> List[ChiptuneTickData]:
         chiptune_ticks: List[ChiptuneTickData] = []
         tuningConverter = TuningConverter()
+        vol_converter = VolumeMacroConverter()
         active_ins: FurnaceInstrument = None
         for fur_tick in furnace_ticks:
             for ins in instruments:
@@ -21,7 +23,7 @@ class TickDataConverter:
                     break
 
             chip_tick = ChiptuneTickData()
-            chip_tick.Vol = fur_tick.Vol
+            chip_tick.Vol = vol_converter.get_volume_for_tick(fur_tick, active_ins)
             for effect in fur_tick.Effects:
                 chip_cmd = self.convert_effect(effect)
                 if chip_cmd:
