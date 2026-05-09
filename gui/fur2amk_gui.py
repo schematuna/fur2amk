@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, filedialog, scrolledtext
+from tkinter import ttk, filedialog
 import threading
 import logging
 import json
@@ -11,7 +11,7 @@ from glob import glob
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from fur2amk import load_config, run_conversion
+from fur2amk import run_conversion
 
 
 def _resource_path(relative_path):
@@ -115,7 +115,7 @@ class App(tk.Tk):
         amk_frame = ttk.Frame(self)
         amk_frame.pack(fill='x', **pad)
         ttk.Label(amk_frame, text='AMK directory:').pack(side='left')
-        self.amk_var = tk.StringVar(value=state.get('amk_dir') or load_config().get('amk_dir', ''))
+        self.amk_var = tk.StringVar(value=state.get('amk_dir', ''))
         ttk.Entry(amk_frame, textvariable=self.amk_var, width=50).pack(side='left', padx=5)
         ttk.Button(amk_frame, text='Browse...', command=self._browse_amk).pack(side='left')
 
@@ -129,8 +129,18 @@ class App(tk.Tk):
         self.convert_btn = ttk.Button(self, text='Convert', command=self._start_convert)
         self.convert_btn.pack(**pad)
 
-        self.log = scrolledtext.ScrolledText(self, width=70, height=15, state='disabled')
-        self.log.pack(fill='both', expand=True, **pad)
+        log_frame = ttk.Frame(self)
+        log_frame.pack(fill='both', expand=True, **pad)
+        log_frame.rowconfigure(0, weight=1)
+        log_frame.columnconfigure(0, weight=1)
+
+        self.log = tk.Text(log_frame, width=70, height=15, state='disabled', wrap='none')
+        vsb = ttk.Scrollbar(log_frame, orient='vertical', command=self.log.yview)
+        hsb = ttk.Scrollbar(log_frame, orient='horizontal', command=self.log.xview)
+        self.log.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        self.log.grid(row=0, column=0, sticky='nsew')
+        vsb.grid(row=0, column=1, sticky='ns')
+        hsb.grid(row=1, column=0, sticky='ew')
 
     def _browse(self):
         path = filedialog.askopenfilename(filetypes=[('Furnace files', '*.fur'), ('All files', '*.*')])
@@ -163,14 +173,13 @@ class App(tk.Tk):
         root_logger.setLevel(logging.DEBUG if self.verbose_var.get() else logging.INFO)
 
         try:
-            config = load_config()
             song_name = os.path.splitext(os.path.basename(fur_path))[0]
             script_dir = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
             out_dir = os.path.join(script_dir, 'music')
 
             out_path, sample_dir = run_conversion(fur_path, out_dir, self.nosmpl_var.get())
 
-            amk_dir = self.amk_var.get().strip() or config.get('amk_dir')
+            amk_dir = self.amk_var.get().strip()
             if amk_dir:
                 _copy_to_amk(out_path, sample_dir, song_name, amk_dir)
                 logging.info(f'Done! Output: {os.path.abspath(amk_dir)}')
