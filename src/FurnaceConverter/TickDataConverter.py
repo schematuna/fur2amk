@@ -49,7 +49,7 @@ class TickDataConverter:
                     return fur_tick.Note, 0
             else:
                 # still need to update instrument index for non-sample mapped instruments
-                # since they may ave been bumped up by prior sample-mapped instruments
+                # since they may have been bumped up by prior sample-mapped instruments
                 return fur_tick.Note, ins_info[active_ins.index].default_ins
             
         return fur_tick.Note, fur_tick.Ins
@@ -100,7 +100,7 @@ class TuningConverter:
             tuning_command = TuningCommand(self.global_tuning + self.local_tuning)
         
         if fur_tick.kind() == FurnaceTickData.NoteKind.NOTE:
-            if self.local_tuning is not 0:
+            if self.local_tuning != 0:
                 tuning_command = TuningCommand(self.global_tuning)
             self.local_tuning = 0
 
