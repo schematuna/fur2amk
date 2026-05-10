@@ -50,12 +50,23 @@ class TickDataConverter:
     def apply_volume_macros(self, chiptune_ticks: List[ChiptuneTickData], furnace_ticks: List[FurnaceTickData], instruments: List[FurnaceInstrument]) -> None:
         vol_mac_converter = VolumeMacroConverter()
         active_ins: FurnaceInstrument = None
+        macro_mults: List[float] = []
+
+        # First pass: set chip_tick.Vol and record macro_mult at each tick
         for fur_tick, chip_tick in zip(furnace_ticks, chiptune_ticks):
             for ins in instruments:
                 if ins.index == fur_tick.Ins:
                     active_ins = ins
                     break
             chip_tick.Vol = vol_mac_converter.get_volume_for_tick(fur_tick, active_ins)
+            macro_mults.append(vol_mac_converter.macro_mult)
+
+        # Second pass: scale VolumeFadeCommand targets by macro_mult at slide-start tick
+        for i, chip_tick in enumerate(chiptune_ticks):
+            if cmd := chip_tick.get_command(VolumeFadeCommand):
+                macro_mult = macro_mults[i]
+                if macro_mult != 1:
+                    cmd.target = round(min(max(cmd.target * macro_mult, 0), 0xFE))
 
     def apply_sample_map(self, fur_tick: FurnaceTickData, active_ins: FurnaceInstrument, ins_info: Dict[int, FurInstrumentInfo]) -> Tuple[any, any]:
         if fur_tick.kind() == FurnaceTickData.NoteKind.NOTE:
