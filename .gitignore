@@ -19,6 +19,9 @@ music/**
 *.wav
 *.spc
 modules/**
+user_testing/
+releases/
+originals/
 
 # config
 fur2amk_config.json
