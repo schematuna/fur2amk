@@ -5,7 +5,7 @@ from ..model.FurnaceEffects import *
 from ..model.ChiptuneData import *
 from ..model.ChiptuneCommands import *
 from .InstrumentInfo import FurInstrumentInfo
-from .MacroConverter import VolumeMacroConverter
+from .MacroConverter import VolumeMacroConverter, ArpMacroConverter
 from .FurnaceSliders import FurnaceVolumeSlider
 
 class TickDataConverter:
@@ -17,6 +17,7 @@ class TickDataConverter:
         tuning_converter = TuningConverter()
         vol_converter = VolumeConverter()
         active_ins: FurnaceInstrument = None
+        vol_at_tick: List[float] = []
 
         for fur_tick in furnace_ticks:
             for ins in instruments:
@@ -28,6 +29,8 @@ class TickDataConverter:
 
             for tick_idx, cmd in vol_converter.process_tick(fur_tick):
                 chiptune_ticks[tick_idx].Commands.append(cmd)
+
+            vol_at_tick.append(vol_converter.current_vol)
 
             for effect in fur_tick.Effects:
                 chip_cmd = self.convert_effect(effect)
@@ -44,21 +47,22 @@ class TickDataConverter:
             tick_idx, cmd = completed
             chiptune_ticks[tick_idx].Commands.append(cmd)
 
-        self.apply_volume_macros(chiptune_ticks, furnace_ticks, instruments)
+        self.apply_volume_macros(chiptune_ticks, furnace_ticks, instruments, vol_at_tick)
+        self.apply_arp_macros(chiptune_ticks, furnace_ticks, instruments)
         return chiptune_ticks
 
-    def apply_volume_macros(self, chiptune_ticks: List[ChiptuneTickData], furnace_ticks: List[FurnaceTickData], instruments: List[FurnaceInstrument]) -> None:
+    def apply_volume_macros(self, chiptune_ticks: List[ChiptuneTickData], furnace_ticks: List[FurnaceTickData], instruments: List[FurnaceInstrument], vol_at_tick: List[float]) -> None:
         vol_mac_converter = VolumeMacroConverter()
         active_ins: FurnaceInstrument = None
         macro_mults: List[float] = []
 
         # First pass: set chip_tick.Vol and record macro_mult at each tick
-        for fur_tick, chip_tick in zip(furnace_ticks, chiptune_ticks):
+        for i, (fur_tick, chip_tick) in enumerate(zip(furnace_ticks, chiptune_ticks)):
             for ins in instruments:
                 if ins.index == fur_tick.Ins:
                     active_ins = ins
                     break
-            chip_tick.Vol = vol_mac_converter.get_volume_for_tick(fur_tick, active_ins)
+            chip_tick.Vol = vol_mac_converter.get_volume_for_tick(fur_tick, active_ins, vol_at_tick[i])
             macro_mults.append(vol_mac_converter.macro_mult)
 
         # Second pass: scale VolumeFadeCommand targets by macro_mult at slide-start tick
@@ -67,6 +71,20 @@ class TickDataConverter:
                 macro_mult = macro_mults[i]
                 if macro_mult != 1:
                     cmd.target = round(min(max(cmd.target * macro_mult, 0), 0xFE))
+
+    def apply_arp_macros(self, chiptune_ticks: List[ChiptuneTickData], furnace_ticks: List[FurnaceTickData], instruments: List[FurnaceInstrument]) -> None:
+        arp_converter = ArpMacroConverter()
+        active_ins: FurnaceInstrument = None
+        for fur_tick, chip_tick in zip(furnace_ticks, chiptune_ticks):
+            for ins in instruments:
+                if ins.index == fur_tick.Ins:
+                    active_ins = ins
+                    break
+            if cmd := arp_converter.get_arp_for_tick(fur_tick, active_ins):
+                if existing := chip_tick.get_command(TuningCommand):
+                    existing.tuning += cmd.tuning
+                else:
+                    chip_tick.Commands.append(cmd)
 
     def apply_sample_map(self, fur_tick: FurnaceTickData, active_ins: FurnaceInstrument, ins_info: Dict[int, FurInstrumentInfo]) -> Tuple[any, any]:
         if fur_tick.kind() == FurnaceTickData.NoteKind.NOTE:
@@ -116,6 +134,10 @@ class VolumeConverter:
 
     def __init__(self):
         self._slider = FurnaceVolumeSlider()
+
+    @property
+    def current_vol(self) -> float:
+        return self._slider.target_val
 
     def process_tick(self, fur_tick: FurnaceTickData) -> List[Tuple[int, ChiptuneCommand]]:
         """Returns a list of (tick_idx, command) pairs to be placed on a previously-emitted ChiptuneTickData."""
