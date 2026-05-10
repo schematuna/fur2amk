@@ -19,6 +19,9 @@ class TickDataResolver():
         # virtual tempo changes must also be resolved before note delay is handled
         furnace_ticks = self.resolve_note_delay(furnace_ticks)
 
+        # resolve EC note cuts: insert a release tick at the specified offset after each note onset
+        furnace_ticks = self.resolve_note_cut(furnace_ticks)
+
         # abstract away quick legato
         furnace_ticks = self.resolve_quick_legato(furnace_ticks)
 
@@ -44,6 +47,18 @@ class TickDataResolver():
                 tick_data.Vol = primary_vol
         return furnace_ticks
     
+    def resolve_note_cut(self, furnace_ticks: List[FurnaceTickData]) -> List[FurnaceTickData]:
+        for i, tick_data in enumerate(furnace_ticks):
+            note_cut_effect = tick_data.get_effect(NoteCutEffect)
+            if note_cut_effect is None:
+                continue
+            cut_idx = i + note_cut_effect.cut_ticks + 1
+            if cut_idx >= len(furnace_ticks):
+                continue
+            if furnace_ticks[cut_idx].kind() == FurnaceTickData.NoteKind.EMPTY:
+                furnace_ticks[cut_idx] = FurnaceTickData(Note=180)
+        return furnace_ticks
+
     def resolve_note_delay(self, furnace_ticks: List[FurnaceTickData]) -> List[FurnaceTickData]:
         out_ticks: List[FurnaceTickData] = [FurnaceTickData()] * len(furnace_ticks)
         for i, tick_data in enumerate(furnace_ticks):

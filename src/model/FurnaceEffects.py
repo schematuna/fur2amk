@@ -95,6 +95,13 @@ class QuickLegatoEffect(FurnaceEffect):
         self.semitones = semitones
 
 
+class NoteCutEffect(FurnaceEffect):
+    """Note cut effect (0xEC). Value is ticks after note start to cut."""
+
+    def __init__(self, raw_value: int):
+        self.cut_ticks = raw_value
+
+
 class NoteDelayEffect(FurnaceEffect):
     """Note delay effect (0xED). Value is delay in ticks."""
     
@@ -231,6 +238,7 @@ class FurnaceEffectFactory:
             0xE8: lambda v: QuickLegatoEffect(v, False, True),  # quick legaato up
             0xE9: lambda v: QuickLegatoEffect(v, False, False), # quick legato down
             0xEA: LegatoEffect,
+            0xEC: NoteCutEffect,
             0xED: NoteDelayEffect,
             0xEE: SendExternalEffect,
             0xF0: lambda v: SetTickRateEffect(v, True),

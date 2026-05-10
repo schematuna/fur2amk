@@ -52,6 +52,7 @@ which has high moderation standards.
 - E8: Quick legato up
 - E9: Quick legato down
 - EA: Toggle Legato
+- EC: Note Cut
 - ED: Note Delay
 - EE: Send External Command (for fur2amk hints, see below)
 - F0: Set Tick Rate (BPM)
