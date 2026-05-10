@@ -48,17 +48,12 @@ class LegatoEnableCommand(ChiptuneCommand):
     def __init__(self, legato_on: bool):
         self.legato_on = legato_on
 
-class VolumeSlideCommand(ChiptuneCommand):
-    """Volume slide Command. change_per_tick is the rate of volume change per tick."""
+class VolumeFadeCommand(ChiptuneCommand):
+    """Generic volume fade. duration is in furnace ticks, target is in furnace volume units (0-254)."""
 
-    def __init__(self, change_per_tick):
-        self.change_per_tick = change_per_tick
-
-class FineVolumeSlideCommand(ChiptuneCommand):
-    """Fine volume slide Command. change_per_tick is the fine rate of volume change per tick."""
-
-    def __init__(self, change_per_tick):
-        self.change_per_tick = change_per_tick
+    def __init__(self, duration: int, target: int):
+        self.duration = duration
+        self.target = target
 
 class VibratoCommand(ChiptuneCommand):
     def __init__(self, speed: int, depth: int):

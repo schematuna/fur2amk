@@ -20,18 +20,17 @@ class TickDataResolver():
         furnace_ticks = self.resolve_note_delay(furnace_ticks)
 
         # abstract away quick legato
-        # this just handles legato commands, corresponding notes are added in loop below
         furnace_ticks = self.resolve_quick_legato(furnace_ticks)
 
         # convert portamento into note slides so AMK Converter doesn't need to worry about porta logic
-        # Note: portamentos are unaffected by smaple mapped note changes. This is how it works in Furnace.
+        # Note: portamentos are unaffected by sample mapped note changes. This is how it works in Furnace.
         furnace_ticks = self.resolve_portamento(furnace_ticks)
 
         # Resolves single-tick volume change effects
         furnace_ticks = self.resolve_volume(furnace_ticks)
 
         # resolves echo macro
-        furnace_ticks = self.resolve_macros(furnace_ticks, instruments)
+        furnace_ticks = self.resolve_echo(furnace_ticks, instruments)
 
         return furnace_ticks
 
@@ -189,7 +188,7 @@ class TickDataResolver():
         return out_ticks
     
 
-    def resolve_macros(self, furnace_ticks: List[FurnaceTickData], instruments: List[FurnaceInstrument]):
+    def resolve_echo(self, furnace_ticks: List[FurnaceTickData], instruments: List[FurnaceInstrument]):
         echo_converter = EchoMacroConverter()
         active_ins = None
         new_ticks = furnace_ticks

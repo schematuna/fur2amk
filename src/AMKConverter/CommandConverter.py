@@ -15,30 +15,34 @@ import copy
 class VolumeConverter():
     def __init__(self, tick_ratio: float) -> None:
         self.tick_ratio = tick_ratio
-        self.volume_slider = VolumeSlider(tick_ratio, 0)
+        self.cur_vol: float = 0xFE  # Furnace default volume (0x7F * 2)
 
     def convert_tick(self, tick_data: ChiptuneTickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
-        new_vol = tick_data.Vol
-        vol_slide: VolumeSlide = None
-        if new_vol is not None:
-            vol_slide = self.volume_slider.end_slide()
-            if vol_slide is not None:
-                commands.append(VolumeFade(vol_slide.tick, vol_slide.duration, vol_slide.target))
-            self.volume_slider.set_target(new_vol)
-            commands.append(VolumeChange(tick, MMLUtil.find_v(new_vol)))
-
-        new_slide: VolumeSlide = None
-        if effect := tick_data.get_command(VolumeSlideCommand) or tick_data.get_command(FineVolumeSlideCommand):
-            if new_slide := self.volume_slider.handle_new_effect(effect):
-                commands.append(VolumeFade(new_slide.tick, new_slide.duration, new_slide.target))
-        elif vol_slide is not None:
-            # restart slide if it was interrupted by a volume command
-            self.volume_slider.start_slide()
-            
-        if new_slide := self.volume_slider.tick(1):
-            commands.append(VolumeFade(new_slide.tick, new_slide.duration, new_slide.target))
-
+        if tick_data.Vol is not None:
+            self.cur_vol = tick_data.Vol
+            commands.append(VolumeChange(tick, MMLUtil.find_v(self.cur_vol)))
+        if cmd := tick_data.get_command(VolumeFadeCommand):
+            amk_duration = round(cmd.duration * self.tick_ratio)
+            fur_start = self.cur_vol
+            fur_target = cmd.target
+            max_duration = max(MMLUtil.TICK_TO_DURATION.keys())
+            if amk_duration <= max_duration:
+                commands.append(VolumeFade(tick, amk_duration, MMLUtil.find_v(fur_target)))
+            else:
+                # Split into multiple fades with linearly interpolated targets in Furnace units
+                cur_tick = tick
+                remaining = amk_duration
+                elapsed = 0
+                while remaining > 0:
+                    chunk = min(remaining, max_duration)
+                    elapsed += chunk
+                    t = elapsed / amk_duration
+                    interp_fur = fur_start + t * (fur_target - fur_start)
+                    commands.append(VolumeFade(cur_tick, chunk, MMLUtil.find_v(round(interp_fur))))
+                    cur_tick += chunk
+                    remaining -= chunk
+            self.cur_vol = fur_target
         return commands
 
 class PanConverter():
