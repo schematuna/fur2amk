@@ -1,10 +1,10 @@
 from typing import Optional, Tuple
 
-from ..model.ChiptuneCommands import VolumeFadeCommand
+from ..model.ChiptuneCommands import *
 
 
-class FurnaceVolumeSlider:
-    """Tracks volume slide state in furnace units, emitting VolumeFadeCommands."""
+class FurnaceSlider:
+    """Tracks slide state, emitting Chiptune slide commands."""
 
     def __init__(self):
         self.change_per_tick: float = 0
@@ -12,18 +12,17 @@ class FurnaceVolumeSlider:
         self.slide_start: int = None
         self.is_sliding: bool = False
         self.cur_tick: int = 0
+        # whether this slide should stop when limit is reached
+        self.stop_on_limit: bool = True
+
+    def limit_target_val(self, target_val: float) -> float:
+        return target_val
+
+    def get_command(self, duration: int, target: int) -> ChiptuneCommand:
+        return None
 
     def set_target(self, target: float) -> None:
         self.target_val = target
-
-    def set_volume(self, vol: float) -> Optional[Tuple[int, VolumeFadeCommand]]:
-        """Called when an explicit volume is set on a row. Ends any in-progress slide,
-        resets target_val, and restarts the slide from the new volume."""
-        completed = self.end_slide() if self.is_sliding else None
-        self.target_val = vol
-        if completed is not None:
-            self._start_slide()
-        return completed
 
     def end_slide(self) -> Optional[Tuple[int, VolumeFadeCommand]]:
         """Ends the current slide. Returns (slide_start_tick, command) for retroactive placement."""
@@ -34,9 +33,9 @@ class FurnaceVolumeSlider:
         self.is_sliding = False
         if duration == 0:
             return None
-        return start, VolumeFadeCommand(duration, round(self.target_val))
+        return start, self.get_command(duration, round(self.target_val))
 
-    def _start_slide(self) -> None:
+    def start_slide(self) -> None:
         self.slide_start = self.cur_tick
         self.is_sliding = True
 
@@ -49,18 +48,39 @@ class FurnaceVolumeSlider:
         completed = self.end_slide()
         self.change_per_tick = effect.change_per_tick
         if not self.is_sliding:
-            self._start_slide()
+            self.start_slide()
         return completed
 
     def tick(self) -> Optional[Tuple[int, VolumeFadeCommand]]:
         result = None
         if self.is_sliding:
             self.target_val += self.change_per_tick
-            bounded = max(0, min(self.target_val, 0xFE))
-            if bounded != self.target_val:
+            bounded = self.limit_target_val(self.target_val)
+            if bounded != self.target_val and self.stop_on_limit:
                 self.target_val = bounded
                 result = self.end_slide()
             else:
                 self.target_val = bounded
         self.cur_tick += 1
         return result
+
+class FurnaceVolumeSlider(FurnaceSlider):
+    def __init__(self):
+        super().__init__()
+
+    def limit_target_val(self, target_val: float) -> float:
+        return max(0, min(target_val, 0xFE))
+
+    def get_command(self, duration: int, target: int) -> VolumeFadeCommand:
+        return VolumeFadeCommand(duration, round(target))
+
+class FurnacePanSlider(FurnaceSlider):
+    def __init__(self):
+        super().__init__()
+        self.stop_on_limit = False
+
+    def limit_target_val(self, target_val: float) -> float:
+        return max(0, min(target_val, 0xFF))
+
+    def get_command(self, duration: int, target: int) -> PanFadeCommand:
+        return PanFadeCommand(duration, round(target))
