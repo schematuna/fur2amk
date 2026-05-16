@@ -6,7 +6,8 @@ from ..model.ChiptuneData import *
 from ..model.ChiptuneCommands import *
 from .InstrumentInfo import FurInstrumentInfo
 from .MacroConverter import VolumeMacroConverter, ArpMacroConverter
-from .FurnaceSliders import FurnaceVolumeSlider
+from .FurnaceSliders import *
+from .FurnaceUtil import FurnaceUtil
 
 class TickDataConverter:
     def __init__(self):
@@ -16,10 +17,11 @@ class TickDataConverter:
         chiptune_ticks: List[ChiptuneTickData] = []
         tuning_converter = TuningConverter()
         vol_converter = VolumeConverter()
+        pan_converter = PanConverter()
         active_ins: FurnaceInstrument = None
         vol_at_tick: List[float] = []
 
-        for fur_tick in furnace_ticks:
+        for i, fur_tick in enumerate(furnace_ticks):
             for ins in instruments:
                 if ins.index == fur_tick.Ins:
                     active_ins = ins
@@ -27,10 +29,19 @@ class TickDataConverter:
 
             chip_tick = ChiptuneTickData()
 
+            # condense volume slides
             for tick_idx, cmd in vol_converter.process_tick(fur_tick):
                 chiptune_ticks[tick_idx].Commands.append(cmd)
 
+            # remember volume at every tick to help with volume macro conversion later
             vol_at_tick.append(vol_converter.current_vol)
+
+            # condense pan slides
+            for tick_idx, cmd in pan_converter.process_tick(fur_tick, i):
+                if tick_idx == i:
+                    chip_tick.Commands.append(cmd)
+                else:                
+                    chiptune_ticks[tick_idx].Commands.append(cmd)
 
             for effect in fur_tick.Effects:
                 chip_cmd = self.convert_effect(effect)
@@ -43,7 +54,11 @@ class TickDataConverter:
             chip_tick.Note, chip_tick.Ins = self.apply_sample_map(fur_tick, active_ins, ins_info)
             chiptune_ticks.append(chip_tick)
 
-        if completed := vol_converter._slider.end_slide():
+        # finish potential final slides
+        if completed := vol_converter.slider.end_slide():
+            tick_idx, cmd = completed
+            chiptune_ticks[tick_idx].Commands.append(cmd)
+        if completed := pan_converter.slider.end_slide():
             tick_idx, cmd = completed
             chiptune_ticks[tick_idx].Commands.append(cmd)
 
@@ -110,12 +125,6 @@ class TickDataConverter:
             return PitchSlideCommand(effect.change_per_tick)
         elif isinstance(effect, NoteSlideEffect):
             return NoteSlideCommand(effect.speed, effect.semitones)
-        elif isinstance(effect, StereoPanEffect):
-            return StereoPanCommand(effect.left_volume, effect.right_volume)
-        elif isinstance(effect, PanEffect):
-            return PanCommand(effect.pan_position)
-        elif isinstance(effect, PanSlideEffect):
-            return PanSlideCommand(effect.change_per_tick)
         elif isinstance(effect, LegatoEffect):
             return LegatoEnableCommand(effect.legato_on)
         elif isinstance(effect, EchoEffect):
@@ -133,37 +142,72 @@ class VolumeConverter:
     """Tracks volume slide state, emitting retroactive VolumeFadeCommands."""
 
     def __init__(self):
-        self._slider = FurnaceVolumeSlider()
+        self.slider = FurnaceVolumeSlider()
 
     @property
     def current_vol(self) -> float:
-        return self._slider.target_val
+        return self.slider.target_val
 
     def process_tick(self, fur_tick: FurnaceTickData) -> List[Tuple[int, ChiptuneCommand]]:
-        """Returns a list of (tick_idx, command) pairs to be placed on a previously-emitted ChiptuneTickData."""
-        retroactive: List[Tuple[int, ChiptuneCommand]] = []
+        """Returns a list of (tick_idx, command) pairs."""
+
+        commands: List[Tuple[int, ChiptuneCommand]] = []
 
         vol_effect = fur_tick.get_effect(VolumeSlideEffect) or fur_tick.get_effect(FineVolumeSlideEffect)
 
         if fur_tick.Vol is not None:
-            if vol_effect is not None:
-                # End the current slide first (captures accumulated target), then update base.
-                # handle_new_effect will start the new slide cleanly since is_sliding will be False.
-                if completed := self._slider.end_slide():
-                    retroactive.append(completed)
-                self._slider.set_target(fur_tick.Vol)
-            else:
-                if completed := self._slider.set_volume(fur_tick.Vol):
-                    retroactive.append(completed)
+            if completed := self.slider.end_slide():
+                commands.append(completed)
+                if vol_effect is None:
+                    self.slider.start_slide()
+                
+            self.slider.set_target(fur_tick.Vol)
 
         if vol_effect is not None:
-            if completed := self._slider.handle_new_effect(vol_effect):
-                retroactive.append(completed)
+            if completed := self.slider.handle_new_effect(vol_effect):
+                commands.append(completed)
 
-        if completed := self._slider.tick():
-            retroactive.append(completed)
-        return retroactive
+        if completed := self.slider.tick():
+            commands.append(completed)
+
+        return commands
     
+
+class PanConverter:
+    """Tracks pan slide state, emitting retroactive pan fade commands."""
+
+    def __init__(self):
+        self.slider = FurnacePanSlider()
+        self.cur_pan = 0x80  # center pan
+
+    def process_tick(self, fur_tick: FurnaceTickData, tick_num: int) -> List[Tuple[int, ChiptuneCommand]]:
+        """Returns a list of (tick_idx, command) pairs."""
+
+        commands: List[Tuple[int, ChiptuneCommand]] = []
+
+        pan_slide_effect = fur_tick.get_effect(PanSlideEffect)
+
+        if pan_effect := fur_tick.get_effect(PanEffect):
+            effect_pan = pan_effect.pan_position
+            commands.append((tick_num, PanCommand(effect_pan)))
+            self.slider.set_target(effect_pan)
+            self.cur_pan = effect_pan
+
+        if stereo_pan_effect := fur_tick.get_effect(StereoPanEffect):
+            effect_pan = FurnaceUtil.stereo_to_unity_pan(stereo_pan_effect.left_volume, stereo_pan_effect.right_volume)
+            commands.append((tick_num, PanCommand(effect_pan)))
+            self.slider.set_target(effect_pan)
+            self.cur_pan = effect_pan
+
+        if pan_slide_effect := fur_tick.get_effect(PanSlideEffect):
+            if completed := self.slider.handle_new_effect(pan_slide_effect):
+                commands.append(completed)
+
+        if completed := self.slider.tick():
+            commands.append(completed)
+
+        return commands      
+
 
 class TuningConverter:
     def __init__(self):

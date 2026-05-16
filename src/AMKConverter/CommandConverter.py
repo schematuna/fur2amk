@@ -19,9 +19,11 @@ class VolumeConverter():
 
     def convert_tick(self, tick_data: ChiptuneTickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
+
         if tick_data.Vol is not None:
             self.cur_vol = tick_data.Vol
             commands.append(VolumeChange(tick, MMLUtil.find_v(self.cur_vol)))
+
         if cmd := tick_data.get_command(VolumeFadeCommand):
             amk_duration = round(cmd.duration * self.tick_ratio)
             fur_start = self.cur_vol
@@ -48,28 +50,36 @@ class VolumeConverter():
 class PanConverter():
     def __init__(self, tick_ratio: float) -> None:
         self.tick_ratio = tick_ratio
-        self.pan_slider = PanSlider(tick_ratio, 0)
+        self.cur_pan: float = 0x80  # center (Furnace default)
 
     def convert_tick(self, tick_data: ChiptuneTickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
         if effect := tick_data.get_command(PanCommand):
-            self.pan_slider.set_target(effect.pan_position)
+            self.cur_pan = effect.pan_position
             amk_pan = FurnaceUtil.unity_to_amk_pan(effect.pan_position)
             commands.append(PanChange(tick, amk_pan))
-        
-        if effect := tick_data.get_command(StereoPanCommand):
-            cur_pan = FurnaceUtil.stereo_to_unity_pan(effect.left_volume, effect.right_volume)
-            self.pan_slider.set_target(cur_pan)
-            amk_pan = FurnaceUtil.stereo_to_amk_pan(effect.left_volume, effect.right_volume)
-            commands.append(PanChange(tick, amk_pan))
-        
-        if effect := tick_data.get_command(PanSlideCommand):
-            new_slide: PanSlide = None
-            if new_slide := self.pan_slider.handle_new_effect(effect):
-                commands.append(PanFade(new_slide.tick, new_slide.duration, new_slide.target))
-                    
-        if new_slide := self.pan_slider.tick(1):
-            commands.append(PanFade(new_slide.tick, new_slide.duration, new_slide.target))
+
+        if cmd := tick_data.get_command(PanFadeCommand):
+            amk_duration = round(cmd.duration * self.tick_ratio)
+            fur_start = self.cur_pan
+            fur_target = cmd.target
+            max_duration = max(MMLUtil.TICK_TO_DURATION.keys())
+            if amk_duration <= max_duration:
+                commands.append(PanFade(tick, amk_duration, FurnaceUtil.unity_to_amk_pan(fur_target)))
+            else:
+                # Split into multiple fades with linearly interpolated targets in Furnace units
+                cur_tick = tick
+                remaining = amk_duration
+                elapsed = 0
+                while remaining > 0:
+                    chunk = min(remaining, max_duration)
+                    elapsed += chunk
+                    t = elapsed / amk_duration
+                    interp_fur = fur_start + t * (fur_target - fur_start)
+                    commands.append(PanFade(cur_tick, chunk, FurnaceUtil.unity_to_amk_pan(round(interp_fur))))
+                    cur_tick += chunk
+                    remaining -= chunk
+            self.cur_pan = fur_target
 
         return commands
 

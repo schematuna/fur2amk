@@ -10,11 +10,6 @@ class Slide:
     tick: int = 0
     duration: int = 0
 
-@dataclass
-class VolumeSlide(Slide):
-    target: int = 0
-
-
 class SlideHelper:
     def __init__(self, tick_ratio: int, starting_tick: int) -> None:
         # ratio of amk ticks to furnace ticks
@@ -105,15 +100,3 @@ class SlideHelper:
 
         self.cur_tick += ticks
         return new_slide
-
-
-class VolumeSlider(SlideHelper):
-    def _get_target_amk(self) -> int:
-        return MMLUtil.find_v(round(self.target_val))
-
-    def _limit_target_val(self, target_val: float) -> float:
-        # max in Furnace is 7F, stored in binary as val * 2
-        return max(0, min(target_val, 0xFE))
-
-    def _get_command(self, tick: int, duration: int, target_volume: int) -> VolumeSlide:
-        return VolumeSlide(tick, duration, target_volume)

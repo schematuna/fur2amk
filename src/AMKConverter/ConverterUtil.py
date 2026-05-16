@@ -8,7 +8,7 @@ from ..model.MMLData import *
 from ..model.FurnaceData import *
 from ..model.ChiptuneData import *
 
-from .SlideHelpers import Slide, VolumeSlide, SlideHelper
+from .SlideHelpers import Slide, SlideHelper
 
 import copy
 
@@ -34,37 +34,12 @@ class FurnaceUtil:
         octaves_to_slide = abs(semitones) / 12
         return ticks_per_octave * octaves_to_slide
 
-    # Convert from Furnace unity pan format (00=left, 80=center, FF=right)
+    # Convert from ChiptuneData pan format (00=left, 80=center, FF=right)
     # to AMK format (0=right, 10=center, 20=left)
     @staticmethod
     def unity_to_amk_pan(pan: int) -> int:
         pan = max(0, min(255, pan))
         return MMLUtil.find_y(pan)
-
-    # Convert from Furnace stereo pan format (left and right, 0->15)
-    # to AMK format (0=right, 10=center, 20=left)
-    @staticmethod
-    def stereo_to_amk_pan(left: int, right: int) -> int:
-        unity_pan = FurnaceUtil.stereo_to_unity_pan(left, right)
-        return FurnaceUtil.unity_to_amk_pan(unity_pan)
-
-    # Convert from Furnace stereo pan format (left and right, both 0->15)
-    # to Furnace unity pan format (00=left, 80=center, FF=right)
-    @staticmethod
-    def stereo_to_unity_pan(left: int, right: int) -> int:
-        # Clamp to valid range
-        left = max(0, min(15, left))
-        right = max(0, min(15, right))
-        
-        # Handle edge cases
-        if left == 0 and right == 0:
-            return 0x80
-        
-        # Calculate linear pan based on relative balance
-        total = left + right
-        level = round(255 * right / total)
-        
-        return max(0, min(255, level))
     
     @staticmethod
     def tick_rate_to_amk_tempo(structure: ChiptuneStructure, amk_ticks_per_row: int, tick_rate: int) -> int:
@@ -110,10 +85,7 @@ class FurnaceUtil:
 @dataclass
 class PitchSlide(Slide):
     target: int = 0
-
-@dataclass
-class PanSlide(Slide):
-    target: int = 0
+    
 
 class PitchSlider(SlideHelper):
     @staticmethod
@@ -135,29 +107,3 @@ class PitchSlider(SlideHelper):
 
     def _get_command(self, tick: int, duration: int, target_note: float) -> Slide:
         return PitchSlide(tick, duration, target_note)
-
-
-class PanSlider(SlideHelper):
-    def __init__(self, tick_ratio: int, starting_tick: int) -> None:
-        super().__init__(tick_ratio, starting_tick)
-        self.stop_on_limit = False
-
-    def _get_target_amk(self) -> int:
-        return FurnaceUtil.unity_to_amk_pan(round(self.target_val))
-
-    def _limit_target_val(self, target_val: float) -> float:
-        return max(0, min(target_val, 0xFF))
-
-    def _get_command(self, tick: int, duration: int, target_pan: int) -> Slide:
-        return PanSlide(tick, duration, target_pan)
-
-class VolumeSlider(SlideHelper):
-    def _get_target_amk(self) -> int:
-        return MMLUtil.find_v(round(self.target_val))
-
-    def _limit_target_val(self, target_val: float) -> float:
-        # max in Furnace is 7F, stored in binary as val * 2
-        return max(0, min(target_val, 0xFE))
-
-    def _get_command(self, tick: int, duration: int, target_volume: int) -> Slide:
-        return VolumeSlide(tick, duration, target_volume)
