@@ -79,6 +79,7 @@ class ArpMacroConverter:
         self.timer = None
         self.primary_note = 0
         self.in_legato_seq = False
+        self.last_val = None
 
     def get_arp_for_tick(self, tick_data: FurnaceTickData, active_ins: FurnaceInstrument, chip_note: int) -> Tuple[int | None, LegatoEnableCommand | None]:
         if chip_note is not None:
@@ -89,6 +90,7 @@ class ArpMacroConverter:
                 self.timer = None
             
             self.primary_note = chip_note
+            self.last_val = None
 
         is_note_release = tick_data.kind() == ChiptuneTickData.NoteKind.RELEASE
         if is_note_release:
@@ -98,10 +100,12 @@ class ArpMacroConverter:
         legato_cmd = None
         if self.timer is not None:
             val = self.timer.tick()
-            if val is not None:
+            # make a new note for new arp vals
+            if val is not None and val != self.last_val:
+                self.last_val = val
                 new_note = self.primary_note + val
                 # turn on legato on second note.
-                if self.timer.cur_step == 1:
+                if self.timer.cur_step >= 1 and not self.in_legato_seq:
                     legato_cmd = LegatoEnableCommand(True)
                     self.in_legato_seq = True
 
