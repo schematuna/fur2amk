@@ -2,7 +2,7 @@ import logging
 import sys
 
 from ..model.FurnaceData import *
-from ..model.ChiptuneCommands import TuningCommand
+from ..model.ChiptuneData import *
 
 class MacroTimer():
     def __init__(self, macro: FurnaceMacro):
@@ -77,26 +77,44 @@ class ArpMacroConverter:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
         self.timer = None
-        self.cur_offset = 0
+        self.primary_note = 0
+        self.in_legato_seq = False
 
-    def get_arp_for_tick(self, tick_data: FurnaceTickData, active_ins: FurnaceInstrument):
-        if tick_data.kind() == FurnaceTickData.NoteKind.NOTE:
+    def get_arp_for_tick(self, tick_data: FurnaceTickData, active_ins: FurnaceInstrument, chip_note: int) -> Tuple[int | None, LegatoEnableCommand | None]:
+        if chip_note is not None:
             arp_macro = active_ins.get_macro(SNESMacroCode.Arpeggio) if active_ins else None
             if arp_macro and arp_macro.type == SNESMacroTypes.Sequence.value:
                 self.timer = MacroTimer(arp_macro)
             else:
                 self.timer = None
+            
+            self.primary_note = chip_note
 
+        is_note_release = tick_data.kind() == ChiptuneTickData.NoteKind.RELEASE
+        if is_note_release:
+            self.timer = None
+
+        new_note = None
+        legato_cmd = None
         if self.timer is not None:
             val = self.timer.tick()
             if val is not None:
-                self.cur_offset = val
-                return TuningCommand(val)
-        elif self.cur_offset != 0:
-            self.cur_offset = 0
-            return TuningCommand(0)
+                new_note = self.primary_note + val
+                # turn on legato on second note.
+                if self.timer.cur_step == 1:
+                    legato_cmd = LegatoEnableCommand(True)
+                    self.in_legato_seq = True
 
-        return None
+        if chip_note is not None and self.in_legato_seq:
+            # turn off legato on note after arp macro ends
+            legato_cmd = LegatoEnableCommand(False)
+            self.in_legato_seq = False
+
+        # note slides affect pitch throughout entire note duration
+        if note_slide_command := tick_data.get_effect(NoteSlideEffect):
+            self.primary_note += note_slide_command.semitones
+
+        return new_note, legato_cmd
 
     
 class EchoMacroConverter:

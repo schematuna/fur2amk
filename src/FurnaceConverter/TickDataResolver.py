@@ -47,6 +47,8 @@ class TickDataResolver():
             note_cut_effect = tick_data.get_effect(NoteCutEffect)
             if note_cut_effect is None:
                 continue
+            # Add 1 cause it sounds better
+            # TODO: figure out why note releases sound so different between Furnace and AMK
             cut_idx = i + note_cut_effect.cut_ticks + 1
             if cut_idx >= len(furnace_ticks):
                 continue
@@ -156,7 +158,7 @@ class TickDataResolver():
     
     def resolve_portamento(self, furnace_ticks: List[FurnaceTickData]):
         '''Convert portamentos to note slides for simplicity'''
-        # TODO: this conversion loses precision. Convert all pitch slides to some standard ChiptuneData format instead
+        # TODO: this conversion loses precision. Convert to a Pitch Slide Effect instead
         out_ticks: List[FurnaceTickData] = []
         # the current active pitch. Determines starting pitch for portamentos
         active_note = None
