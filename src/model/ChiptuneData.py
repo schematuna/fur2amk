@@ -1,7 +1,6 @@
 from dataclasses import dataclass, field
-from typing import Optional, List, Tuple, Dict
+from typing import Optional, List
 from enum import Enum
-import logging
 
 from .FurnaceData import *
 from .ChiptuneCommands import *
