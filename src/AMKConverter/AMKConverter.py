@@ -8,7 +8,6 @@ from typing import Dict, List, Tuple
 
 from ..model.ChiptuneData import *
 from ..model.AMKData import *
-from ..model.MMLCommands import *
 from .TickDataConverter import *
 from ..util import *
 

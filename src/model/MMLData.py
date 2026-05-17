@@ -15,6 +15,7 @@ class MMLNote:
     pre_note_commands: List[MMLCommand] = field(default_factory=lambda: [])
 
     # pitchbends must occur within the duration of the note
+    # Unused since switched off $DD onto $EB
     pitch_bends: List[PitchBend] = field(default_factory=lambda: [])
 
     # whether this note should use the MML trick to avoid a 1-tick gap before the next note

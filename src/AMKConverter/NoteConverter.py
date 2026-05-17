@@ -2,7 +2,6 @@ from typing import List, Optional, Tuple
 import logging
 
 from ..model.MMLCommands import *
-from ..model.MMLData import *
 from ..model.ChiptuneData import *
 from ..model.AMKData import *
 from .ConverterUtil import *

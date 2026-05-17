@@ -1,10 +1,9 @@
-from typing import List, Optional
+from typing import List
 from dataclasses import dataclass
 from math import floor
 import logging
 
 from ..model.MMLCommands import *
-from ..model.MMLData import *
 from ..model.ChiptuneData import *
 
 from .ConverterUtil import *
