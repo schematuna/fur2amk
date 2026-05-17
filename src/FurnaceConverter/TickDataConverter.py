@@ -19,6 +19,7 @@ class TickDataConverter:
         tuning_converter = TuningConverter()
         vol_converter = VolumeConverter()
         pan_converter = PanConverter()
+        arp_converter = ArpMacroConverter()
         pitchbend_converter = PitchBendConverter()
         active_ins: FurnaceInstrument = None
         vol_at_tick: List[float] = []
@@ -59,6 +60,13 @@ class TickDataConverter:
 
             chip_tick.Note, chip_tick.Ins = self.apply_sample_map(fur_tick, active_ins, ins_info)
 
+            # process arp macro after sample maps but before pitch bends
+            note, legato_cmd = arp_converter.get_arp_for_tick(fur_tick, active_ins, chip_tick.Note)
+            if note is not None:
+                chip_tick.Note = note
+            if legato_cmd is not None:
+                chip_tick.Commands.append(legato_cmd)
+
             # handle pitch slides after sample mapping so target note is correct
             for tick_idx, cmd in pitchbend_converter.process_tick(fur_tick, chip_tick.Note, i):
                 if tick_idx == i:
@@ -80,7 +88,6 @@ class TickDataConverter:
             chiptune_ticks[tick_idx].Commands.append(cmd)
 
         self.apply_volume_macros(chiptune_ticks, furnace_ticks, instruments, vol_at_tick)
-        self.apply_arp_macros(chiptune_ticks, furnace_ticks, instruments)
         return chiptune_ticks
 
     def apply_volume_macros(self, chiptune_ticks: List[ChiptuneTickData], furnace_ticks: List[FurnaceTickData], instruments: List[FurnaceInstrument], vol_at_tick: List[float]) -> None:
@@ -103,20 +110,6 @@ class TickDataConverter:
                 macro_mult = macro_mults[i]
                 if macro_mult != 1:
                     cmd.target = round(min(max(cmd.target * macro_mult, 0), 0xFE))
-
-    def apply_arp_macros(self, chiptune_ticks: List[ChiptuneTickData], furnace_ticks: List[FurnaceTickData], instruments: List[FurnaceInstrument]) -> None:
-        arp_converter = ArpMacroConverter()
-        active_ins: FurnaceInstrument = None
-        for fur_tick, chip_tick in zip(furnace_ticks, chiptune_ticks):
-            for ins in instruments:
-                if ins.index == fur_tick.Ins:
-                    active_ins = ins
-                    break
-            if cmd := arp_converter.get_arp_for_tick(fur_tick, active_ins):
-                if existing := chip_tick.get_command(TuningCommand):
-                    existing.tuning += cmd.tuning
-                else:
-                    chip_tick.Commands.append(cmd)
 
     def apply_sample_map(self, fur_tick: FurnaceTickData, active_ins: FurnaceInstrument, ins_info: Dict[int, FurInstrumentInfo]) -> Tuple[any, any]:
         if fur_tick.kind() == FurnaceTickData.NoteKind.NOTE:
