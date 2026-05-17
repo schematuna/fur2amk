@@ -11,7 +11,7 @@
     #optimized
 }
 
-; created with fur2amk 0.5.2
+; created with fur2amk 0.6.0
 
 w254 t30
 

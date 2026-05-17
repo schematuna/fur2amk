@@ -415,8 +415,7 @@ class PitchBendConverter:
                     note_notes.append(cur_note)
             else:
                 if env_active:
-                    commands.append(PitchEnvelope(cur_note.tick, 0, 0, 0))
-                    # commands.append(PitchEnvelopeOff(cur_note.tick))
+                    commands.append(PitchEnvelopeOff(cur_note.tick))
                     env_active = False
                 note_notes.append(cur_note)
 
