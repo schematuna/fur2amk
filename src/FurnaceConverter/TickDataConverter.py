@@ -5,7 +5,7 @@ from ..model.FurnaceEffects import *
 from ..model.ChiptuneData import *
 from ..model.ChiptuneCommands import *
 from .InstrumentInfo import FurInstrumentInfo
-from .MacroConverter import VolumeMacroConverter, ArpMacroConverter
+from .MacroConverter import *
 from .FurnaceSliders import *
 from .FurnaceUtil import FurnaceUtil
 
@@ -15,6 +15,7 @@ class TickDataConverter:
 
     def convert(self, furnace_ticks: List[FurnaceTickData], instruments: List[FurnaceInstrument], ins_info: Dict[int, FurInstrumentInfo]) -> List[ChiptuneTickData]:
         chiptune_ticks: List[ChiptuneTickData] = []
+        echo_converter = EchoConverter()
         tuning_converter = TuningConverter()
         vol_converter = VolumeConverter()
         pan_converter = PanConverter()
@@ -29,6 +30,10 @@ class TickDataConverter:
                     break
 
             chip_tick = ChiptuneTickData()
+
+            # convert echo
+            if echo_cmd := echo_converter.process_tick(fur_tick, active_ins):
+                chip_tick.Commands.append(echo_cmd)
 
             # condense volume slides
             for tick_idx, cmd in vol_converter.process_tick(fur_tick):
@@ -135,8 +140,6 @@ class TickDataConverter:
     def convert_effect(self, effect: FurnaceEffect) -> ChiptuneCommand | None:
         if isinstance(effect, LegatoEffect):
             return LegatoEnableCommand(effect.legato_on)
-        elif isinstance(effect, EchoEffect):
-            return EchoEnableCommand(effect.echo_on)
         elif isinstance(effect, VibratoEffect):
             return VibratoCommand(effect.speed, effect.depth)
         elif isinstance(effect, SetTickRateEffect):
@@ -293,3 +296,21 @@ class TuningConverter:
             tuning_command = TuningCommand(self.global_tuning + self.local_tuning)
 
         return tuning_command
+
+class EchoConverter:
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+        self.echo_macro_converter = EchoMacroConverter()
+
+    def process_tick(self, tick_data: FurnaceTickData, active_ins: FurnaceInstrument) -> ChiptuneCommand | None:
+        echo_command = None
+
+        if macro_echo_effect := self.echo_macro_converter.get_echo_for_tick(tick_data, active_ins):
+            echo_command = EchoEnableCommand(macro_echo_effect.echo_on)
+
+        if row_echo_effect := tick_data.get_effect(EchoEffect):
+            # echo macro takes precedence over row effect
+            if macro_echo_effect is None:
+                echo_command = EchoEnableCommand(row_echo_effect.echo_on)
+
+        return echo_command

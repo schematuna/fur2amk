@@ -1,4 +1,4 @@
-from .MacroConverter import *
+from ..model.FurnaceData import *
 from ..util.MMLUtil import *
 
 import copy
@@ -29,9 +29,6 @@ class TickDataResolver():
 
         # Resolves single-tick volume change effects
         furnace_ticks = self.resolve_volume(furnace_ticks)
-
-        # resolves echo macro
-        furnace_ticks = self.resolve_echo(furnace_ticks, instruments)
 
         return furnace_ticks
 
@@ -199,29 +196,4 @@ class TickDataResolver():
             out_ticks.append(new_tick)
                 
         return out_ticks
-    
-
-    def resolve_echo(self, furnace_ticks: List[FurnaceTickData], instruments: List[FurnaceInstrument]):
-        echo_converter = EchoMacroConverter()
-        active_ins = None
-        new_ticks = furnace_ticks
-        for tick_data in new_ticks:
-            note_kind = tick_data.kind()
-            if note_kind == FurnaceTickData.NoteKind.NOTE:
-                new_fur_ins = None
-                for ins in instruments:
-                    if ins.index == tick_data.Ins:
-                        new_fur_ins = ins
-                        break
-
-                if new_fur_ins is not None:
-                    active_ins = new_fur_ins
-
-                if active_ins is None:
-                    self.logger.warning(f"No furnace instrument active in row with Note {tick_data.Note}.")
-
-            if echo_effect := echo_converter.get_echo_for_tick(tick_data, active_ins):
-                tick_data.Effects.append(echo_effect)
-
-        return new_ticks
     
