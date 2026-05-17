@@ -8,8 +8,6 @@ from ..model.MMLData import *
 from ..model.FurnaceData import *
 from ..model.ChiptuneData import *
 
-from .SlideHelpers import Slide, SlideHelper
-
 import copy
 
 # persistent channel state for conversion process
@@ -21,19 +19,6 @@ class FurnaceState:
     fur_ins_idx: int = None
 
 class FurnaceUtil:
-    PITCH_STEPS_PER_OCTAVE = 384
-
-    @staticmethod
-    def fur_pitch_change_to_semitones(change: int) -> float:
-        semitones = change * 12 / FurnaceUtil.PITCH_STEPS_PER_OCTAVE
-        return semitones
-
-    @staticmethod
-    def ticks_from_speed(speed: int, semitones: int) -> float:
-        ticks_per_octave = FurnaceUtil.PITCH_STEPS_PER_OCTAVE / speed
-        octaves_to_slide = abs(semitones) / 12
-        return ticks_per_octave * octaves_to_slide
-
     # Convert from ChiptuneData pan format (00=left, 80=center, FF=right)
     # to AMK format (0=right, 10=center, 20=left)
     @staticmethod
@@ -80,30 +65,3 @@ class FurnaceUtil:
         note2.pre_note_commands = []
 
         return note1, note2
-
-# Slide objects created by the helpers
-@dataclass
-class PitchSlide(Slide):
-    target: int = 0
-    
-
-class PitchSlider(SlideHelper):
-    @staticmethod
-    def get_max_duration() -> int:
-        # EB command can got to $FF but just do C0 for cleanliness
-        return 0xC0
-
-    def _get_target_amk(self) -> float:
-        return self.target_val
-
-    def _get_change_per_tick(self, effect: FurnaceEffect) -> float:
-        if effect.change_per_tick is not None:
-            return FurnaceUtil.fur_pitch_change_to_semitones(effect.change_per_tick / self.tick_ratio)
-        else:
-            return None
-
-    def _limit_target_val(self, target_val: float) -> float:
-        return max(MMLUtil.AMK_MIN_PITCH, min(target_val, MMLUtil.AMK_MAX_PITCH))
-
-    def _get_command(self, tick: int, duration: int, target_note: float) -> Slide:
-        return PitchSlide(tick, duration, target_note)

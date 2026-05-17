@@ -1,4 +1,17 @@
 class FurnaceUtil:
+    PITCH_STEPS_PER_OCTAVE = 384
+
+    @staticmethod
+    def fur_pitch_change_to_semitones(change: int) -> float:
+        semitones = change * 12 / FurnaceUtil.PITCH_STEPS_PER_OCTAVE
+        return semitones
+
+    @staticmethod
+    def ticks_from_speed(speed: int, semitones: int) -> float:
+        ticks_per_octave = FurnaceUtil.PITCH_STEPS_PER_OCTAVE / speed
+        octaves_to_slide = abs(semitones) / 12
+        return ticks_per_octave * octaves_to_slide
+
     # Convert from Furnace stereo pan format (left and right, both 0->15)
     # to Furnace unity pan format (00=left, 80=center, FF=right)
     @staticmethod

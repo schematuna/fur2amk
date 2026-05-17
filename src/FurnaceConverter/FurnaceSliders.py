@@ -1,6 +1,9 @@
 from typing import Optional, Tuple
 
 from ..model.ChiptuneCommands import *
+from .FurnaceUtil import FurnaceUtil
+from ..util.MMLUtil import MMLUtil
+from ..model.FurnaceEffects import FurnaceEffect
 
 
 class FurnaceSlider:
@@ -20,6 +23,9 @@ class FurnaceSlider:
 
     def get_command(self, duration: int, target: int) -> ChiptuneCommand:
         return None
+    
+    def get_change_per_tick(self, effect) -> float:
+        return effect.change_per_tick
 
     def set_target(self, target: float) -> None:
         self.target_val = target
@@ -46,7 +52,7 @@ class FurnaceSlider:
         if effect.change_per_tick is None:
             return self.end_slide()
         completed = self.end_slide()
-        self.change_per_tick = effect.change_per_tick
+        self.change_per_tick = self.get_change_per_tick(effect)
         if not self.is_sliding:
             self.start_slide()
         return completed
@@ -84,3 +90,22 @@ class FurnacePanSlider(FurnaceSlider):
 
     def get_command(self, duration: int, target: int) -> PanFadeCommand:
         return PanFadeCommand(duration, round(target))
+    
+class FurnacePitchSlider(FurnaceSlider):
+    def __init__(self):
+        super().__init__()
+
+    def limit_target_val(self, target_val: float) -> float:
+        # Just limit to ANK pitch range, even though Furnace can technically go beyond that.
+        return max(MMLUtil.AMK_MIN_PITCH, min(target_val, MMLUtil.AMK_MAX_PITCH))
+
+    def get_command(self, duration: int, target: int) -> PitchSlideCommand:
+        return PitchSlideCommand(duration, round(target))
+    
+    def get_change_per_tick(self, effect: FurnaceEffect) -> float:
+        if effect.change_per_tick is not None:
+            # track slider progress in semitones
+            # TODO: probably just track in furnace units and convert to semitones in get_command
+            return FurnaceUtil.fur_pitch_change_to_semitones(effect.change_per_tick)
+        else:
+            return None

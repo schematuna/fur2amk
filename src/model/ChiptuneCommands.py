@@ -5,17 +5,11 @@ class ChiptuneCommand(ABC):
     pass
 
 class PitchSlideCommand(ChiptuneCommand):
-    """Pitch slide Command. Value is speed."""
+    """Pitch slide Command. duration in ticks, target in semtones, fractional allowed"""
     
-    def __init__(self, change_per_tick):
-        self.change_per_tick = change_per_tick
-
-class NoteSlideCommand(ChiptuneCommand):
-    """Note slide Command."""
-    
-    def __init__(self, speed: int, semitones: int):
-        self.speed = speed
-        self.semitones = semitones
+    def __init__(self, duration: int, target: float):
+        self.duration = duration
+        self.target = target
 
 class TuningCommand(ChiptuneCommand):
     """Sets tuning for the channel. Use decimals for in-between semitones."""
