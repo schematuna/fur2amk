@@ -419,4 +419,8 @@ class PitchBendConverter:
 
             split_notes.extend(note_notes)
 
+        # wrap up possible final envelope.
+        if env_active:
+            commands.append(PitchEnvelopeOff(cur_note.tick + cur_note.duration - 1))
+
         return commands, split_notes, out_ticks
