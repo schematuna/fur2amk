@@ -61,7 +61,7 @@ class FurnaceConverter:
                         else:
                             chip_ins_idx = used_samples[sample_index]
                         
-                        # Store the note -> AMK instrument mapping for later
+                        # Store the note -> Chipttune instrument mapping for later
                         # Convert from 0:C-(-5) for furnace note to 0:C-0 for sample map
                         note = i + 60
                         note_to_play = mapping[0] + 60

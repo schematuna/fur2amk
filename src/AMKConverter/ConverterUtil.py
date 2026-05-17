@@ -3,22 +3,20 @@ from dataclasses import dataclass, field
 
 from ..util.MMLUtil import MMLUtil
 
-from ..model.FurnaceEffects import *
 from ..model.MMLData import *
-from ..model.FurnaceData import *
 from ..model.ChiptuneData import *
 
 import copy
 
 # persistent channel state for conversion process
 @dataclass
-class FurnaceState:
+class AMKState:
     remote_commands: List[RemoteCommand] = field(default_factory=list)
     is_echo: bool = True
     adsr: ADSR = None
-    fur_ins_idx: int = None
+    ins_idx: int = None
 
-class FurnaceUtil:
+class AMKUtil:
     # Convert from ChiptuneData pan format (00=left, 80=center, FF=right)
     # to AMK format (0=right, 10=center, 20=left)
     @staticmethod

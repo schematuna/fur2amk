@@ -3,7 +3,6 @@ from dataclasses import dataclass
 from math import floor
 import logging
 
-from ..model.FurnaceData import *
 from ..model.MMLCommands import *
 from ..model.MMLData import *
 from ..model.ChiptuneData import *
@@ -16,7 +15,7 @@ class VolumeConverter():
     def __init__(self) -> None:
         self.cur_vol: float = 0xFE  # Furnace default volume (0x7F * 2)
 
-    def convert_tick(self, tick_data: ChiptuneTickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
+    def convert_tick(self, tick_data: ChiptuneTickData, tick: int, state: AMKState) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
 
         if tick_data.Vol is not None:
@@ -48,13 +47,13 @@ class VolumeConverter():
 
 class PanConverter():
     def __init__(self) -> None:
-        self.cur_pan: float = 0x80  # center (Furnace default)
+        self.cur_pan: float = 0x80  # center by default
 
-    def convert_tick(self, tick_data: ChiptuneTickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
+    def convert_tick(self, tick_data: ChiptuneTickData, tick: int, state: AMKState) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
         if effect := tick_data.get_command(PanCommand):
             self.cur_pan = effect.pan_position
-            amk_pan = FurnaceUtil.unity_to_amk_pan(effect.pan_position)
+            amk_pan = AMKUtil.unity_to_amk_pan(effect.pan_position)
             commands.append(PanChange(tick, amk_pan))
 
         if cmd := tick_data.get_command(PanFadeCommand):
@@ -63,9 +62,9 @@ class PanConverter():
             fur_target = cmd.target
             max_duration = max(MMLUtil.TICK_TO_DURATION.keys())
             if amk_duration <= max_duration:
-                commands.append(PanFade(tick, amk_duration, FurnaceUtil.unity_to_amk_pan(fur_target)))
+                commands.append(PanFade(tick, amk_duration, AMKUtil.unity_to_amk_pan(fur_target)))
             else:
-                # Split into multiple fades with linearly interpolated targets in Furnace units
+                # Split into multiple fades with linearly interpolated targets
                 cur_tick = tick
                 remaining = amk_duration
                 elapsed = 0
@@ -74,7 +73,7 @@ class PanConverter():
                     elapsed += chunk
                     t = elapsed / amk_duration
                     interp_fur = fur_start + t * (fur_target - fur_start)
-                    commands.append(PanFade(cur_tick, chunk, FurnaceUtil.unity_to_amk_pan(round(interp_fur))))
+                    commands.append(PanFade(cur_tick, chunk, AMKUtil.unity_to_amk_pan(round(interp_fur))))
                     cur_tick += chunk
                     remaining -= chunk
             self.cur_pan = fur_target
@@ -85,7 +84,7 @@ class VibratoConverter():
     def __init__(self, tick_ratio: float) -> None:
         self.tick_ratio = tick_ratio
         
-    def convert_tick(self, tick_data: ChiptuneTickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
+    def convert_tick(self, tick_data: ChiptuneTickData, tick: int, state: AMKState) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
         if effect := tick_data.get_command(VibratoCommand):
             # Vibrato off when both speed and depth are 0
@@ -116,10 +115,10 @@ class TempoConverter():
         self.structure = structure
         self.amk_ticks_per_row = amk_ticks_per_row
 
-    def convert_tick(self, tick_data: ChiptuneTickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
+    def convert_tick(self, tick_data: ChiptuneTickData, tick: int, state: AMKState) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
         if effect := tick_data.get_command(SetTickRateCommand):
-            commands.append(TempoChange(tick, FurnaceUtil.tick_rate_to_amk_tempo(self.structure, self.amk_ticks_per_row, effect.tick_rate)))
+            commands.append(TempoChange(tick, AMKUtil.tick_rate_to_amk_tempo(self.structure, self.amk_ticks_per_row, effect.tick_rate)))
 
         return commands
     
@@ -175,7 +174,7 @@ class TuningConverter():
                     ticks[tick].Commands.append(LegatoEnableCommand(0))
 
             fine_tune_effect = tick_data.get_command(TuningCommand)
-            retuned_note, _ = FurnaceUtil.get_note_active_at(tick, notes)
+            retuned_note, _ = AMKUtil.get_note_active_at(tick, notes)
             is_mid_note = retuned_note and tick_data.kind() != ChiptuneTickData.NoteKind.NOTE
             # only turn on legato if a pitch effect happens for the first time in a note duration
             if fine_tune_effect and is_mid_note and not in_fine_tune_chain:
@@ -194,13 +193,13 @@ class TuningConverter():
         split_notes: List[MMLNote] = notes
         for tick, tick_data in enumerate(ticks):
             if tick_data.get_command(TuningCommand):
-                retuned_note, idx = FurnaceUtil.get_note_active_at(tick, split_notes)
+                retuned_note, idx = AMKUtil.get_note_active_at(tick, split_notes)
                 if not retuned_note:
                     continue
                 # only want to split the note if fine tune actually happened in middle of note
                 if retuned_note.tick == tick or retuned_note.duration + retuned_note.tick == tick:
                     continue
-                note1, note2 = FurnaceUtil.split_note(retuned_note, tick)
+                note1, note2 = AMKUtil.split_note(retuned_note, tick)
                 split_notes.pop(idx)
                 split_notes.insert(idx, note1)
                 split_notes.insert(idx + 1, note2)
@@ -270,7 +269,7 @@ class LegatoConverter:
 
         for region in regions:
             # Find note active at region start and add ON toggle
-            start_note, _ = FurnaceUtil.get_note_active_at(region.start_tick, notes)
+            start_note, _ = AMKUtil.get_note_active_at(region.start_tick, notes)
             if start_note:
                 start_note.pre_note_commands.append(LegatoToggle(start_note.tick))
             else:
@@ -281,7 +280,7 @@ class LegatoConverter:
             # AMK docs say we have to turn legato off in the middle of the previous note, but that
             # doesn't seem to be necessary.
             if region.end_tick is not None:
-                end_note = FurnaceUtil.get_note_starting_at(region.end_tick, notes)
+                end_note = AMKUtil.get_note_starting_at(region.end_tick, notes)
                 if end_note:
                     end_note.pre_note_commands.append(LegatoToggle(end_note.tick))
                 else:
@@ -404,7 +403,7 @@ class PitchBendConverter:
                             out_ticks[cur_note.tick + cur_note.duration].Commands.append(LegatoEnableCommand(0))
                     last_note = cur_note
                     for b in bends_in_note[1:]:
-                        note1, last_note = FurnaceUtil.split_note(last_note, b.tick)
+                        note1, last_note = AMKUtil.split_note(last_note, b.tick)
                         last_note.note += bend_amt
                         bend_amt = round(b.target) - current_pitch
                         commands.append(PitchEnvelope(b.tick, 0, b.duration, bend_amt))

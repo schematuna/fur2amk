@@ -1,7 +1,6 @@
 from typing import List, Optional, Tuple
 import logging
 
-from ..model.FurnaceData import *
 from ..model.MMLCommands import *
 from ..model.MMLData import *
 from ..model.ChiptuneData import *
@@ -23,7 +22,7 @@ class NoteConverter():
     def __init__(self) -> None:
         self.logger = logging.getLogger(__name__)
 
-    def get_pre_note_commands(self, chip_ins: ChiptuneInstrument, ins_info: Dict[int, InstrumentInfo], state: FurnaceState, note_tick: int) -> List[MMLCommand]:
+    def get_pre_note_commands(self, chip_ins: ChiptuneInstrument, ins_info: Dict[int, InstrumentInfo], state: AMKState, note_tick: int) -> List[MMLCommand]:
         # if new instrument, set up remote commands for this instrument
         remote_commands = []
         if chip_ins.index in ins_info:
@@ -53,7 +52,7 @@ class NoteConverter():
         notes: List[MMLNote] = []
         commands: List[MMLCommand] = []
         tick = 0
-        state = FurnaceState()
+        state = AMKState()
 
         # the current note duration
         cur_dur: Optional[MMLNote] = None
@@ -78,9 +77,9 @@ class NoteConverter():
 
                 pre_note_commands = []
                 # we only have to set up pre-note commands for new instruments
-                if chip_ins.index != state.fur_ins_idx:
+                if chip_ins.index != state.ins_idx:
                     pre_note_commands = self.get_pre_note_commands(chip_ins, ins_info, state, tick)
-                    state.fur_ins_idx = chip_ins.index   
+                    state.ins_idx = chip_ins.index   
 
                 if cur_dur is not None:
                     cur_dur.duration = tick - cur_dur.tick
