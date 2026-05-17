@@ -51,7 +51,7 @@
     "03_S4_SoftTrb.brr"           $00 $00 $3A $05 $63 ;@50
 }
 
-; created with fur2amk 0.5.2
+; created with fur2amk 0.6.0
 
 w194 t52
 
@@ -68,8 +68,7 @@ $F5 $4D $11 $FA $F4 $FA $FB $FA $00
 $F4$02 
 ; section 00
 $F4$01 @31 o3 a32^=1 $EB$05$02$FE b16 $EB$05$02$FE b16 $EB$05$02$FE b16 $EB$05$02$FE b16
-$EB$00$00$00 b4
-a8^16^32^=2 b4
+$FE b4 a8^16^32^=2 b4
 a4^16^32^64^=2 b4 a4^16^32^=2 $F4$01 ^=2
 /
 ; reset state on loop

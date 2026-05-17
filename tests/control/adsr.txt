@@ -23,7 +23,7 @@
     "02_Sample2.brr"      $C9 $A3 $80 $0A $03 ;@32
 }
 
-; created with fur2amk 0.5.2
+; created with fur2amk 0.6.0
 
 w194 t52
 

@@ -31,7 +31,7 @@
     "03_S4_SoftTrb.brr"  $00 $00 $7F $05 $63 ;@30
 }
 
-; created with fur2amk 0.5.2
+; created with fur2amk 0.6.0
 
 w194 t52
 
