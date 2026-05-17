@@ -121,7 +121,7 @@ class TickDataConverter:
                 note = fur_tick.Note
                 note_map = ins_info[active_ins.index].ins_map
                 if note in note_map:
-                    return note_map[note].note_to_play, note_map[note].amk_ins_idx
+                    return note_map[note].note_to_play, note_map[note].chiptune_ins_idx
                 else:
                     self.logger.warning(f"No instrument mapping found for Furnace instrument {active_ins.index}, note {note}.")
                     return fur_tick.Note, 0

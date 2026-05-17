@@ -1,13 +1,9 @@
-from typing import List, Optional
-from dataclasses import dataclass, field
-import sys
+from typing import List
 import logging
 
-from ..model.FurnaceData import *
 from ..model.AMKData import *
 from ..model.MMLCommands import *
 from ..model.ChiptuneData import *
-from ..model.FurnaceEffects import *
 from .CommandConverter import *
 from .NoteConverter import *
 from ..util import *
@@ -19,15 +15,15 @@ class TickDataConverter:
 
     def calc_amk_ticks_per_row(self, ticks_per_step: int) -> None:
         self.logger = logging.getLogger(__name__)
-        # determine musical duration to map to a furnace row
-        # find first AMK tick value that is greater than or equal to the furnace tick rate
+        # determine musical duration to map to a chiptunedata row
+        # find first AMK tick value that is greater than or equal to the chiptune tick rate
         self.amk_ticks_per_row = 12
         for tick_value in MMLUtil.TICK_TO_DURATION.keys():
             if tick_value >= ticks_per_step:
                 self.amk_ticks_per_row = tick_value
                 break
 
-        # ratio of amk ticks to furnace ticks
+        # ratio of amk ticks to chiptune ticks
         self.tick_ratio = self.amk_ticks_per_row / ticks_per_step
         if self.tick_ratio != round(self.tick_ratio):
             self.logger.warning("Furnace ticks not cleanly convertible to amk ticks.")
@@ -44,16 +40,15 @@ class TickDataConverter:
 
         return rounded_amk_ticks
 
-    # expands a set of Furnace ticks out into AMK ticks
-    # there will (or at least should) always be the same or more AMK ticks than Furnace ticks per beat
-    # so we iterate over all Furnace ticks and place its notes and commands in the nearest AMK tick
-    # TODO: don't we have to update all FurnaceEffects with tick-based data to account for the expansion?
+    # expands a set of ChiptuneData ticks out into AMK ticks
+    # there will (or at least should) always be the same or more AMK ticks than ChiptuneData ticks per beat
+    # so we iterate over all ChiptuneData ticks and place its notes and commands in the nearest AMK tick
     def expand_ticks(self, ticks: List[ChiptuneTickData]):
         song_length = self.to_amk_ticks(len(ticks))
         amk_ticks = [ChiptuneTickData() for _ in range(song_length)]
         for tick, tick_data in enumerate(ticks):
             amk_tick = self.to_amk_ticks(tick)
-            # should never have to condense here - an AMK tick should always correspond to only one furnace tick
+            # should never have to condense here - an AMK tick should always correspond to only one ChiptuneData tick
             if amk_ticks[amk_tick] != ChiptuneTickData():
                 self.logger.warning("Two Furnace ticks round to one AMK tick. This should never happen.")
 
@@ -105,7 +100,7 @@ class TickDataConverter:
         volume_converter    = VolumeConverter()
         pan_converter       = PanConverter()
         vibrato_converter   = VibratoConverter(self.tick_ratio)
-        state = FurnaceState()
+        state = AMKState()
         for tick_data in proc_ticks:
             commands.extend(tempo_converter.convert_tick(tick_data, tick, state))
             commands.extend(volume_converter.convert_tick(tick_data, tick, state))

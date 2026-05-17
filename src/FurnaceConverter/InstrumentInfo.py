@@ -3,7 +3,7 @@ from typing import Dict
 
 @dataclass
 class MappingInfo:
-    amk_ins_idx: int
+    chiptune_ins_idx: int
     note_to_play: int
 
 @dataclass

@@ -4,10 +4,8 @@ from ..util.MMLUtil import *
 import copy
 import math
 
-# this class abstracts away lots of Furnace-specific stuff like:
-#   - quick legato
-#   - macros
-
+# this class abstracts away lots of Furnace-specific stuff that the rest of converion process doesn't need to know about.
+# These are commands that can be rewritten with more fundamental furnace commands.
 
 class TickDataResolver():
     def __init__(self):
