@@ -56,8 +56,20 @@ class TickDataConverter:
             # should never have to condense here - an AMK tick should always correspond to only one furnace tick
             if amk_ticks[amk_tick] != ChiptuneTickData():
                 self.logger.warning("Two Furnace ticks round to one AMK tick. This should never happen.")
-                                    
-            amk_ticks[amk_tick] = tick_data
+
+            amk_tick_data = copy.deepcopy(tick_data)
+
+            # convert slide durations to amk ticks    
+            if pitch_slide := amk_tick_data.get_command(PitchSlideCommand):
+                pitch_slide.duration = max(1, self.to_amk_ticks(pitch_slide.duration))
+
+            if pan_slide := amk_tick_data.get_command(PanFadeCommand):
+                pan_slide.duration = max(1, self.to_amk_ticks(pan_slide.duration))
+            
+            if volume_slide := amk_tick_data.get_command(VolumeFadeCommand):
+                volume_slide.duration = max(1, self.to_amk_ticks(volume_slide.duration))
+
+            amk_ticks[amk_tick] = amk_tick_data
         
         return amk_ticks
 
@@ -69,11 +81,11 @@ class TickDataConverter:
         tick = 0
 
         # convert notes
-        note_converter      = NoteConverter(self.tick_ratio)
-        notes, commands, pitchbends = note_converter.convert(proc_ticks, ins_info, chiptune_data.instruments)
+        note_converter      = NoteConverter()
+        notes, commands = note_converter.convert(proc_ticks, ins_info, chiptune_data.instruments)
 
         bend_converter      = PitchBendConverter()
-        bend_commands, notes, proc_ticks = bend_converter.convert(pitchbends, notes, proc_ticks)
+        bend_commands, notes, proc_ticks = bend_converter.convert(proc_ticks, notes)
         commands.extend(bend_commands)
 
         # convert fine tune commands 
@@ -90,8 +102,8 @@ class TickDataConverter:
         commands.extend(echo_converter.convert(proc_ticks))    
         
         tempo_converter     = TempoConverter(chiptune_data.structure, self.amk_ticks_per_row)
-        volume_converter    = VolumeConverter(self.tick_ratio)
-        pan_converter       = PanConverter(self.tick_ratio)
+        volume_converter    = VolumeConverter()
+        pan_converter       = PanConverter()
         vibrato_converter   = VibratoConverter(self.tick_ratio)
         state = FurnaceState()
         for tick_data in proc_ticks:

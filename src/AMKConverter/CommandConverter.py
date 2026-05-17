@@ -13,8 +13,7 @@ from .ConverterUtil import *
 import copy
 
 class VolumeConverter():
-    def __init__(self, tick_ratio: float) -> None:
-        self.tick_ratio = tick_ratio
+    def __init__(self) -> None:
         self.cur_vol: float = 0xFE  # Furnace default volume (0x7F * 2)
 
     def convert_tick(self, tick_data: ChiptuneTickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
@@ -25,7 +24,7 @@ class VolumeConverter():
             commands.append(VolumeChange(tick, MMLUtil.find_v(self.cur_vol)))
 
         if cmd := tick_data.get_command(VolumeFadeCommand):
-            amk_duration = round(cmd.duration * self.tick_ratio)
+            amk_duration = cmd.duration
             fur_start = self.cur_vol
             fur_target = cmd.target
             max_duration = max(MMLUtil.TICK_TO_DURATION.keys())
@@ -48,8 +47,7 @@ class VolumeConverter():
         return commands
 
 class PanConverter():
-    def __init__(self, tick_ratio: float) -> None:
-        self.tick_ratio = tick_ratio
+    def __init__(self) -> None:
         self.cur_pan: float = 0x80  # center (Furnace default)
 
     def convert_tick(self, tick_data: ChiptuneTickData, tick: int, state: FurnaceState) -> List[MMLCommand]:
@@ -60,7 +58,7 @@ class PanConverter():
             commands.append(PanChange(tick, amk_pan))
 
         if cmd := tick_data.get_command(PanFadeCommand):
-            amk_duration = round(cmd.duration * self.tick_ratio)
+            amk_duration = cmd.duration
             fur_start = self.cur_pan
             fur_target = cmd.target
             max_duration = max(MMLUtil.TICK_TO_DURATION.keys())
@@ -319,11 +317,18 @@ class EchoConverter:
 
         return echo_commands
     
+# intermediary slide object
+@dataclass
+class PitchSlide():
+    tick: int = 0
+    duration: int = 0
+    target: int = 0
+
 class PitchBendConverter:
     def __init__(self) -> None:
         self.logger = logging.getLogger(__name__)
 
-    def convert(self, bends: List[PitchSlide], notes: List[MMLNote], ticks: List[ChiptuneTickData]) -> Tuple[List[MMLCommand], List[MMLNote], List[ChiptuneTickData]]:
+    def convert(self, ticks: List[ChiptuneTickData], notes: List[MMLNote]) -> Tuple[List[MMLCommand], List[MMLNote], List[ChiptuneTickData]]:
         # figure out EB commands from notes and bend info
         # create new notes for multiple bends in the same note, and wrap in legato.
         commands: List[PitchEnvelope] = []
@@ -333,7 +338,38 @@ class PitchBendConverter:
         global_legato_enabled: bool = False
         out_ticks = copy.deepcopy(ticks)
 
+        # can technically go to FF but choose C0 for neatness
+        MAX_BEND_DURATION = 0xC0
+        cur_pitch = None
+        all_pitch_slides: List[PitchSlide] = []
+        # get all pitch slides, splitting if too long
+        for i, tick in enumerate(ticks):
+            if tick.kind() == ChiptuneTickData.NoteKind.NOTE:
+                cur_pitch = tick.Note
+            if pitchbend_command := tick.get_command(PitchSlideCommand):
+                duration = pitchbend_command.duration
+                target = pitchbend_command.target
+                if duration <= MAX_BEND_DURATION:
+                    all_pitch_slides.append(PitchSlide(i, duration, target))
+                else:
+                    # Split into chunks with linearly interpolated targets
+                    start_pitch = cur_pitch if cur_pitch is not None else target
+                    remaining = duration
+                    elapsed = 0
+                    cur_tick = i
+                    while remaining > 0:
+                        chunk = min(remaining, MAX_BEND_DURATION)
+                        elapsed += chunk
+                        t = elapsed / duration
+                        interp_target = start_pitch + t * (target - start_pitch)
+                        all_pitch_slides.append(PitchSlide(cur_tick, chunk, interp_target))
+                        cur_tick += chunk
+                        remaining -= chunk
+                cur_pitch = target
+
         cur_note: MMLNote = None
+        # then split notes that contain multiple bends and wrap in legato
+        # since can't apply pitch envelope mid-note
         for i, tick in enumerate(ticks):
             if tick_legato := tick.get_command(LegatoEnableCommand):
                 global_legato_enabled = tick_legato.legato_on
@@ -344,7 +380,7 @@ class PitchBendConverter:
                 continue
 
             current_pitch = cur_note.note
-            bends_in_note = [b for b in bends if (b.tick >= cur_note.tick and b.tick < cur_note.tick + cur_note.duration)]
+            bends_in_note = [b for b in all_pitch_slides if (b.tick >= cur_note.tick and b.tick < cur_note.tick + cur_note.duration)]
             note_notes: List[MMLNote] = []
             if len(bends_in_note) > 0:
                 env_active = True
@@ -380,6 +416,7 @@ class PitchBendConverter:
             else:
                 if env_active:
                     commands.append(PitchEnvelope(cur_note.tick, 0, 0, 0))
+                    # commands.append(PitchEnvelopeOff(cur_note.tick))
                     env_active = False
                 note_notes.append(cur_note)
 

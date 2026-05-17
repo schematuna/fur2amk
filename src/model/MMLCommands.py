@@ -114,7 +114,12 @@ class PitchEnvelope(MMLCommand):
     def to_mml(self, mml_state: 'MMLState' = None) -> str:
         return f"$EB${MMLUtil.to_hex(self.delay)}${MMLUtil.to_hex(self.duration)}${MMLUtil.to_hex(self.semitones)}"
 
-   
+@dataclass 
+class PitchEnvelopeOff(MMLCommand):
+    # turns off the pitch envelope
+
+    def to_mml(self, mml_state: 'MMLState' = None) -> str:
+        return "$FE"
 
 @dataclass
 class VolumeFade(MMLCommand):

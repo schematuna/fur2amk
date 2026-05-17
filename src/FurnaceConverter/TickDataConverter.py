@@ -18,6 +18,7 @@ class TickDataConverter:
         tuning_converter = TuningConverter()
         vol_converter = VolumeConverter()
         pan_converter = PanConverter()
+        pitchbend_converter = PitchBendConverter()
         active_ins: FurnaceInstrument = None
         vol_at_tick: List[float] = []
 
@@ -52,6 +53,14 @@ class TickDataConverter:
                 chip_tick.Commands.append(tuning_command)
 
             chip_tick.Note, chip_tick.Ins = self.apply_sample_map(fur_tick, active_ins, ins_info)
+
+            # handle pitch slides after sample mapping so target note is correct
+            for tick_idx, cmd in pitchbend_converter.process_tick(fur_tick, chip_tick.Note, i):
+                if tick_idx == i:
+                    chip_tick.Commands.append(cmd)
+                else:
+                    chiptune_ticks[tick_idx].Commands.append(cmd)
+
             chiptune_ticks.append(chip_tick)
 
         # finish potential final slides
@@ -59,6 +68,9 @@ class TickDataConverter:
             tick_idx, cmd = completed
             chiptune_ticks[tick_idx].Commands.append(cmd)
         if completed := pan_converter.slider.end_slide():
+            tick_idx, cmd = completed
+            chiptune_ticks[tick_idx].Commands.append(cmd)
+        if completed := pitchbend_converter.slider.end_slide():
             tick_idx, cmd = completed
             chiptune_ticks[tick_idx].Commands.append(cmd)
 
@@ -121,11 +133,7 @@ class TickDataConverter:
         return fur_tick.Note, fur_tick.Ins
 
     def convert_effect(self, effect: FurnaceEffect) -> ChiptuneCommand | None:
-        if isinstance(effect, PitchSlideEffect):
-            return PitchSlideCommand(effect.change_per_tick)
-        elif isinstance(effect, NoteSlideEffect):
-            return NoteSlideCommand(effect.speed, effect.semitones)
-        elif isinstance(effect, LegatoEffect):
+        if isinstance(effect, LegatoEffect):
             return LegatoEnableCommand(effect.legato_on)
         elif isinstance(effect, EchoEffect):
             return EchoEnableCommand(effect.echo_on)
@@ -137,6 +145,55 @@ class TickDataConverter:
             return SendExternalCommand(effect.value)
         return None
 
+
+class PitchBendConverter:
+    def __init__(self):
+        self.slider = FurnacePitchSlider()
+        self.cur_pitch = 0  # in semitones
+
+    def process_tick(self, fur_tick: FurnaceTickData, new_note: int, tick_num: int) -> List[Tuple[int, ChiptuneCommand]]:
+        """Returns a list of (tick_idx, command) pairs."""
+
+        commands: List[Tuple[int, ChiptuneCommand]] = []
+
+        note_slide_command = fur_tick.get_effect(NoteSlideEffect)
+        pitch_slide_command = fur_tick.get_effect(PitchSlideEffect)
+
+        if new_note is not None:
+            self.cur_pitch = new_note
+            if completed := self.slider.end_slide():
+                commands.append(completed)
+            self.slider.set_target(self.cur_pitch)
+            # if this note interrupted a pitch slide, start a new one
+            # unless there is a pitch slide command on this tick, in which case we'll let that handle it
+            if completed and not note_slide_command and not pitch_slide_command:
+                self.slider.start_slide()
+        elif fur_tick.kind() == FurnaceTickData.NoteKind.RELEASE:
+            self.cur_pitch = None
+            if completed := self.slider.end_slide():
+                commands.append(completed)
+
+        if note_slide_command:
+            target_note = self.cur_pitch + note_slide_command.semitones
+            target_note = max(0,min(target_note, MMLUtil.AMK_MAX_PITCH))
+            # for note slides, each speed unit is 4 pitch steps per tick
+            ticks_to_slide = FurnaceUtil.ticks_from_speed(note_slide_command.speed * 4, abs(note_slide_command.semitones))
+            commands.append((tick_num, PitchSlideCommand(ticks_to_slide, target_note)))
+            self.cur_pitch = target_note
+            self.slider.set_target(self.cur_pitch)
+
+        if pitch_slide_command:
+            if completed := self.slider.handle_new_effect(pitch_slide_command):
+                commands.append(completed)
+                _, cmd = completed
+                self.cur_pitch = cmd.target
+
+        if completed := self.slider.tick():
+            commands.append(completed)
+            _, cmd = completed
+            self.cur_pitch = cmd.target
+
+        return commands
 
 class VolumeConverter:
     """Tracks volume slide state, emitting retroactive VolumeFadeCommands."""
