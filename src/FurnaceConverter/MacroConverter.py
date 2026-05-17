@@ -102,8 +102,6 @@ class ArpMacroConverter:
 class EchoMacroConverter:
     def __init__(self):
         self.logger = logging.getLogger(__name__)
-        # TODO: implement echo command 12XX, accounting for channel echo initialization in chip settings
-        # self.global_echo: bool = 1
         self.ins_echo: bool = None
 
     def get_echo_for_tick(self, tick_data: FurnaceTickData, active_ins: FurnaceInstrument):
