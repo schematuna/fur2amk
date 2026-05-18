@@ -30,6 +30,7 @@ which has high moderation standards.
 - Sample Maps
 - All instrument envelope and gain types
 - Vanilla Samples/Instruments
+- Volume and Arpeggio macros
 
 ## Supported Effects
 
@@ -88,7 +89,7 @@ AMK only supports C1 -> A6. If any notes are out of this range they will be octa
 ## Limitations
 
 - **Wavetables** are not supported. All instruments must use samples or noise.
-- **Most Macros** are not yet supported. Only Volume, 1 Noise Freq value, up to 2 Gain values, and the Special Echo and Noise flags are supported. 
+- **Macros** have limited support. Volume and Arpeggio sequence macros are supported. Additionally, 1 Noise Freq value, up to 2 Gain values, and the Special Echo and Noise flags are supported. 
 - **Alternating Speeds and Grooves** are not supported.
 - **Compatibility Flags** are not supported. Conversion assumes that all compatibility flags are disabled.
 
