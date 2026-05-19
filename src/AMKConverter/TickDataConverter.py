@@ -101,7 +101,7 @@ class TickDataConverter:
         state = AMKState()
         for tick_data in proc_ticks:
             commands.extend(tempo_converter.convert_tick(tick_data, tick, state))
-            commands.extend(volume_converter.convert_tick(tick_data, tick, state))
+            commands.extend(volume_converter.convert_tick(tick_data, tick))
             commands.extend(pan_converter.convert_tick(tick_data, tick, state))
             commands.extend(vibrato_converter.convert_tick(tick_data, tick, state))
 

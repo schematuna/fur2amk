@@ -217,6 +217,8 @@ class MMLWriter:
             pre_loop_commands.append(EchoToggle(self.mml_data.loop_tick - 1))
             post_loop_commands.insert(0, EchoToggle(self.mml_data.loop_tick))
 
+        # TODO: Handle pitch envelope state at loop point
+
         return pre_loop_commands, post_loop_commands
 
 

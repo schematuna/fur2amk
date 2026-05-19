@@ -1,5 +1,4 @@
-from typing import List, Tuple, Optional
-from dataclasses import dataclass
+from typing import List, Tuple
 import logging
 
 class MMLUtil:
@@ -110,9 +109,6 @@ class MMLUtil:
             logger = logging.getLogger(__name__)
             logger.warning(f"{MMLUtil._out_of_range_count} note(s) were out of AMK's supported range (o1 c to o6 a) and were shifted by octaves to fit.")
 
-@dataclass
-class MMLState:
-    octave: Optional[int]                 = None
 
 class DurationFormatter:
     # a "beat" is a quarter note, and the song is assumed to be in 4/4
