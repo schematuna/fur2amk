@@ -9,6 +9,10 @@ from ..model.MMLCommands import *
 # INTERNAL MML WRITER CLASSES  #
 ################################
 
+@dataclass
+class MMLState:
+    octave: Optional[int]                   = None
+
 # silent instruction to break a tie
 # useful for pitchbend commands that need to be placed after the duration to be modulated
 @dataclass

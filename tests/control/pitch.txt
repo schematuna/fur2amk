@@ -51,7 +51,7 @@
     "03_S4_SoftTrb.brr"           $00 $00 $3A $05 $63 ;@50
 }
 
-; created with fur2amk 0.6.0
+; created with fur2amk 0.6.1
 
 w194 t52
 
@@ -97,6 +97,6 @@ r1^1^16
 ; section 01
 r4 @39 $F4$03 v202 o3 c1 c1 c1 c1
 ; section 02
-v202 c1 c1 c1 c2^8^16^32^64^=2 $F4$03 ^=1
+c1 c1 c1 c2^8^16^32^64^=2 $F4$03 ^=1
 
 

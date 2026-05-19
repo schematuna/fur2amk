@@ -11,10 +11,10 @@ import copy
 # persistent channel state for conversion process
 @dataclass
 class AMKState:
-    remote_commands: List[RemoteCommand] = field(default_factory=list)
-    is_echo: bool = True
-    adsr: ADSR = None
-    ins_idx: int = None
+    remote_commands: List[RemoteCommand]    = field(default_factory=list)
+    is_echo: bool                           = True
+    adsr: Optional[ADSR]                    = None
+    ins_idx: Optional[int]                  = None
 
 class AMKUtil:
     # Convert from ChiptuneData pan format (00=left, 80=center, FF=right)

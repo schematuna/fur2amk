@@ -12,18 +12,30 @@ import copy
 
 class VolumeConverter():
     def __init__(self) -> None:
-        self.cur_vol: float = 0xFE  # Furnace default volume (0x7F * 2)
+        self.primary_vol: float = 0xFE  # Furnace default volume (0x7F * 2)
+        # state tracking for optimizations
+        self.vol_state: int = None
+        self.fade_counter: int = 0
 
-    def convert_tick(self, tick_data: ChiptuneTickData, tick: int, state: AMKState) -> List[MMLCommand]:
+    def convert_tick(self, tick_data: ChiptuneTickData, tick: int) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
 
         if tick_data.Vol is not None:
-            self.cur_vol = tick_data.Vol
-            commands.append(VolumeChange(tick, MMLUtil.find_v(self.cur_vol)))
+            self.primary_vol = tick_data.Vol
+
+            if self.vol_state != tick_data.Vol:
+                commands.append(VolumeChange(tick, MMLUtil.find_v(self.primary_vol)))
+
+            # only update volume state if not in a fade
+            if self.fade_counter == 0:
+                self.vol_state = tick_data.Vol
 
         if cmd := tick_data.get_command(VolumeFadeCommand):
             amk_duration = cmd.duration
-            fur_start = self.cur_vol
+            # track fades so we don't filter repeated volume commands during the fade
+            self.fade_counter = amk_duration
+            self.vol_state = None
+            fur_start = self.primary_vol
             fur_target = cmd.target
             max_duration = max(MMLUtil.TICK_TO_DURATION.keys())
             if amk_duration <= max_duration:
@@ -41,7 +53,11 @@ class VolumeConverter():
                     commands.append(VolumeFade(cur_tick, chunk, MMLUtil.find_v(round(interp_fur))))
                     cur_tick += chunk
                     remaining -= chunk
-            self.cur_vol = fur_target
+            self.primary_vol = fur_target
+
+        if self.fade_counter > 0:
+            self.fade_counter -= 1
+
         return commands
 
 class PanConverter():
