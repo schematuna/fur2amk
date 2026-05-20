@@ -67,8 +67,8 @@ $F5 $4D $11 $FA $F4 $FA $FB $FA $00
 ; enable light staccato
 $F4$02 
 ; section 00
-@34 v131
-(3)[o3 e1^1]
+@34
+(3)[v131 o3 e1^1]
 /
 ; reset state on loop
 @34 

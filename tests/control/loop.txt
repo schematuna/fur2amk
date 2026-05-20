@@ -72,13 +72,13 @@ $F4$02
 ; reset state on loop
 @31 
 ; section 01
-y20 f2 @34 v159 y0 o3 e2
+v202 y20 f2 @34 v159 y0 o3 e2
 
 
 #1
 ; section 00
-@39 v202
-(3)[o3 c1]
+@39
+(3)[v202 o3 c1]
 /
 ; reset state on loop
 @39 

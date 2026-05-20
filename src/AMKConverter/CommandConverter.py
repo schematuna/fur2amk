@@ -11,14 +11,19 @@ from .ConverterUtil import *
 import copy
 
 class VolumeConverter():
-    def __init__(self) -> None:
+    def __init__(self, loop_tick: int | None) -> None:
         self.primary_vol: float = 0xFE  # Furnace default volume (0x7F * 2)
         # state tracking for optimizations
         self.vol_state: int = None
         self.fade_counter: int = 0
+        self.loop_tick = loop_tick
 
     def convert_tick(self, tick_data: ChiptuneTickData, tick: int) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
+
+        # first vol change after loop point should never get optmized out
+        if tick == self.loop_tick:
+            self.vol_state = None
 
         if tick_data.Vol is not None:
             self.primary_vol = tick_data.Vol
@@ -61,19 +66,36 @@ class VolumeConverter():
         return commands
 
 class PanConverter():
-    def __init__(self) -> None:
-        self.cur_pan: float = 0x80  # center by default
+    def __init__(self, loop_tick: int | None) -> None:
+        self.primary_pan: float = 0x80  # center by default
+        # state tracking for optimizations
+        self.pan_state: int = None
+        self.fade_counter: int = 0
+        self.loop_tick = loop_tick
 
     def convert_tick(self, tick_data: ChiptuneTickData, tick: int, state: AMKState) -> List[MMLCommand]:
         commands: List[MMLCommand] = []
+
+        # first pan change after loop point should never get optmized out
+        if tick == self.loop_tick:
+            self.pan_state = None
+
         if effect := tick_data.get_command(PanCommand):
-            self.cur_pan = effect.pan_position
-            amk_pan = AMKUtil.unity_to_amk_pan(effect.pan_position)
-            commands.append(PanChange(tick, amk_pan))
+            self.primary_pan = effect.pan_position
+
+            if self.pan_state != effect.pan_position:
+                amk_pan = AMKUtil.unity_to_amk_pan(effect.pan_position)
+                commands.append(PanChange(tick, amk_pan))
+
+            # only update pan state if not in a fade
+            if self.fade_counter == 0:
+                self.pan_state = effect.pan_position
 
         if cmd := tick_data.get_command(PanFadeCommand):
             amk_duration = cmd.duration
-            fur_start = self.cur_pan
+            self.fade_counter = amk_duration
+            self.pan_state = None
+            fur_start = self.primary_pan
             fur_target = cmd.target
             max_duration = max(MMLUtil.TICK_TO_DURATION.keys())
             if amk_duration <= max_duration:
@@ -91,7 +113,10 @@ class PanConverter():
                     commands.append(PanFade(cur_tick, chunk, AMKUtil.unity_to_amk_pan(round(interp_fur))))
                     cur_tick += chunk
                     remaining -= chunk
-            self.cur_pan = fur_target
+            self.primary_pan = fur_target
+
+        if self.fade_counter > 0:
+            self.fade_counter -= 1
 
         return commands
 

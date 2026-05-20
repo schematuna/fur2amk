@@ -95,8 +95,8 @@ class TickDataConverter:
         commands.extend(echo_converter.convert(proc_ticks))    
         
         tempo_converter     = TempoConverter(chiptune_data.structure, self.amk_ticks_per_row)
-        volume_converter    = VolumeConverter()
-        pan_converter       = PanConverter()
+        volume_converter    = VolumeConverter(chiptune_data.structure.loop_tick)
+        pan_converter       = PanConverter(chiptune_data.structure.loop_tick)
         vibrato_converter   = VibratoConverter(self.tick_ratio)
         state = AMKState()
         for tick_data in proc_ticks:
