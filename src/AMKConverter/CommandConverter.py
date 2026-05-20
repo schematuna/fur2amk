@@ -366,6 +366,7 @@ class PitchSlide():
 class PitchBendConverter:
     def __init__(self) -> None:
         self.logger = logging.getLogger(__name__)
+        self.envelope_state: Optional[PitchEnvelope] = None
 
     def convert(self, ticks: List[ChiptuneTickData], notes: List[MMLNote]) -> Tuple[List[MMLCommand], List[MMLNote], List[ChiptuneTickData]]:
         # figure out EB commands from notes and bend info
@@ -426,7 +427,10 @@ class PitchBendConverter:
                 first_bend = bends_in_note[0]
                 delay = first_bend.tick - cur_note.tick
                 bend_amt = round(first_bend.target) - current_pitch
-                commands.append(PitchEnvelope(cur_note.tick, delay, first_bend.duration, bend_amt))
+                env_cmd = PitchEnvelope(cur_note.tick, delay, first_bend.duration, bend_amt)
+                if env_cmd != self.envelope_state:
+                    commands.append(env_cmd)
+                    self.envelope_state = env_cmd
                 current_pitch += bend_amt
                 if len(bends_in_note) > 1:
                     we_enabled_legato = False
@@ -446,7 +450,10 @@ class PitchBendConverter:
                         note1, last_note = AMKUtil.split_note(last_note, b.tick)
                         last_note.note += bend_amt
                         bend_amt = round(b.target) - current_pitch
-                        commands.append(PitchEnvelope(b.tick, 0, b.duration, bend_amt))
+                        env_cmd = PitchEnvelope(b.tick, 0, b.duration, bend_amt)
+                        if env_cmd != self.envelope_state:
+                            commands.append(env_cmd)
+                            self.envelope_state = env_cmd
                         current_pitch += bend_amt
                         note_notes.append(note1)
                     note_notes.append(last_note)
@@ -455,6 +462,7 @@ class PitchBendConverter:
             else:
                 if env_active:
                     commands.append(PitchEnvelopeOff(cur_note.tick))
+                    self.envelope_state = None
                     env_active = False
                 note_notes.append(cur_note)
 
@@ -463,5 +471,6 @@ class PitchBendConverter:
         # wrap up possible final envelope.
         if env_active:
             commands.append(PitchEnvelopeOff(cur_note.tick + cur_note.duration - 1))
+            self.envelope_state = None
 
         return commands, split_notes, out_ticks
