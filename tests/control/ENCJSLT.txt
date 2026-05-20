@@ -199,10 +199,10 @@ r1^1^1^1^1^1
 ; section 00
 @37 v196 o4 c8 c8 c8 c8 c8 c8 c8 c8
 ; section 01
-@39 v137
-(9)[$F4$01 $EB$00$C0$FE o6 d1 $EB$00$C0$FE c1 $EB$00$C0$FE o5 a+1]
+@39 $EB$00$C0$FE v137
+(9)[$F4$01 o6 d1 c1 o5 a+1]
 ; section 02
-(10)[$F4$01 $F4$01 $EB$00$C0$FE c+1 $EB$00$C0$FE o4 b1 $EB$00$C0$FE a1]
+(10)[$F4$01 $F4$01 c+1 o4 b1 a1]
 ; section 03
 $F4$01
 (9)
@@ -243,10 +243,10 @@ r1^1^1
 ; section 00
 r1
 ; section 01
-@39 v137
-(14)[$F4$01 $EB$00$C0$FE o5 a1 $EB$00$C0$FE g1 $EB$00$C0$FE f1]
+@39 $EB$00$C0$FE v137
+(14)[$F4$01 o5 a1 g1 f1]
 ; section 02
-(15)[$F4$01 $F4$01 $EB$00$C0$FE o4 g+1 $EB$00$C0$FE f+1 $EB$00$C0$FE e1]
+(15)[$F4$01 $F4$01 o4 g+1 f+1 e1]
 ; section 03
 $F4$01
 (14)

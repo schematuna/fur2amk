@@ -2,7 +2,7 @@
 
 #spc
 {
-    #title   "pitch test"
+    #title   "pitchbend test"
     #author  "tuna"
 }
 
@@ -69,6 +69,11 @@ $F4$02
 ; section 00
 r4 $F4$01 @34 $EB$00$60$04 v131 o3 e2 $EB$00$60$FC g+2
 $FE d8 e8 $EB$30$30$02 f+2^8 $F4$01 ^8
-$FE c1^2^4
+$EB$00$09$02 c4 d4 e4
+/
+; reset state on loop
+@34 
+; section 01
+f4 g4 a4 b8^16^32^64^=2 $FE ^=1
 
 
