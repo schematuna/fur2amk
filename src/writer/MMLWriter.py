@@ -153,6 +153,7 @@ class MMLWriter:
         # state tracking
         cur_ins = None
         cur_remote_commands = []
+        cur_pitch_envelope: PitchEnvelope | None = None
         legato_on = False
         legato_on_at_loop = False  # was legato on when we crossed the loop point?
         echo_toggled = False
@@ -186,6 +187,9 @@ class MMLWriter:
                 for cmd in cur_remote_commands:
                     post_loop_commands.append(replace(cmd, tick=word.tick))
 
+            if first_note_after_loop and cur_pitch_envelope is not None:
+                post_loop_commands.append(replace(cur_pitch_envelope, tick=word.tick))
+
             if first_note_after_loop:
                 break
 
@@ -196,6 +200,13 @@ class MMLWriter:
                         cur_remote_commands = []
                     else:
                         cur_remote_commands.append(command)
+
+            # track pitch envelope state
+            for command in word.commands:
+                if isinstance(command, PitchEnvelope):
+                    cur_pitch_envelope = command
+                if isinstance(command, PitchEnvelopeOff):
+                    cur_pitch_envelope = None
 
             # track instrument state
             for command in word.commands:
