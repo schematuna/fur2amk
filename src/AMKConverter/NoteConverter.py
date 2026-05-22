@@ -4,7 +4,7 @@ import logging
 from ..model.MMLCommands import *
 from ..model.ChiptuneData import *
 from ..model.AMKData import *
-from .ConverterUtil import *
+from .AMKUtil import *
 from ..util.MMLUtil import *
 
 # conversion helper data class

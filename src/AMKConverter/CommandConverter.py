@@ -6,7 +6,7 @@ import logging
 from ..model.MMLCommands import *
 from ..model.ChiptuneData import *
 
-from .ConverterUtil import *
+from .AMKUtil import *
 
 import copy
 
