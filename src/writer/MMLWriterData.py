@@ -311,28 +311,39 @@ class MMLSection:
             if info.label:
                 if info.isRepeat:
                     line_txt += f"({info.label})"
+                    if info.numLoops > 1:
+                        line_txt += f"{info.numLoops}"
                 else:
                     line_txt += f"({info.label})["
                     if len(info.sentenceIndices) > 1:
                         line_txt += "\n"
-                    for j, subloop in enumerate(info.subLoops):
-                        if subloop.numLoops > 1:
-                            line_txt += f"[["
-                            if len(subloop.sentenceIndices) > 1:
+                    if info.subLoops is not None:
+                        for j, subloop in enumerate(info.subLoops):
+                            if subloop.numLoops > 1:
+                                line_txt += f"[["
+                                if len(subloop.sentenceIndices) > 1:
+                                    line_txt += "\n"
+                            for i, idx in enumerate(subloop.sentenceIndices):
+                                line_txt += self.sentences[idx].to_mml(mml_state)
+                                if i != len(subloop.sentenceIndices) - 1:
+                                    line_txt += "\n"
+                            if subloop.numLoops > 1:
+                                if len(subloop.sentenceIndices) > 1:
+                                    line_txt += "\n"
+                                line_txt += f"]]{subloop.numLoops}"
+                            if j != len(info.subLoops) - 1:
                                 line_txt += "\n"
-                        for i, idx in enumerate(subloop.sentenceIndices):
+                    else:
+                        for i, idx in enumerate(info.sentenceIndices):
                             line_txt += self.sentences[idx].to_mml(mml_state)
-                            if i != len(subloop.sentenceIndices) - 1:
+                            if i != len(info.sentenceIndices) - 1:
                                 line_txt += "\n"
-                        if subloop.numLoops > 1:
-                            if len(subloop.sentenceIndices) > 1:
-                                line_txt += "\n"
-                            line_txt += f"]]{subloop.numLoops}"
-                        if j != len(info.subLoops) - 1:
-                            line_txt += "\n"
                     if len(info.sentenceIndices) > 1:
                         line_txt += "\n"
                     line_txt += "]"
+                    if info.numLoops > 1:
+                        line_txt += f"{info.numLoops}"
+                line_txt += "\n"
             else:
                 if info.numLoops > 1:
                     line_txt += "["

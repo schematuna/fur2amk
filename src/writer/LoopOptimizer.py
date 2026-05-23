@@ -168,20 +168,50 @@ class LoopOptimizer:
 
                     loop.subLoops = loopInfo
 
-    def optimize_loops(self, sections: List[MMLSection]):
+    def optimize_loops(self, sections: List[MMLSection], label_count: int) -> int:
         """optimize finer tuned intra-section loops
-           Uses a modified LZ77 alg, only allowing consecutive repeats"""
+           Uses a modified LZ77 alg, only allowing consecutive repeats
+           assigns labels for repeated sentence groups across sections"""
 
-        for i, section in enumerate(sections):
+        labels_assigned: Dict[int, List[MMLSentence]] = {}
+        # links unique groups of sentences to the LoopInfo object from their first occurrence
+        unique_groups: List[Tuple[List[MMLSentence], LoopInfo]] = []
+        for section in sections:
             # Only optimize section if it hasn't been touched yet. i.e. doesn't have a label
             if len(section.loopInfo) == 1 and section.loopInfo[0].label is None:
                 subloops = self.lz77(section.sentences)
 
                 loopInfo: List[LoopInfo] = []
                 for info in subloops:
-                    loopInfo.append(LoopInfo(info.sentenceIndices, None, False, info.numLoops))
+                    newLoopInfo = LoopInfo(info.sentenceIndices, None, False, info.numLoops)
+                    sentences = [section.sentences[idx] for idx in info.sentenceIndices]
+                    if not any(g == sentences for g, _ in unique_groups):
+                        unique_groups.append((sentences, newLoopInfo))
+                    elif not any(g == sentences for g in labels_assigned.values()):
+                        for group, original_loop_info in unique_groups:
+                            if group == sentences:
+                                # assign label to this repeated group
+                                labels_assigned[label_count] = group
+                                # mark the original LoopInfo object with the label directly
+                                original_loop_info.label = label_count
+                                newLoopInfo.label = label_count
+                                newLoopInfo.isRepeat = True
+                                newLoopInfo.numLoops = info.numLoops
+                                label_count += 1
+                    else:
+                        # find existing label for this pattern
+                        for lbl, group in labels_assigned.items():
+                            if group == sentences:
+                                newLoopInfo.label = lbl
+                                newLoopInfo.isRepeat = True
+                                newLoopInfo.numLoops = info.numLoops
+                                break
+
+                    loopInfo.append(newLoopInfo)
 
                 section.loopInfo = loopInfo
+
+        return label_count
 
     def lz77(self, sentences: List[MMLSentence]) -> List[SubLoopInfo]:
         """lz77 alg for MML sentences
