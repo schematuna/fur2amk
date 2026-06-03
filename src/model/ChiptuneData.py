@@ -36,6 +36,9 @@ class ChiptuneSampleInfo:
     index: int
     filename: str
     c4_rate: str
+    brr_data: Optional[bytes] = None
+    loop_start: Optional[int] = None  # in samples
+    loop_end: Optional[int] = None    # in samples
 
 # class representing all events that occur during a single tick
 @dataclass

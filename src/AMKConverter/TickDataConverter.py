@@ -33,8 +33,8 @@ class TickDataConverter:
         
         amk_ticks = chiptune_ticks * self.tick_ratio
         rounded_amk_ticks = round(amk_ticks)
-        if (rounded_amk_ticks != amk_ticks):
-            self.logger.debug("furnace to amk tick conversion was not clean")
+        # if (rounded_amk_ticks != amk_ticks):
+        #     self.logger.debug("furnace to amk tick conversion was not clean")
 
         return rounded_amk_ticks
 

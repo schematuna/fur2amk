@@ -27,18 +27,31 @@ class FurnaceConverter:
         samps: List[ChiptuneSampleInfo] = []
         for s in module.Samples:
             fname = f"{s.index:02d}_" + (s.name or f"Sample{s.index}").replace(' ', '_') + '.brr'
-            samps.append(ChiptuneSampleInfo(s.index, fname, s.c4_rate))
+            info = ChiptuneSampleInfo(s.index, fname, s.c4_rate)
+            info.brr_data = s.brr_raw
+            info.loop_start = s.loop_start
+            info.loop_end = s.loop_end
+            samps.append(info)
+
+        # Append placeholder entries for wavetables, indexed after regular samples
+        num_regular = len(module.Samples)
+        for w in module.Wavetables:
+            idx = num_regular + w.index
+            fname = f"{idx:02d}_" + (w.name or f"Wave{w.index}").replace(' ', '_') + '.brr'
+            info = ChiptuneSampleInfo(idx, fname, 32000)  # c4_rate fudged
+            info.brr_data = b''  # placeholder until proper wavetable->BRR conversion is implemented
+            samps.append(info)
 
         return samps
     
-    def get_instruments(self, module: FurnaceModule, num_samples: int) -> List[ChiptuneInstrument]:
+    def get_instruments(self, module: FurnaceModule, num_samples: int, num_regular_samples: int) -> List[ChiptuneInstrument]:
         '''Decomposes sample maps to get flat list of all SNES instruments needed for this port
            Also stores sample map info for later use when resolving furnace notes'''
         chip_instruments: List[ChiptuneInstrument] = []
         chip_ins_counter = 0
         for ins in module.Instruments:
             ins_info = FurInstrumentInfo()
-            if ins.use_sample_map:
+            if ins.use_sample_map and not ins.use_wave:
                 # sample idx: chip ins idx
                 used_samples: Dict[int, int] = {}
                 chip_ins_idx: int = 0
@@ -47,8 +60,8 @@ class FurnaceConverter:
                     if idx != 65535:
                         sample_index = idx
                         if sample_index >= num_samples:
-                            sample_index = 0
                             self.logger.warning(f"Instrument {ins.index} has sample index {sample_index} which is greater than the number of samples {num_samples}. Using sample index 0 instead. Please check your sample index in Furnace.")
+                            sample_index = 0
                         # only make a new chip instrument for unique samples
                         if sample_index not in used_samples:
                             chip_ins = self.fur_ins_to_chip_ins(ins, chip_ins_counter)
@@ -68,10 +81,17 @@ class FurnaceConverter:
                         ins_info.ins_map[note] = MappingInfo(chip_ins_idx, note_to_play)
             else:
                 chip_ins = self.fur_ins_to_chip_ins(ins, chip_ins_counter)
-                sample_index = ins.initial_sample
+                if ins.use_wave:
+                    wave_idx = ins.get_wave_index()
+                    if wave_idx is None:
+                        self.logger.warning(f"Instrument {ins.index} ({ins.name}) uses wavetable but no wavetable index could be determined. Defaulting to wavetable 0.")
+                        wave_idx = 0
+                    sample_index = num_regular_samples + wave_idx
+                else:
+                    sample_index = ins.initial_sample
                 if sample_index >= num_samples:
-                    sample_index = 0
                     self.logger.warning(f"Instrument {ins.index} has sample index {sample_index} which is greater than the number of samples {num_samples}. Using sample index 0 instead. Please check your sample index in Furnace.")
+                    sample_index = 0
                 chip_ins.initial_sample = sample_index
                 chip_instruments.append(chip_ins)
                 ins_info.default_ins = chip_ins_counter
@@ -134,7 +154,8 @@ class FurnaceConverter:
 
         chiptune_data.song_info = self.get_song_info(module)
         chiptune_data.sample_info = self.get_sample_info(module)
-        chiptune_data.instruments = self.get_instruments(module, len(chiptune_data.sample_info))
+        num_regular_samples = len(module.Samples)
+        chiptune_data.instruments = self.get_instruments(module, len(chiptune_data.sample_info), num_regular_samples)
         chiptune_data.tick_rate = module.TicksPerSecond
         chiptune_data.global_volume = self.get_global_volume(module)
         chiptune_data.echo_data = self.get_echo_data(module)

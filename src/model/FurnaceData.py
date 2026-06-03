@@ -109,6 +109,10 @@ class FurnaceInstrument:
     use_wave: bool = False    # bit 2 of SM flags
     waveform_length: int = 0  # from SM block
     sample_table: List[Tuple[int, int]] = field(default_factory=lambda: [(0, 1)] * 120)
+
+    # Wavetable synth data from INS2 'WS'
+    wave_synth_first_wave: Optional[int] = None  # index of first wavetable
+    wave_synth_enabled: bool = False
     
     macros: List[FurnaceMacro] = field(default_factory=list)
 
@@ -124,6 +128,17 @@ class FurnaceInstrument:
         
         return None
             
+    def get_wave_index(self) -> Optional[int]:
+        """Returns the wavetable index this instrument uses.
+        If wavetable synth is enabled, returns wave_synth_first_wave.
+        Otherwise returns the first value of the Waveform macro (if present)."""
+        if self.wave_synth_enabled and self.wave_synth_first_wave is not None:
+            return self.wave_synth_first_wave
+        if wave_macro := self.get_macro(SNESMacroCode.Waveform):
+            if wave_macro.values:
+                return wave_macro.values[0]
+        return None
+
     def get_initial_adsr(self) -> ADSR:
         # For sustain modes 1-3, use decay2 as the release value during note-on
         # (sn_release is only used for DIRECT mode, or when note-off happens in DELAYED mode)
@@ -232,6 +247,15 @@ class FurnacePattern:
 
 
 @dataclass
+class FurnaceWavetable:
+    index: int
+    name: str
+    width: int                  # number of samples in the waveform
+    height: int                 # amplitude ceiling (max sample value)
+    data: List[int] = field(default_factory=list)  # width uint32 values
+
+
+@dataclass
 class FurnaceModule:
     # A normalized adapter exposing the subset EventTable/MML expect
     SongName: str = ''
@@ -240,6 +264,7 @@ class FurnaceModule:
     GV: float = 1.0             # global volume (0..1)
     Instruments: List[FurnaceInstrument] = field(default_factory=list)
     Samples: List[FurnaceSample] = field(default_factory=list)
+    Wavetables: List[FurnaceWavetable] = field(default_factory=list)
     NumChannels: int = 8
     PatternLength: int = 64
     OrdersPerChannel: List[List[int]] = field(default_factory=list)  # [ch][order_idx] -> pattern_id

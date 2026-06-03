@@ -72,6 +72,7 @@ class FurnaceParser:
 
         # First, try to read header at info_ptr
         inst_ptrs: List[int] = []
+        wave_ptrs: List[int] = []
         samp_ptrs: List[int] = []
         patn_ptrs: List[int] = []
         subsong_ptrs: List[int] = []
@@ -86,12 +87,12 @@ class FurnaceParser:
                     # New format: INF2 header
                     if tag == b'INF2' and (info_ptr+8+size) <= len(data):
                         payload = data[info_ptr+8:info_ptr+8+size]
-                        inst_ptrs, samp_ptrs, patn_ptrs, chip_flags_ptrs, subsong_ptrs = self._parse_INF2(mod, io.BytesIO(payload))
+                        inst_ptrs, wave_ptrs, samp_ptrs, patn_ptrs, chip_flags_ptrs, subsong_ptrs = self._parse_INF2(mod, io.BytesIO(payload))
                 else:
                     # Old format: INFO header
                     if tag == b'INFO' and (info_ptr+8+size) <= len(data):
                         payload = data[info_ptr+8:info_ptr+8+size]
-                        inst_ptrs, samp_ptrs, patn_ptrs, chip_flags_ptrs = self._parse_INFO(mod, io.BytesIO(payload))
+                        inst_ptrs, wave_ptrs, samp_ptrs, patn_ptrs, chip_flags_ptrs = self._parse_INFO(mod, io.BytesIO(payload))
         except Exception as e:
             self.logger.error(f"Error parsing header: {e}")
             # Fall back to scanning for INFO in the stream
@@ -106,6 +107,12 @@ class FurnaceParser:
                 size = int.from_bytes(data[off+4:off+8], 'little')
                 if tag == b'SNG2' and off+8+size <= len(data):
                     self._parse_SNG2(mod, io.BytesIO(data[off+8:off+8+size]))
+        for off in wave_ptrs:
+            if 0 < off+8 <= len(data):
+                tag = data[off:off+4]
+                size = int.from_bytes(data[off+4:off+8], 'little')
+                if tag == b'WAVE' and off+8+size <= len(data):
+                    self._parse_WAVE(mod, io.BytesIO(data[off+8:off+8+size]))
         for off in samp_ptrs:
             if 0 < off+8 <= len(data):
                 tag = data[off:off+4]
@@ -139,7 +146,7 @@ class FurnaceParser:
 
     # ------------- block handlers -------------
 
-    def _parse_INFO(self, mod: FurnaceModule, s: io.BytesIO) -> Tuple[List[int], List[int], List[int], List[Tuple[int, int]]]:
+    def _parse_INFO(self, mod: FurnaceModule, s: io.BytesIO) -> Tuple[List[int], List[int], List[int], List[int], List[Tuple[int, int]]]:
         # Read subset as per docs; many fields will be ignored.
         # time base, speed1, speed2, arp time
         _tb = self._ru8(s); sp1 = self._ru8(s); sp2 = self._ru8(s); _arp = self._ru8(s)
@@ -184,7 +191,7 @@ class FurnaceParser:
             s.read(1)
         # Now read pointers to instruments/wavetables/samples/patterns
         inst_ptrs = list(self._read_u32_list(s, inst_count))
-        _wav_ptrs = list(self._read_u32_list(s, wavetable_count))
+        wave_ptrs = list(self._read_u32_list(s, wavetable_count))
         samp_ptrs = list(self._read_u32_list(s, sample_count))
         patn_ptrs = list(self._read_u32_list(s, int(gpat_count)))
         # Orders and channel metadata
@@ -213,9 +220,9 @@ class FurnaceParser:
         for i in range(min(len(chip_bytes), len(chip_flags_ptrs))):
             chip_pairs.append((int(chip_bytes[i]), int(chip_flags_ptrs[i])))
 
-        return inst_ptrs, samp_ptrs, patn_ptrs, chip_pairs
+        return inst_ptrs, wave_ptrs, samp_ptrs, patn_ptrs, chip_pairs
 
-    def _parse_INF2(self, mod: FurnaceModule, s: io.BytesIO) -> Tuple[List[int], List[int], List[int], List[Tuple[int, int]], List[int]]:
+    def _parse_INF2(self, mod: FurnaceModule, s: io.BytesIO) -> Tuple[List[int], List[int], List[int], List[int], List[Tuple[int, int]], List[int]]:
         """Parse INF2 header block for Furnace version >= 240."""
         # Song information (strings)
         name = self._rstr(s)
@@ -269,6 +276,7 @@ class FurnaceParser:
 
         # Read elements until DIV_ELEMENT_END
         inst_ptrs: List[int] = []
+        wave_ptrs: List[int] = []
         samp_ptrs: List[int] = []
         patn_ptrs: List[int] = []
         subsong_ptrs: List[int] = []
@@ -284,12 +292,14 @@ class FurnaceParser:
                 chip_flags_ptrs = list(self._read_element_ptrs(s))
             elif element_type == self.DIV_ELEMENT_INSTRUMENT:
                 inst_ptrs = list(self._read_element_ptrs(s))
+            elif element_type == self.DIV_ELEMENT_WAVETABLE:
+                wave_ptrs = list(self._read_element_ptrs(s))
             elif element_type == self.DIV_ELEMENT_SAMPLE:
                 samp_ptrs = list(self._read_element_ptrs(s))
             elif element_type == self.DIV_ELEMENT_PATTERN:
                 patn_ptrs = list(self._read_element_ptrs(s))
             else:
-                # Skip unknown element types (ASSET_DIR, WAVETABLE, COMPAT_FLAGS, COMMENTS, GROOVE, etc.)
+                # Skip unknown element types (ASSET_DIR, COMPAT_FLAGS, COMMENTS, GROOVE, etc.)
                 num_elements = self._ru32(s)
                 for _ in range(num_elements):
                     self._ru32(s)
@@ -299,7 +309,7 @@ class FurnaceParser:
         for i in range(min(len(chip_types), len(chip_flags_ptrs))):
             chip_pairs.append((chip_types[i], chip_flags_ptrs[i]))
 
-        return inst_ptrs, samp_ptrs, patn_ptrs, chip_pairs, subsong_ptrs
+        return inst_ptrs, wave_ptrs, samp_ptrs, patn_ptrs, chip_pairs, subsong_ptrs
 
     def _read_element_ptrs(self, s: io.BytesIO) -> List[int]:
         """Read element pointer array: count (u32) followed by count pointers (u32 each)."""
@@ -384,6 +394,29 @@ class FurnaceParser:
         # print(f"  Loop start: {samp.loop_start}, Loop end: {samp.loop_end}")
         mod.Samples.append(samp)
 
+    def _parse_WAVE(self, mod: FurnaceModule, s: io.BytesIO) -> None:
+        name = self._rstr(s)
+        width = self._ru32(s)
+        _reserved = self._ru32(s)
+        height = self._ru32(s)
+        count = width
+        raw = s.read(count * 4) if count > 0 else b''
+        actual_count = len(raw) // 4
+        data = list(struct.unpack(f'<{actual_count}I', raw[:actual_count * 4])) if actual_count > 0 else []
+        idx = len(mod.Wavetables)
+        wt = FurnaceWavetable(
+            index=idx,
+            name=self._sanitize_name(name or f'Wave{idx}'),
+            width=int(width),
+            height=int(height),
+            data=data,
+        )
+        mod.Wavetables.append(wt)
+        self.logger.debug(
+            f"Wavetable {idx}: '{wt.name}' width={wt.width} height={wt.height} "
+            f"data={wt.data[:16]}{'...' if len(wt.data) > 16 else ''}"
+        )
+
     def _parse_INS2(self, mod: FurnaceModule, s: io.BytesIO) -> None:
         _fmt_version = self._ru16(s)
         ins_type = self._ru16(s)
@@ -438,8 +471,8 @@ class FurnaceParser:
                     ins.use_sample = bool(flags & 0x02)
                     ins.use_wave = bool(flags & 0x04)
                     ins.waveform_length = self._ru8(ds)
-                    if ins.use_wave:
-                        self.logger.warning(f"Instrument {ins.index} uses wavetables, which is not supported. Using sample instead.")
+                    if ins.use_sample and ins.use_wave:
+                        self.logger.warning(f"Instrument {ins.index} ('{ins.name}') has both 'use sample' and 'use wave' set. This is ambiguous.")
                     # Sample map 120 entries if enabled
                     if ins.use_sample_map:
                         table: List[Tuple[int, int]] = []
@@ -529,6 +562,16 @@ class FurnaceParser:
                     except:
                         self.logger.warning(f"Invalid macro code: {macro_code}")
 
+            elif code == 'WS':
+                # Wavetable synth data; only track first wave and enabled flag
+                ds = io.BytesIO(data)
+                if length >= 4:
+                    ins.wave_synth_first_wave = self._ru32(ds)  # first wave index
+                if length >= 8:
+                    self._ru32(ds)  # second wave (unused)
+                if length >= 11:
+                    ds.read(2)     # rate divider, effect
+                    ins.wave_synth_enabled = bool(self._ru8(ds))
             elif code == 'EN':
                 break
             else:
