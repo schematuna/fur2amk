@@ -61,10 +61,13 @@ class FurnaceConverter:
                         else:
                             chip_ins_idx = used_samples[sample_index]
                         
-                        # Store the note -> Chipttune instrument mapping for later
-                        # Convert from 0:C-(-5) for furnace note to 0:C-0 for sample map
-                        note = i + 60
-                        note_to_play = mapping[0] + 60
+                        # sample maps were made bigger in v246
+                        if module.Version >= 246:
+                            note = i
+                            note_to_play = mapping[0]
+                        else:
+                            note = i + 60
+                            note_to_play = mapping[0] + 60
                         ins_info.ins_map[note] = MappingInfo(chip_ins_idx, note_to_play)
             else:
                 chip_ins = self.fur_ins_to_chip_ins(ins, chip_ins_counter)

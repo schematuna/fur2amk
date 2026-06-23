@@ -108,7 +108,7 @@ class FurnaceInstrument:
     use_sample: bool = False  # bit 1 of SM flags
     use_wave: bool = False    # bit 2 of SM flags
     waveform_length: int = 0  # from SM block
-    sample_table: List[Tuple[int, int]] = field(default_factory=lambda: [(0, 1)] * 120)
+    sample_table: List[Tuple[int, int]] = field(default_factory=lambda: [(0, 65535)] * 180)
     
     macros: List[FurnaceMacro] = field(default_factory=list)
 
@@ -234,6 +234,7 @@ class FurnacePattern:
 @dataclass
 class FurnaceModule:
     # A normalized adapter exposing the subset EventTable/MML expect
+    Version: int = 0            # .fur file version
     SongName: str = ''
     Author: str = ''            # song author
     Comment: str = ''           # song comment

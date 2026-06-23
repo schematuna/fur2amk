@@ -59,6 +59,7 @@ class FurnaceParser:
         # Header (32 bytes)
         _ = bio.read(16)  # magic
         self.version = self._ru16(bio)
+        mod.Version = self.version
         self.logger.info(f"Furnace version: {self.version}")
         # patterns require version 157+
         # instruments require version 127+
@@ -440,10 +441,11 @@ class FurnaceParser:
                     ins.waveform_length = self._ru8(ds)
                     if ins.use_wave:
                         self.logger.warning(f"Instrument {ins.index} uses wavetables, which is not supported. Using sample instead.")
-                    # Sample map 120 entries if enabled
+                    # Sample map: 180 entries for version >= 246, 120 entries for older
                     if ins.use_sample_map:
                         table: List[Tuple[int, int]] = []
-                        for _ in range(120):
+                        num_entries = 180 if self.version >= 246 else 120
+                        for _ in range(num_entries):
                             note_to_play = self._ru16(ds)
                             samp_to_play = self._ru16(ds)
                             table.append((note_to_play, samp_to_play))
