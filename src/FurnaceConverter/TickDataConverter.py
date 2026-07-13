@@ -61,7 +61,8 @@ class TickDataConverter:
             chip_tick.Note, chip_tick.Ins = self.apply_sample_map(fur_tick, active_ins, ins_info)
 
             # process arp macro after sample maps but before pitch bends
-            note, legato_cmd = arp_converter.get_arp_for_tick(fur_tick, active_ins, chip_tick.Note)
+            arp_note = chip_tick.Note if fur_tick.kind() == FurnaceTickData.NoteKind.NOTE else None
+            note, legato_cmd = arp_converter.get_arp_for_tick(fur_tick, active_ins, arp_note)
             if note is not None:
                 chip_tick.Note = note
             if legato_cmd is not None:

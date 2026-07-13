@@ -92,7 +92,7 @@ class ArpMacroConverter:
             self.primary_note = chip_note
             self.last_val = None
 
-        is_note_release = tick_data.kind() == ChiptuneTickData.NoteKind.RELEASE
+        is_note_release = tick_data.kind() == FurnaceTickData.NoteKind.RELEASE
         if is_note_release:
             self.timer = None
 
