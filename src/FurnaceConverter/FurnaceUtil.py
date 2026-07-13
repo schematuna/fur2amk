@@ -1,5 +1,10 @@
+import logging
+
 class FurnaceUtil:
     PITCH_STEPS_PER_OCTAVE = 384
+
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
 
     @staticmethod
     def fur_pitch_change_to_semitones(change: int) -> float:
@@ -8,6 +13,10 @@ class FurnaceUtil:
 
     @staticmethod
     def ticks_from_speed(speed: int, semitones: int) -> float:
+        if speed == 0:
+            # don't allow zero speed
+            logging.warning("Pitch shift speed is zero, setting to 1 instead.")
+            speed = 1
         ticks_per_octave = FurnaceUtil.PITCH_STEPS_PER_OCTAVE / speed
         octaves_to_slide = abs(semitones) / 12
         return ticks_per_octave * octaves_to_slide
