@@ -21,7 +21,7 @@ class TickDataConverter:
         pan_converter = PanConverter()
         arp_converter = ArpMacroConverter()
         pitchbend_converter = PitchBendConverter()
-        active_ins: FurnaceInstrument = instruments[0]
+        active_ins: FurnaceInstrument = instruments[0] if instruments else None
         vol_at_tick: List[float] = []
 
         for i, fur_tick in enumerate(furnace_ticks):
@@ -93,7 +93,7 @@ class TickDataConverter:
 
     def apply_volume_macros(self, chiptune_ticks: List[ChiptuneTickData], furnace_ticks: List[FurnaceTickData], instruments: List[FurnaceInstrument], vol_at_tick: List[float]) -> None:
         vol_mac_converter = VolumeMacroConverter()
-        active_ins: FurnaceInstrument = instruments[0]
+        active_ins: FurnaceInstrument = instruments[0] if instruments else None
         macro_mults: List[float] = []
 
         # First pass: set chip_tick.Vol and record macro_mult at each tick
