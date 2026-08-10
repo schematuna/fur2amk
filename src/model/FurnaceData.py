@@ -249,6 +249,5 @@ class FurnaceModule:
     HighlightA: int = 4
     HighlightB: int = 16
     TicksPerSecond: float = 0.0
-    Speed1: int = 6
-    Speed2: int = 0
+    Speeds: List[int] = field(default_factory=lambda: [6])  # active speed pattern entries
     SNESFlags: FurnaceSNESFlags = field(default_factory=FurnaceSNESFlags)

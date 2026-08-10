@@ -18,7 +18,7 @@ class RowConverter():
         condensed_rows, pattern_lengths_rows, loop_row = self._resolve_jumps(flat_song_rows, self.module.PatternLength)
 
         # Get the number of ticks per row, which may be variable
-        self.ticks_per_row = self._resolve_speeds(condensed_rows, self.module.Speed1)
+        self.ticks_per_row = self._resolve_speeds(condensed_rows, self.module.Speeds)
 
         # calc loop tick
         if loop_row:
@@ -173,12 +173,12 @@ class RowConverter():
 
         return condensed_rows, pattern_lengths, loop_row
     
-    def _resolve_speeds(self, condensed_rows: List[List[FurnaceRow]], default_speed: int) -> List[int]:
+    def _resolve_speeds(self, condensed_rows: List[List[FurnaceRow]], speeds: List[int]) -> List[int]:
         """ 
         Returns the number of ticks that should be in each row 
 
-        Accounts for command 0F Set Speed
-        TODO: account for 09, alternating speeds, and grooves
+        Accounts for command 0F Set Speed, alternating speeds, and a single groove
+        TODO: account for 09 and multiple groove patterns
         """
 
         num_channels = len(condensed_rows)
@@ -193,11 +193,15 @@ class RowConverter():
 
         # Then create a list of speeds for all rows
         row_speeds: List[int] = []
-        cur_speed = default_speed
+        cur_speeds = list(speeds)
         for i in range(num_rows):
             if i in speed_changes:
-                cur_speed = speed_changes[i]
+                # When using alternating speeds, 0F modifies second speed. Otherwise first speed.
+                if len(cur_speeds) == 2:
+                    cur_speeds[1] = speed_changes[i]
+                else:
+                    cur_speeds[0] = speed_changes[i]
 
-            row_speeds.append(cur_speed)
+            row_speeds.append(cur_speeds[i % len(cur_speeds)])
         
         return row_speeds

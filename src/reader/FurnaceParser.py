@@ -154,8 +154,12 @@ class FurnaceParser:
         mod.HighlightA = int(hlA) or 4
         mod.HighlightB = int(hlB) or 16
         mod.TicksPerSecond = float(tps)
-        mod.Speed1 = int(sp1)
-        mod.Speed2 = int(sp2)
+        # Build speed pattern from speed1/speed2; speed pattern (>=139) would override but
+        # the INFO parser does not currently reach that section of the block.
+        if int(sp2) > 0 and int(sp2) != int(sp1):
+            mod.Speeds = [int(sp1), int(sp2)]
+        else:
+            mod.Speeds = [int(sp1)] if int(sp1) > 0 else [6]
         # global pattern count
         gpat_count = self._ru32(s)
         # Sound chip IDs (32 bytes)
@@ -338,8 +342,9 @@ class FurnaceParser:
         mod.HighlightA = int(hl_a) or 4
         mod.HighlightB = int(hl_b) or 16
         mod.TicksPerSecond = float(hz)
-        mod.Speed1 = int(speeds[0]) if speeds_len > 0 else 6
-        mod.Speed2 = int(speeds[1]) if speeds_len > 1 else 0
+        # Store only the active entries of the speed pattern (length given by speeds_len)
+        active = speeds[:speeds_len] if speeds_len > 0 else [6]
+        mod.Speeds = [int(v) for v in active]
 
         # Read orders for each channel
         for ch in range(mod.NumChannels):
