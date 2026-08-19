@@ -12,10 +12,11 @@ from .MMLWriter import MMLWriter
 from ..util import *
 
 class AMKWriter:
-    def __init__(self, amk_data: AMKData, module_path: str) -> None:
+    def __init__(self, amk_data: AMKData, module_path: str, optimize_loops: bool = True) -> None:
         self.logger = logging.getLogger(__name__)
         self.txt: str = ''
         self.amk_data = amk_data
+        self.optimize_loops = optimize_loops
 
         self.add_amk_header()
         self.add_spc_info()
@@ -167,7 +168,7 @@ class AMKWriter:
         label_count = self.amk_data.label_start
         mml_data = self.amk_data.mml_data
         
-        mml_writer = MMLWriter(mml_data, label_count)
+        mml_writer = MMLWriter(mml_data, label_count, optimize_loops=self.optimize_loops)
         self.txt += mml_writer.write()
 
         return

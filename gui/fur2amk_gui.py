@@ -123,8 +123,10 @@ class App(tk.Tk):
         opt_frame.pack(fill='x', **pad)
         self.nosmpl_var = tk.BooleanVar()
         self.verbose_var = tk.BooleanVar()
+        self.noopt_var = tk.BooleanVar()
         ttk.Checkbutton(opt_frame, text='Skip samples', variable=self.nosmpl_var).pack(side='left')
         ttk.Checkbutton(opt_frame, text='Verbose', variable=self.verbose_var).pack(side='left', padx=10)
+        ttk.Checkbutton(opt_frame, text="Don't optimize loops", variable=self.noopt_var).pack(side='left')
 
         self.convert_btn = ttk.Button(self, text='Convert', command=self._start_convert)
         self.convert_btn.pack(**pad)
@@ -177,7 +179,7 @@ class App(tk.Tk):
             script_dir = os.path.dirname(sys.executable) if getattr(sys, 'frozen', False) else os.path.dirname(os.path.abspath(__file__))
             out_dir = os.path.join(script_dir, 'music')
 
-            out_path, sample_dir = run_conversion(fur_path, out_dir, self.nosmpl_var.get())
+            out_path, sample_dir = run_conversion(fur_path, out_dir, self.nosmpl_var.get(), optimize_loops=not self.noopt_var.get())
 
             amk_dir = self.amk_var.get().strip()
             if amk_dir:
