@@ -79,10 +79,8 @@ class ChiptuneTickData:
     
 @dataclass
 class ChiptuneMacroData:
-    is_noise: bool = None
-    noise_freq: Optional[int] = None # ranges 0 to 32
     gain_values: Optional[List[int]] = None  # snes gain values
-    gain_speed: Optional[int] = None # ticks between each gain change
+    gain_speed: Optional[int] = None  # ticks between each gain change
 
 @dataclass
 class ChiptuneInstrument:
@@ -106,6 +104,8 @@ class ChiptuneInstrument:
     # Sample mapping from INS2 'SM'
     initial_sample: Optional[int] = 0  # sample 0 by default
 
+    is_noise: bool = None
+    noise_freq: Optional[int] = None  # ranges 0 to 32
     snes_macro_data: ChiptuneMacroData = field(default_factory=ChiptuneMacroData)
 
 @dataclass
