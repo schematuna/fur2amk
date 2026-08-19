@@ -104,8 +104,8 @@ class FurnaceConverter:
         if noise_freq_macro := fur_ins.get_macro(SNESMacroCode.NoiseFreq):
             chip_ins.noise_freq = noise_freq_macro.values[0]
         if gain_macro := fur_ins.get_macro(SNESMacroCode.Gain):
-            chip_ins.snes_macro_data.gain_values = gain_macro.values
-            chip_ins.snes_macro_data.gain_speed = gain_macro.speed
+            chip_ins.gain_values = gain_macro.values
+            chip_ins.gain_speed = gain_macro.speed
 
         return chip_ins
 

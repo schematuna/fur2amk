@@ -76,7 +76,7 @@ class AMKConverter:
                     env.release = ins.sn_release
                 amk_ins.envelope = env
             else:
-                amk_ins.gain_values = ins.snes_macro_data.gain_values
+                amk_ins.gain_values = ins.gain_values
                 amk_ins.gain = ins.sn_gain
                 if amk_ins.gain_values is None or amk_ins.gain is None:
                     self.logger.debug(f"Instrument {ins.index:02X} uses gain mode but does not have gain parameters set.")
@@ -91,13 +91,13 @@ class AMKConverter:
 
         for chip_ins in chiptune_data.instruments:
             self.instrument_info[chip_ins.index] = InstrumentInfo()
-            gmacro = chip_ins.snes_macro_data.gain_values
+            gmacro = chip_ins.gain_values
             if gmacro and len(gmacro) > 1:
                 # just support one gain change for now.
                 # If we want to support more we'll have to set gain manually throughout the note.
                 comment = "Gain toggle for instrument " + str(chip_ins.index)+ ": " + chip_ins.name
                 command = EnableGainCommand(None, SnesGain.from_byte(gmacro[1]))
-                remote_def = AMKRemoteDef(command_num, command, comment, RemoteCommandTiming.AFTER_START, chip_ins.snes_macro_data.gain_speed)
+                remote_def = AMKRemoteDef(command_num, command, comment, RemoteCommandTiming.AFTER_START, chip_ins.gain_speed)
                 amk_data.remote_defs.append(remote_def)
                 self.instrument_info[chip_ins.index].remote_commands.append(remote_def)
                 command_num += 1
