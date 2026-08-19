@@ -48,9 +48,9 @@ class AMKConverter:
         for ins in chiptune_data.instruments:
             amk_ins = AMKInstrument()
             # first, check if this is a noise instrument
-            if ins.snes_macro_data.is_noise:
+            if ins.is_noise:
                 amk_ins.is_noise = True
-                amk_ins.noise_freq = ins.snes_macro_data.noise_freq
+                amk_ins.noise_freq = ins.noise_freq
                 if amk_ins.noise_freq is None:
                     amk_ins.noise_freq = 29  # default noise freq if unset
                     self.logger.warning(f"Instrument {ins.index} is a noise instrument but has no noise frequency set; You should set it explicitly in Furnace.")
