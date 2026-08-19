@@ -73,6 +73,13 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
         default=False,
         help='Skip sample conversion/dumping'
     )
+
+    parser.add_argument(
+        '--noopt',
+        action='store_true',
+        default=False,
+        help="Don't optimize loops"
+    )
     
     args = parser.parse_args(argv[1:])
     
@@ -83,14 +90,14 @@ def parse_args(argv: List[str]) -> argparse.Namespace:
     return args
 
 
-def run_conversion(furnace_file: str, out_dir: str, nosmpl: bool = False):
+def run_conversion(furnace_file: str, out_dir: str, nosmpl: bool = False, optimize_loops: bool = True):
     """Parse, convert, and write outputs. Returns (mml_path, sample_dir or None)."""
     song_name = os.path.splitext(os.path.basename(furnace_file.replace('\\', '/')))[0]
 
     module = FurnaceParser().parse(furnace_file)
     chiptune_data = FurnaceConverter().convert(module)
     amk_data = AMKConverter().convert(chiptune_data)
-    amk_writer = AMKWriter(amk_data, song_name)
+    amk_writer = AMKWriter(amk_data, song_name, optimize_loops=optimize_loops)
 
     os.makedirs(out_dir, exist_ok=True)
     out_path = os.path.join(out_dir, f'{song_name}.txt')
@@ -118,7 +125,7 @@ def main() -> None:
     logging.basicConfig(format='%(levelname)-7s %(message)s', level=log_level)
 
     song_name = os.path.splitext(os.path.basename(args.furnace_file))[0]
-    out_path, sample_dir = run_conversion(args.furnace_file, 'music', args.nosmpl)
+    out_path, sample_dir = run_conversion(args.furnace_file, 'music', args.nosmpl, optimize_loops=not args.noopt)
 
     amk_dir = config.get('amk_dir')
     if amk_dir:

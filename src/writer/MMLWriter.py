@@ -10,10 +10,11 @@ from .MMLWriterData import *
 from ..util import *
 
 class MMLWriter:
-    def __init__(self, mml_data: MMLData, label_start: int) -> None:
+    def __init__(self, mml_data: MMLData, label_start: int, optimize_loops: bool = True) -> None:
         self.logger = logging.getLogger(__name__)
         self.mml_data = mml_data
         self.label_count = label_start
+        self.optimize_loops = optimize_loops
 
     def get_section_num(self, tick: int) -> int:
         """
@@ -266,9 +267,13 @@ class MMLWriter:
             sections.append(MMLSection(section_words, cur_section_num, self.mml_data.measure_length))
 
             optimizer = LoopOptimizer()
-            self.label_count = optimizer.label_repeated_sections(sections, self.label_count)
-            optimizer.optimize_subloops(sections)
-            self.label_count = optimizer.optimize_loops(sections, self.label_count)
+            if self.optimize_loops:
+                self.label_count = optimizer.label_repeated_sections(sections, self.label_count)
+                optimizer.optimize_subloops(sections)
+                self.label_count = optimizer.optimize_loops(sections, self.label_count)
+            else:
+                for section in sections:
+                    section.loopInfo = [LoopInfo(list(range(len(section.sentences))))]
 
             mml_state = MMLState()
             # light staccato is a global toggle
