@@ -78,11 +78,6 @@ class ChiptuneTickData:
         return None
     
 @dataclass
-class ChiptuneMacroData:
-    gain_values: Optional[List[int]] = None  # snes gain values
-    gain_speed: Optional[int] = None  # ticks between each gain change
-
-@dataclass
 class ChiptuneInstrument:
     index: int
     name: str
@@ -106,7 +101,10 @@ class ChiptuneInstrument:
 
     is_noise: bool = None
     noise_freq: Optional[int] = None  # ranges 0 to 32
-    snes_macro_data: ChiptuneMacroData = field(default_factory=ChiptuneMacroData)
+
+    # Gain handling
+    gain_values: Optional[List[int]] = None  # Up to two gain values to be applied every time the instrument is triggered
+    gain_speed: Optional[int] = None  # ticks until second gain value is applied, if applicable
 
 @dataclass
 class ChiptuneData:
