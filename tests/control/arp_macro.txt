@@ -41,7 +41,7 @@
     @15  $8E $E0 $80 $01 $E4 ;@53
 }
 
-; created with fur2amk 0.6.1
+; created with fur2amk 0.6.4
 
 w254 t38
 
@@ -61,5 +61,7 @@ $F4$01 $F4$01 @32 o1 e64^=1 o3 f16^=2 c4^32
 $F4$01 $F4$01 o1 b64^=1 o4 c16^=2 o3 g4^32
 $F4$01 $F4$01 o1 a64^=1 o3 a+16^=2 f4^32
 $F4$01 @33 $EB$00$0C$01 f8^16 $FE f8^16 $EB$24$0C$FF a4^16^32^64^=2 $FE ^=1
+; disable light staccato
+$F4$02 
 
 

@@ -51,7 +51,7 @@
     "03_S4_SoftTrb.brr"           $00 $00 $3A $05 $63 ;@50
 }
 
-; created with fur2amk 0.6.1
+; created with fur2amk 0.6.4
 
 w194 t52
 
@@ -68,6 +68,8 @@ $F5 $4D $11 $FA $F4 $FA $FB $FA $00
 $F4$02 
 ; section 00
 @31 v187 o3 e4 y20 ^4 y0 ^4 y10 ^4 y20 ^4 y0 ^4 y10 ^2 $DC$C0$14 ^1 $DC$C0$0A ^1 $DC$C0$00 ^1 $DC$C0$0C ^1^2 $DC$60$14 ^2 $DC$60$04 ^2 $DC$30$11 ^4 $DC$30$0E ^4
+; disable light staccato
+$F4$02 
 
 
 #1

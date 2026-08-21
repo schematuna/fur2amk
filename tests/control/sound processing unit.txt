@@ -44,7 +44,7 @@
     "12_tamborine_revb.brr"        $FF $EC $80 $00 $F5 ;@42
 }
 
-; created with fur2amk 0.6.1
+; created with fur2amk 0.6.4
 
 w254 t25
 
@@ -102,6 +102,8 @@ v187 c64^=2|^=1 v99 c64^=2|^=1 c64^=2|^=1 v187 c64^=2|^=1 v111 c64^=2|^=1 v99 c6
 [v187 c64^=2|^=1 v99 c64^=2|^=1 c64^=2|^=1 v187 c64^=2|^=1 v111 c64^=2|^=1 v99 c64^=2|^=1 v187 c64^=2|^=1 v137 c64^=2|^=1]4
 ; section 09
 $EB$0C$54$03 $E8$88$00 c2 $FE d+1^2
+; disable light staccato
+$F4$02 
 
 
 #1

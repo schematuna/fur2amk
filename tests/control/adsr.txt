@@ -23,7 +23,7 @@
     "02_Sample2.brr"      $C9 $A3 $80 $0A $03 ;@32
 }
 
-; created with fur2amk 0.6.1
+; created with fur2amk 0.6.4
 
 w194 t52
 
@@ -45,6 +45,8 @@ $F4$02
 (!2, 3) (!3, -1) @32 o2 c1 r2 o3 f4 r4 e8 d8 c8 r2^8 (!99, 0) (!1, -1) @30 c1
 ; section 01
 v255 e1 $ED$3C$AD ^1 e1 (!99, 0) (!2, 3) (!3, -1) @32 c1
+; disable light staccato
+$F4$02 
 
 
 #1

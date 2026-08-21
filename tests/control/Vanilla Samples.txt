@@ -42,7 +42,7 @@
     @15  $8E $E0 $80 $01 $E4 ;@53
 }
 
-; created with fur2amk 0.6.1
+; created with fur2amk 0.6.4
 
 w254 t38
 

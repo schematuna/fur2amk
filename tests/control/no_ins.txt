@@ -42,7 +42,7 @@
     @15  $8E $E0 $80 $01 $E4 ;@53
 }
 
-; created with fur2amk 0.6.3
+; created with fur2amk 0.6.4
 
 w254 t30
 
@@ -56,5 +56,7 @@ $F1 $00 $00 $01
 $F4$02 
 ; section 00
 @30 o3 c1^1
+; disable light staccato
+$F4$02 
 
 

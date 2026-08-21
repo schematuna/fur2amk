@@ -302,6 +302,10 @@ class MMLWriter:
                 word_txt += f"; section {MMLUtil.to_hex(section.section_num)}\n"
                 word_txt += section.to_mml(mml_state) + '\n'
 
+            if not has_loop_point and c == 0:
+                word_txt += '; disable light staccato\n'
+                word_txt += LightStaccatoToggle(0).get_text(mml_state) + '\n'
+
             txt += word_txt + '\n\n'
 
         # Print warning if any notes were out of range
