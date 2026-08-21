@@ -34,7 +34,7 @@
     "07_DKC-Tambourine_mod.brr"  $FF $ED $80 $05 $1C ;@37
 }
 
-; created with fur2amk 0.6.1
+; created with fur2amk 0.6.4
 
 w128 t30
 

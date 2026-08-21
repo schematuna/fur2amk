@@ -51,7 +51,7 @@
     "09_jsma502a__2024-06-24_182000_.brr"         $FF $EE $80 $02 $A3 ;@46
 }
 
-; created with fur2amk 0.6.1
+; created with fur2amk 0.6.4
 
 w254 t76
 
@@ -135,6 +135,8 @@ c64 @30 v131 c64 v121 c64 v115 c64 v111 c64 v104 c64 v99 c64 v77 c64 @33 v187 c8
 (7)
 ; section 11
 r1^1^1
+; disable light staccato
+$F4$02 
 
 
 #1
