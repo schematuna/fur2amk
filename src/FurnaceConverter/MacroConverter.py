@@ -72,7 +72,42 @@ class VolumeMacroConverter:
             return min(max(0, new_vol), 254)
 
         return None
-    
+
+class TremoloMacroConverter:
+    def __init__(self):
+        self.logger = logging.getLogger(__name__)
+        self.last_ins_index = None
+        self.tremolo_active = False
+
+    def get_tremolo_for_tick(self, active_ins: FurnaceInstrument) -> TremoloCommand | None:
+        if active_ins is None or active_ins.index == self.last_ins_index:
+            return None
+        self.last_ins_index = active_ins.index
+
+        vol_macro = active_ins.get_macro(SNESMacroCode.Volume)
+        if vol_macro and vol_macro.type == SNESMacroTypes.LFO.value:
+            depth = vol_macro.lfo_top - vol_macro.lfo_bottom
+            ticks = self._speed_to_ticks(vol_macro.lfo_speed, depth, vol_macro.lfo_shape)
+            self.tremolo_active = True
+            cmd = TremoloCommand(vol_macro.delay, ticks, depth)
+            return cmd
+
+        if self.tremolo_active:
+            self.tremolo_active = False
+            cmd = TremoloCommand(0, 0, 0)
+            return cmd
+
+        return None
+
+    def _speed_to_ticks(self, speed: int, depth: int, shape: int) -> int:
+        '''Converts Furnace's LFO speed parameter to a period length in ticks,
+           matching the tooltip shown in Furnace's macro editor (insEdit.cpp).'''
+        if speed is None or speed < 1:
+            return 0
+        lfo_range = abs(depth)
+        param_max = 65536 if shape == LFOShape.Square.value else ((lfo_range << 8) | 0xFF)
+        return (param_max // speed) * (2 if shape == LFOShape.Triangle.value else 1)
+
 class ArpMacroConverter:
     def __init__(self):
         self.logger = logging.getLogger(__name__)

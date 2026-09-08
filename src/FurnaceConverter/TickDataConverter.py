@@ -20,6 +20,7 @@ class TickDataConverter:
         vol_converter = VolumeConverter()
         pan_converter = PanConverter()
         arp_converter = ArpMacroConverter()
+        tremolo_converter = TremoloMacroConverter()
         pitchbend_converter = PitchBendConverter()
         active_ins: FurnaceInstrument = instruments[0] if instruments else None
         vol_at_tick: List[float] = []
@@ -35,6 +36,10 @@ class TickDataConverter:
             # convert echo
             if echo_cmd := echo_converter.process_tick(fur_tick, active_ins):
                 chip_tick.Commands.append(echo_cmd)
+
+            # emit tremolo command on instrument change
+            if tremolo_cmd := tremolo_converter.get_tremolo_for_tick(active_ins):
+                chip_tick.Commands.append(tremolo_cmd)
 
             # condense volume slides
             for tick_idx, cmd in vol_converter.process_tick(fur_tick):

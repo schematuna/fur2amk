@@ -34,6 +34,11 @@ class SNESMacroTypes(Enum):
     ADSR = 1
     LFO = 2
 
+class LFOShape(Enum):
+    Triangle = 0
+    Saw = 1
+    Square = 2
+
 class SpecialFlag(Enum):
     Noise = 0
     Echo = 1
@@ -81,6 +86,11 @@ class FurnaceMacro:
     delay: int                  # macro delay
     speed: int                  # step length in ticks
     values: List[int]           # parsed integer values (length given by entries field)
+    # LFO-specific fields (only set when type == LFO)
+    lfo_bottom: Optional[int] = None  # LFO output range bottom
+    lfo_top: Optional[int] = None     # LFO output range top
+    lfo_speed: Optional[int] = None   # LFO oscillation speed
+    lfo_shape: Optional[int] = None   # 0=triangle,1=saw,2=square
 
 @dataclass
 class FurnaceInstrument:
