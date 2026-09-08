@@ -159,6 +159,20 @@ class DisableVibrato(MMLCommand):
         return "$DF"
 
 @dataclass
+class Tremolo(MMLCommand):
+    delay: int
+    duration: int  # speed
+    amplitude: int  # depth
+
+    def to_mml(self, mml_state: 'MMLState' = None) -> str:
+        return f"$E5${MMLUtil.to_hex(self.delay)}${MMLUtil.to_hex(self.duration)}${MMLUtil.to_hex(self.amplitude)}"
+
+@dataclass
+class TremoloOff(MMLCommand):
+    def to_mml(self, mml_state: 'MMLState' = None) -> str:
+        return "$FD"
+
+@dataclass
 class CustomADSR(MMLCommand):
     adsr: ADSR
 

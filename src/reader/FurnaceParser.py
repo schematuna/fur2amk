@@ -522,7 +522,7 @@ class FurnaceParser:
                     # Store macro by code; last occurrence wins if duplicates
                     try:
                         macro_enum = SNESMacroCode(macro_code)
-                        ins.macros.append(FurnaceMacro(
+                        new_macro = FurnaceMacro(
                             code=macro_enum,
                             length=int(macro_length),
                             loop=int(macro_loop),
@@ -532,7 +532,18 @@ class FurnaceParser:
                             delay=int(macro_delay),
                             speed=int(macro_speed),
                             values=values,
-                        ))
+                        )
+                        # Volume LFO macros pack Bottom/Top/Speed/Shape into the values array
+                        # (val[0]=bottom, val[1]=top, val[11]=speed, val[12]=shape) per Furnace's macro editor layout
+                        if macro_enum == SNESMacroCode.Volume and macro_type == SNESMacroTypes.LFO.value:
+                            if len(values) > 12:
+                                new_macro.lfo_bottom = values[0]
+                                new_macro.lfo_top = values[1]
+                                new_macro.lfo_speed = values[11]
+                                new_macro.lfo_shape = values[12]
+                            else:
+                                self.logger.warning("Volume LFO macro has insufficient data for bottom/top/speed/shape.")
+                        ins.macros.append(new_macro)
                     except:
                         self.logger.warning(f"Invalid macro code: {macro_code}")
 

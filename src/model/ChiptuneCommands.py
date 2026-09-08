@@ -48,6 +48,12 @@ class VibratoCommand(ChiptuneCommand):
         self.speed = speed
         self.depth = depth
 
+class TremoloCommand(ChiptuneCommand):
+    def __init__(self, delay: int, speed: int, depth: int):
+        self.delay = delay
+        self.speed = speed
+        self.depth = depth
+
 class EchoEnableCommand(ChiptuneCommand):
     """Enables or disables echo for this channel"""
 

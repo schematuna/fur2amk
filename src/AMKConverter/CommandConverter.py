@@ -149,6 +149,30 @@ class VibratoConverter():
                 commands.append(Vibrato(tick, speed, amplitude))
 
         return commands
+
+class TremoloConverter():
+    def __init__(self, tick_ratio: float) -> None:
+        self.tick_ratio = tick_ratio
+
+    def convert_tick(self, tick_data: ChiptuneTickData, tick: int, state: AMKState) -> List[MMLCommand]:
+        commands: List[MMLCommand] = []
+        if effect := tick_data.get_command(TremoloCommand):
+            if effect.speed == 0 and effect.depth == 0:
+                commands.append(TremoloOff(tick))
+            else:
+                delay = max(0, min(255, round(effect.delay * self.tick_ratio)))
+
+                if effect.speed > 0:
+                    amk_ticks_per_cycle = effect.speed * self.tick_ratio
+                    amk_speed = 256 / amk_ticks_per_cycle
+                    duration = max(1, min(255, round(amk_speed)))
+                else:
+                    duration = 0
+
+                amplitude = max(0, min(255, round(effect.depth)))
+                commands.append(Tremolo(tick, delay, duration, amplitude))
+
+        return commands
     
 class TempoConverter():
     def __init__(self, structure: ChiptuneStructure, amk_ticks_per_row: int) -> None:

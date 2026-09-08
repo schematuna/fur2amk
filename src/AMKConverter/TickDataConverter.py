@@ -98,12 +98,14 @@ class TickDataConverter:
         volume_converter    = VolumeConverter(chiptune_data.structure.loop_tick)
         pan_converter       = PanConverter(chiptune_data.structure.loop_tick)
         vibrato_converter   = VibratoConverter(self.tick_ratio)
+        tremolo_converter   = TremoloConverter(self.tick_ratio)
         state = AMKState()
         for tick_data in proc_ticks:
             commands.extend(tempo_converter.convert_tick(tick_data, tick, state))
             commands.extend(volume_converter.convert_tick(tick_data, tick))
             commands.extend(pan_converter.convert_tick(tick_data, tick, state))
             commands.extend(vibrato_converter.convert_tick(tick_data, tick, state))
+            commands.extend(tremolo_converter.convert_tick(tick_data, tick, state))
 
             tick += 1
 
