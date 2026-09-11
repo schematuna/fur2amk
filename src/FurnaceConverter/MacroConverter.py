@@ -99,6 +99,13 @@ class TremoloMacroConverter:
 
         return None
 
+    def end_song(self) -> TremoloCommand | None:
+        '''Call after the last tick to turn off tremolo if it's still active at the end of the song.'''
+        if self.tremolo_active:
+            self.tremolo_active = False
+            return TremoloCommand(0, 0, 0)
+        return None
+
     def _speed_to_ticks(self, speed: int, depth: int, shape: int) -> int:
         '''Converts Furnace's LFO speed parameter to a period length in ticks,
            matching the tooltip shown in Furnace's macro editor (insEdit.cpp).'''
