@@ -159,6 +159,10 @@ class MMLWriter:
         legato_on_at_loop = False  # was legato on when we crossed the loop point?
         echo_toggled = False
         echo_toggled_at_loop = False  # was echo toggled when we crossed the loop point?
+        tremolo_on = False
+        tremolo_on_at_loop = False  # was tremolo on when we crossed the loop point?
+        cur_tremolo: Tremolo | None = None
+        cur_tremolo_at_loop: Tremolo | None = None  # tremolo params to restore after the loop
 
         for word in words:
             is_post_loop = self.mml_data.loop_tick is None or word.tick >= self.mml_data.loop_tick
@@ -168,6 +172,8 @@ class MMLWriter:
             if first_note_after_loop:
                 legato_on_at_loop = legato_on
                 echo_toggled_at_loop = echo_toggled
+                tremolo_on_at_loop = tremolo_on
+                cur_tremolo_at_loop = cur_tremolo
 
             # Track toggle states
             for command in word.commands:
@@ -175,6 +181,11 @@ class MMLWriter:
                     legato_on = not legato_on
                 if isinstance(command, EchoToggle):
                     echo_toggled = not echo_toggled
+                if isinstance(command, Tremolo):
+                    tremolo_on = True
+                    cur_tremolo = command
+                if isinstance(command, TremoloOff):
+                    tremolo_on = False
 
             # need to explicitly handle instrument change at loop point, so it's correct on loop
             if first_note_after_loop:
@@ -228,6 +239,14 @@ class MMLWriter:
         if echo_toggled_at_loop and self.mml_data.loop_tick is not None:
             pre_loop_commands.append(EchoToggle(self.mml_data.loop_tick - 1))
             post_loop_commands.insert(0, EchoToggle(self.mml_data.loop_tick))
+
+        # Handle tremolo state at loop point
+        # If tremolo is on in the intro as it passes the loop point, we need to:
+        # 1. Turn it off before the loop point (pre_loop_commands)
+        # 2. Turn it back on after the loop point with the same params (post_loop_commands)
+        if tremolo_on_at_loop and self.mml_data.loop_tick is not None:
+            pre_loop_commands.append(TremoloOff(self.mml_data.loop_tick - 1))
+            post_loop_commands.insert(0, replace(cur_tremolo_at_loop, tick=self.mml_data.loop_tick))
 
         # TODO: Handle pitch envelope state at loop point
 

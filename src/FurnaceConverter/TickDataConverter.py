@@ -93,6 +93,11 @@ class TickDataConverter:
             tick_idx, cmd = completed
             chiptune_ticks[tick_idx].Commands.append(cmd)
 
+        # turn off tremolo 1 tick before the song ends if it's still active, so it doesn't carry into the loop
+        if tremolo_off_cmd := tremolo_converter.end_song():
+            end_tick = max(0, len(chiptune_ticks) - 2)
+            chiptune_ticks[end_tick].Commands.append(tremolo_off_cmd)
+
         self.apply_volume_macros(chiptune_ticks, furnace_ticks, instruments, vol_at_tick)
         return chiptune_ticks
 
