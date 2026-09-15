@@ -83,6 +83,10 @@ If the gain macro is unused then the gain setting in the instrument SNES tab is 
 
 You can use one instance of the "Jump to Order" command 0Bxx. The last instance of the command will be used to place the intro marker in the amk output.
 
+## Tremolo
+
+The Tremolo effect (07xx) does not provide much range for the SNES chip in Furance. Therefore, tremolo is supported in fur2amk by way of the volume LFO macro. Variable delay, speed, and depth are supported. 
+
 ## Note Range
 
 AMK only supports C1 -> A6. If any notes are out of this range they will be octave-shifted until they are in range. You can resolve this by retuning samples and find/replacing notes in Furnace to get them in range.
