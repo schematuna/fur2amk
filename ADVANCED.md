@@ -87,6 +87,10 @@ You can use one instance of the "Jump to Order" command 0Bxx. The last instance 
 
 The Tremolo effect (07xx) does not provide much range for the SNES chip in Furance. Therefore, tremolo is supported in fur2amk by way of the volume LFO macro. Variable delay, speed, and depth are supported. 
 
+## Global Volume
+
+Global volume (wXXX in AMK) is controlled with the volume scale settings in the SNES chip config. AMK does not support independent L/R global volume, so both scale values should be set to the same value.
+
 ## Note Range
 
 AMK only supports C1 -> A6. If any notes are out of this range they will be octave-shifted until they are in range. You can resolve this by retuning samples and find/replacing notes in Furnace to get them in range.
