@@ -32,7 +32,7 @@
     "06_Piano2.brr"         $FF $EF $80 $00 $FD ;@36
 }
 
-; created with fur2amk 0.6.4
+; created with fur2amk 0.6.5
 
 w254 t25
 

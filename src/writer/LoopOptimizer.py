@@ -277,3 +277,21 @@ class LoopOptimizer:
             loopInfo.append(SubLoopInfo(list(range(cur_buffer_pos, cur_buffer_pos + len(search_buffer)))))
                             
         return loopInfo
+
+
+    def condense_sections(self, sections: List[MMLSection], loop_tick: int):
+        # a section that is a candidate for condensation is a section that is one self-contained labelled loop
+        # if any following sections are just a repeat of that label, they should be folded into the first instance
+        loop_candidate: LoopInfo = None
+        for section in sections:
+            # can't condense across the loop point
+            if section.tick() == loop_tick:
+                loop_candidate = None
+            if loop_candidate and len(section.loopInfo) == 1 and section.loopInfo[0].label == loop_candidate.label:
+                # fold this section into the candidate and skip writing it
+                loop_candidate.numLoops += section.loopInfo[0].numLoops
+                section.skip_write = True
+            elif section.loopInfo[-1].label:
+                loop_candidate = section.loopInfo[-1]
+            else:
+                loop_candidate = None

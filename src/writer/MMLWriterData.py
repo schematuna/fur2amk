@@ -199,6 +199,8 @@ class MMLSection:
         self.MIN_CHARS_PER_LINE = 10
         self.sentences: List[MMLSentence] = []
         self.make_sentences(words, measure_length)
+        # If true, don't write this section out. Useful for sections that get optimized away into a loop
+        self.skip_write = False
         self.logger = logging.getLogger(__name__)
     
     def __eq__(self, other) -> bool:

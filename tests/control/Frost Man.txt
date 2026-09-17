@@ -34,7 +34,7 @@
     "07_DKC-Tambourine_mod.brr"  $FF $ED $80 $05 $1C ;@37
 }
 
-; created with fur2amk 0.6.4
+; created with fur2amk 0.6.5
 
 w128 t30
 
@@ -95,9 +95,7 @@ b16^32 b32 v255 b16 v219 b16
 v255
 (4)
 ; section 0E
-(5)
-; section 0F
-(5)
+(5)2
 
 
 #1
@@ -108,11 +106,7 @@ v255
 v156 o5 e32 v255 e32 v156 e32 v111 e32 v255 e32 v156 e32 v111 e32 v255 e32
 v156 e32 v255 e32 v156 e32 e32 v255 e32 v156 e32 v111 e32 v255 e32
 ]]2
-]
-; section 01
-(6)
-; section 02
-(6)
+]3
 ; section 03
 v156 e32 v255 e32 v156 e32 v111 e32 v255 e32 v156 e32 v111 e32 v255 e32
 v156 e32 v255 e32 v156 e32 e32 v255 e32 v156 e32 v111 e32 v255 e32
@@ -346,9 +340,7 @@ c+2^4 d+8^16 e16
 ; section 0B
 c+2^4^8 o4 b8
 ; section 0C
-(22)[o5 c+1]
-; section 0D
-(22)
+(22)[o5 c+1]2
 ; section 0E
 e1
 ; section 0F
