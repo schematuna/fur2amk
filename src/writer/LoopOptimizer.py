@@ -313,3 +313,25 @@ class LoopOptimizer:
         #finally, remove vestigial labels
         for loop in condensed_loops:
             loop.label = None
+
+
+    def simplify_loops(self, sections: List[MMLSection]):
+        # simplify case of single repeated subloop within a loop
+        multed_labels: dict[int, int] = dict() # label, multiplier
+        for section in sections:
+            for loop in section.loopInfo:
+                if loop.subLoops:
+                    subloop = loop.subLoops[0]
+                    if len(loop.subLoops) == 1 and subloop.numLoops > 1:
+                        loop.sentenceIndices = subloop.sentenceIndices
+                        loop.numLoops = subloop.numLoops * loop.numLoops
+                        loop.subLoops = None
+
+                        if loop.label is not None:
+                            multed_labels[loop.label] = subloop.numLoops
+
+        # propagate multipliers to repeated labels
+        for section in sections:
+            for loop in section.loopInfo:
+                if loop.label in multed_labels and loop.isRepeat:
+                    loop.numLoops *= multed_labels[loop.label]
