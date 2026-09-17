@@ -51,7 +51,7 @@
     "09_jsma502a__2024-06-24_182000_.brr"         $FF $EE $80 $02 $A3 ;@46
 }
 
-; created with fur2amk 0.6.4
+; created with fur2amk 0.6.5
 
 w254 t76
 
@@ -162,29 +162,7 @@ v255
 @34 v255 c8 @36 c8
 @34 c8 @35 v164 c16 @36 v255 c16
 @35 v164 c8 @36 v255 c8
-]
-; section 02
-(8)
-; section 03
-(8)
-; section 04
-(8)
-; section 05
-(8)
-; section 06
-(8)
-; section 07
-(8)
-; section 08
-(8)
-; section 09
-(8)
-; section 0A
-(8)
-; section 0B
-(8)
-; section 0C
-(8)
+]12
 ; section 0D
 r1 (!3, 3) (!4, -1) @45 v187 b1^2 o5 f+2
 ; section 0E
@@ -212,17 +190,9 @@ $F4$01
 (10)
 ; section 05
 $F4$01 @43 $FE v255
-(11)[o1 d+1^1^1]
-; section 06
-(11)
-; section 07
-(11)
-; section 08
-(11)
+(11)[o1 d+1^1^1]4
 ; section 09
-(12)[g+1^1^1]
-; section 0A
-(12)
+(12)[g+1^1^1]2
 ; section 0B
 a+1^1^1
 ; section 0C
@@ -289,11 +259,7 @@ r1^1^1^1^1^1
 r1
 ; section 01
 @40 v99
-(19)[o3 a1^1^1]
-; section 02
-(19)
-; section 03
-(19)
+(19)[o3 a1^1^1]3
 ; section 04
 a1^1^1^1
 ; section 05
@@ -342,27 +308,7 @@ o4 e16 r16 o3 a16 o4 b32 r32
 e16 r16 v187 e8
 o3 a8 v137 a8
 v99 o4 e32 r16^32 o3 a32 r16^32
-]
-; section 02
-(23)
-; section 03
-(23)
-; section 04
-(23)
-; section 05
-(23)
-; section 06
-(23)
-; section 07
-(23)
-; section 08
-(23)
-; section 09
-(23)
-; section 0A
-(23)
-; section 0B
-(23)
+]11
 ; section 0C
 v187 o4 e16 r16 o3 a16 r16
 v99 o4 e16 r16 v187 e8
@@ -425,20 +371,10 @@ r1^1^1^1^1^1^1^1^1^1^1^1^1^1^1
 r1
 ; section 01
 @42 v58
-(26)[o4 c1^1^1]
-; section 02
-(26)
-; section 03
-(26)
-; section 04
-(26)
+(26)[o4 c1^1^1]4
 ; section 05
 @46 v255
-(27)[c4^8 g4^8 o3 g4^8 a4^8 o4 e2 c4^8 d8 a4^8 o3 g1^1^1^8]
-; section 07
-(27)
-; section 09
-(27)
+(27)[c4^8 g4^8 o3 g4^8 a4^8 o4 e2 c4^8 d8 a4^8 o3 g1^1^1^8]3
 ; section 0B
 o4 c4^8 g4^8 o3 g4^8 a4^8 o4 e2 c4^8 d8 a4^8 o3 g1^1^1^1^1^1^1^1^1^1^1^1^1^1^1^8
 ; section 11
