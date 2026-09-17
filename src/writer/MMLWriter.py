@@ -291,6 +291,7 @@ class MMLWriter:
                 optimizer.optimize_subloops(sections)
                 self.label_count = optimizer.optimize_loops(sections, self.label_count)
                 optimizer.condense_sections(sections, self.mml_data.loop_tick)
+                optimizer.simplify_loops(sections)
             else:
                 for section in sections:
                     section.loopInfo = [LoopInfo(list(range(len(section.sentences))))]

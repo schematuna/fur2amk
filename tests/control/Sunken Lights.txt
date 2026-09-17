@@ -173,13 +173,11 @@ r32^=1 c8^64^=2 r32^=1 c1^4^8^16
 ; section 0D
 @40 $F4$03 v239 y10
 [
-[[
 c8^64^=2 r32^=1 g8^64^=2
 r32^=1 f16^64^=2 r32^=1
 o4 c8^64^=2 r32^=1 o3 f8^64^=2
 r32^=1 a+16^64^=2 r32^=1
-]]4
-]3
+]12
 ; section 10
 [
 c8^64^=2 r32^=1 g8^64^=2
@@ -554,7 +552,6 @@ o3 c16 @32 v181 y0 o2 d16 d+16 @36 v255 y10 o3 g16
 ]
 ; section 02
 (15)[
-[[
 @36 v255 y10 o3 f16 @32 v181 y0 o2 d16 d+16 @36 v255 y10 o4 c16
 @32 v181 y0 o3 d16 o2 a+16 @36 v255 y10 o3 a+16 @32 v181 y0 g16
 @36 v255 y10 o4 f16 @32 v181 y0 o3 f16 c16 @36 v255 y10 o4 a+16
@@ -563,13 +560,12 @@ o3 c16 @32 v181 y0 o2 d16 d+16 @36 v255 y10 o3 g16
 @32 v181 y0 o3 g16 f16 @36 v255 y10 a+16 @32 v181 y0 d16
 @36 v255 y10 o4 f16 @32 v181 y0 o3 f16 c16 @36 v255 y10 o4 a+16
 @32 v181 y0 o3 d+16 d16 @36 v255 y10 o5 d+16 @32 v181 y0 o2 g16
-]]2
-]
+]2
 ; section 03
 @36 v255 y10
 (14)
 ; section 04
-(15)
+(15)2
 ; section 05
 @36 v255 y10
 (14)
@@ -662,11 +658,9 @@ g16 a+8 o3 d+16 a+8 o4 d8 c16 o3 a+8 g16 f8 d+8
 o4 g16 f8 c16 o3 a+8 f8 o4 c16 o3 a+8 f16 d+8 o2 a+8
 ; section 02
 (18)[
-[[
 g16 a+8 o3 d+16 a+8 o4 d8 c16 o3 a+8 g16 f8 d+8
 o4 g16 f8 c16 o3 a+8 f8 o4 c16 o3 a+8 f16 d+8 o2 a+8
-]]2
-]4
+]8
 ; section 06
 g16 a+8 o3 d+16 a+8 o4 d8 c16 o3 a+8 g16 f8 d+8
 o4 g16 f8 c16 o3 a+8 f8 o4 c16 o3 a+8 f16 d+8 o2 a+8
@@ -674,25 +668,23 @@ g16 a+8 o3 d+16 a+8 o4 d8 c16 o3 a+8 g16 f8 d+8
 o4 g16 f8 c16 o3 a+8 f8 o4 c16 o3 a+16^32^=1 r4^16^64^=2
 ; section 07
 [
-[[
 g16 a+8 o4 d+16 a+8 o5 d8 c16 o4 a+8 g16 f8 d+8
 o5 g16 f8 c16 o4 a+8 f8 o5 c16 o4 a+8 f16 d+8 o3 a+8
-]]2
-]3
+]6
 ; section 0A
 g16 a+8 o4 d+16 a+8 o5 d8 c16 o4 a+8 g16 f8 d+8
 o5 g16 f8 c16 o4 a+8 f8 o5 c16 o4 a+8 f16 d+8 o3 a+8
 g16 a+8 o4 d+16 a+8 o5 d8 c16 o4 a+8 g16 f8 d+8
 o5 g16 f8 c16 o4 a+8 f8 o5 c16 o4 a+16^32^=1 r4^16^64^=2
 ; section 0B
-(18)
+(18)2
 ; section 0C
 o2 g16 a+8 o3 d+16 a+8 o4 d8 c16 o3 a+8 g16 f8 d+8
 o4 g16 f8 c16 o3 a+8 f8 o4 c16 o3 a+8 f16 d+8 o2 a+8
 g16 a+8 o3 d+16 a+8 o4 d8 c16 o3 a+8 g16 f8 d+8
 o4 g16 f8 c16 o3 a+8 f8 o4 c16 o3 a+16^32^=1 r4 v181 y20 ^16^64^=2
 ; section 0D
-(18)3
+(18)6
 ; section 10
 o2 g16 a+8 o3 d+16 a+8 o4 d8 c16 o3 a+8 g16 f8 d+8
 o4 g16 f8 c16 o3 a+8 f8 o4 c16 o3 a+8 f16 d+8 o2 a+8
