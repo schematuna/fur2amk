@@ -283,6 +283,9 @@ class LoopOptimizer:
         # a section that is a candidate for condensation is a section that is one self-contained labelled loop
         # if any following sections are just a repeat of that label, they should be folded into the first instance
         loop_candidate: LoopInfo = None
+        # labels we condensed. Store for performant cleanup
+        condensed_loops: List[LoopInfo] = []
+        condensed_labels: set = set()
         for section in sections:
             # can't condense across the loop point
             if section.tick() == loop_tick:
@@ -291,7 +294,22 @@ class LoopOptimizer:
                 # fold this section into the candidate and skip writing it
                 loop_candidate.numLoops += section.loopInfo[0].numLoops
                 section.skip_write = True
+                if loop_candidate not in condensed_loops and not loop_candidate.isRepeat:
+                    condensed_loops.append(loop_candidate)
+                    condensed_labels.add(loop_candidate.label)
             elif section.loopInfo[-1].label:
                 loop_candidate = section.loopInfo[-1]
             else:
                 loop_candidate = None
+
+            # keep track track of standalone labels that will no longer be needed
+            if not section.skip_write:
+                section_labels = [loop.label for loop in section.loopInfo if loop.label is not None]
+                repeated_labels = [label for label in section_labels if label in condensed_labels]
+                for loop in condensed_loops:
+                    if loop.label in repeated_labels:
+                        condensed_loops.remove(loop)
+
+        #finally, remove vestigial labels
+        for loop in condensed_loops:
+            loop.label = None
