@@ -319,27 +319,7 @@ class MMLSection:
                     line_txt += f"({info.label})["
                     if len(info.sentenceIndices) > 1:
                         line_txt += "\n"
-                    if info.subLoops is not None:
-                        for j, subloop in enumerate(info.subLoops):
-                            if subloop.numLoops > 1:
-                                line_txt += f"[["
-                                if len(subloop.sentenceIndices) > 1:
-                                    line_txt += "\n"
-                            for i, idx in enumerate(subloop.sentenceIndices):
-                                line_txt += self.sentences[idx].to_mml(mml_state)
-                                if i != len(subloop.sentenceIndices) - 1:
-                                    line_txt += "\n"
-                            if subloop.numLoops > 1:
-                                if len(subloop.sentenceIndices) > 1:
-                                    line_txt += "\n"
-                                line_txt += f"]]{subloop.numLoops}"
-                            if j != len(info.subLoops) - 1:
-                                line_txt += "\n"
-                    else:
-                        for i, idx in enumerate(info.sentenceIndices):
-                            line_txt += self.sentences[idx].to_mml(mml_state)
-                            if i != len(info.sentenceIndices) - 1:
-                                line_txt += "\n"
+                    line_txt += self.write_loop(info, mml_state)
                     if len(info.sentenceIndices) > 1:
                         line_txt += "\n"
                     line_txt += "]"
@@ -351,10 +331,7 @@ class MMLSection:
                     line_txt += "["
                     if len(info.sentenceIndices) > 1:
                         line_txt += "\n"
-                for i, idx in enumerate(info.sentenceIndices):
-                    line_txt += self.sentences[idx].to_mml(mml_state)
-                    if i != len(info.sentenceIndices) - 1:
-                        line_txt += "\n"
+                line_txt += self.write_loop(info, mml_state)
                 if info.numLoops > 1:
                     if len(info.sentenceIndices) > 1:
                         line_txt += "\n"
@@ -363,3 +340,29 @@ class MMLSection:
 
         # don't want last newline, strip it
         return line_txt.rstrip()
+
+    def write_loop(self, info: LoopInfo, mml_state) -> str:
+        line_txt = ''
+        if info.subLoops is not None:
+            for j, subloop in enumerate(info.subLoops):
+                if subloop.numLoops > 1:
+                    line_txt += f"[["
+                    if len(subloop.sentenceIndices) > 1:
+                        line_txt += "\n"
+                for i, idx in enumerate(subloop.sentenceIndices):
+                    line_txt += self.sentences[idx].to_mml(mml_state)
+                    if i != len(subloop.sentenceIndices) - 1:
+                        line_txt += "\n"
+                if subloop.numLoops > 1:
+                    if len(subloop.sentenceIndices) > 1:
+                        line_txt += "\n"
+                    line_txt += f"]]{subloop.numLoops}"
+                if j != len(info.subLoops) - 1:
+                    line_txt += "\n"
+        else:
+            for i, idx in enumerate(info.sentenceIndices):
+                line_txt += self.sentences[idx].to_mml(mml_state)
+                if i != len(info.sentenceIndices) - 1:
+                    line_txt += "\n"
+
+        return line_txt
