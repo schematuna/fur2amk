@@ -160,7 +160,7 @@ class LoopOptimizer:
                     for idx in loop.sentenceIndices:
                         looped_sentences.append(section.sentences[idx])
 
-                    loopInfo = self.lz77(looped_sentences)
+                    loopInfo = self._rle_lz(looped_sentences)
                     # apply loop sentence offset
                     idx_offset = loop.sentenceIndices[0]
                     for info in loopInfo:
@@ -170,20 +170,24 @@ class LoopOptimizer:
 
     def optimize_loops(self, sections: List[MMLSection], label_count: int) -> int:
         """optimize finer tuned intra-section loops
-           Uses a modified LZ77 alg, only allowing consecutive repeats
-           assigns labels for repeated sentence groups across sections"""
+           First pass uses a modified lz77 alg, only allowing consecutive repeats
+           Second pass does full lz77 on all remaining sentence groups
+           Both passes assign labels for repeated sentence groups across sections"""
 
         labels_assigned: Dict[int, List[MMLSentence]] = {}
         # links unique groups of sentences to the LoopInfo object from their first occurrence
         unique_groups: List[Tuple[List[MMLSentence], LoopInfo]] = []
-        for section in sections:
+        # loops that aren't optimized by lz77, tracked on this pass for later use
+        unoptimized_loops: List[Tuple[int, int]] = {} # ec idx, loopinfo idx
+        for i, section in enumerate(sections):
             # Only optimize section if it hasn't been touched yet. i.e. doesn't have a label
             if len(section.loopInfo) == 1 and section.loopInfo[0].label is None:
-                subloops = self.lz77(section.sentences)
+                subloops = self._rle_lz(section.sentences)
 
                 loopInfo: List[LoopInfo] = []
-                for info in subloops:
+                for j, info in enumerate(subloops):
                     newLoopInfo = LoopInfo(info.sentenceIndices, None, False, info.numLoops)
+                    # TODO: calculate all loopInfo sentences outside the loop, reuse for both lz77 passes
                     sentences = [section.sentences[idx] for idx in info.sentenceIndices]
                     if not any(g == sentences for g, _ in unique_groups):
                         unique_groups.append((sentences, newLoopInfo))
@@ -208,14 +212,132 @@ class LoopOptimizer:
                                 break
 
                     loopInfo.append(newLoopInfo)
+                    # if unlooped/unlabelled, then lz77 didn't optimize it. Store it for future optimizations
+                    if newLoopInfo.numLoops == 1 and newLoopInfo.label == None:
+                        unoptimized_loops.append((i, j))
 
                 section.loopInfo = loopInfo
 
+        # resolve unoptimized loops to their actual sentences ahead of time
+        if len(unoptimized_loops) == 0:
+            # return early if everything miraculously got optimized
+            self.logger.info("Optimized every loopInfo on the first compression pass. Nice!")
+            return label_count
+        unoptimized_sent_grps: List[Tuple[LoopInfo, List[MMLSentence]]] = []
+        for section_idx, info_idx in unoptimized_loops:
+            section = sections[section_idx]
+            info = section.loopInfo[info_idx]
+            loop_sentences = [section.sentences[idx] for idx in info.sentenceIndices]
+            unoptimized_sent_grps.append((info, loop_sentences))
+
+        # now do proper lz77 on all untouched sentence groups
+        # reused labels_assigned data structure here, same purpose
+        labels_assigned.clear()
+        # lz77 principles hold here
+        # we iterate through unoptimized loopInfos sequentially.
+        # at each step, it looks through entire search buffer to see if any sentence group within any loopInfo 
+        # matches any sentence group within the currently considered loopinfo.
+        # If a match is found, it creates a new label and removes the loopInfo with the match from the search buffer.
+        # TODO: this approach means there can only be one match per loopInfo object. Ideally we just remove the matched sentences
+        #       and keep the loopInfo object around until all sentences are matched.
+        # then, the cursor position is increments, the current loopInfo is added to the search buffer.
+        # TODO: move this pass into its own function and unit test so you dont go crazy debugging
+        search_buffer: List[Tuple[LoopInfo, List[MMLSentence]]] = []
+        search_buffer.append(unoptimized_sent_grps[0])
+        # current lookahead position relative to start of unoptimized_sent_grps
+        for cur_info, cur_sentences in unoptimized_sent_grps:
+            matched: bool = False
+            for i, (search_info, search_sentences) in enumerate(search_buffer):
+                # TODO: implement the duplex lz77
+                matches = self._lz77_duplex(search_sentences, cur_sentences)
+                if len(matches) == 0:
+                    continue
+                matched = True
+                # just worry about 1-match case for now
+                match = matches[0]
+                matched_search_idcs = match[0]
+                matched_cursor_idcs = match[1]
+                newSearchLoopInfos = self._split_loopInfo(search_info, matched_search_idcs, label_count)
+                newCurLoopInfos = self._split_loopInfo(cur_info, matched_cursor_idcs, label_count, True)
+                matched_group = [search_info.sentenceIndices[idx] for idx in matched_search_idcs]
+                labels_assigned[label_count] = matched_group
+                label_count += 1
+                # update infos in original data
+                # TODO: need to use section/loopinfo idcs from unoptimized_loops object to find and replace relevant loopinfo
+
+                # this loopinfo is no longer a candidate in search buffer
+                # TODO: minor optimization - keep unmatched splits in search buffer
+                search_buffer.pop(i)
+                break
+            if matched == False:
+                # only add this info to search buffer if it had no matches
+                # TODO: need to change this if we support unmatched splits
+                search_buffer.append(cur_info, cur_sentences)
+                    
         return label_count
 
-    def lz77(self, sentences: List[MMLSentence]) -> List[SubLoopInfo]:
-        """lz77 alg for MML sentences
-           Identifies consecutive repeated sentences and returns loop info for them"""
+    def condense_sections(self, sections: List[MMLSection], loop_tick: int):
+        # a section that is a candidate for condensation is a section that is one self-contained labelled loop
+        # if any following sections are just a repeat of that label, they should be folded into the first instance
+        loop_candidate: LoopInfo = None
+        # labels we condensed. Store for performant cleanup
+        condensed_loops: List[LoopInfo] = []
+        condensed_labels: set = set()
+        for section in sections:
+            # can't condense across the loop point
+            if section.tick() == loop_tick:
+                loop_candidate = None
+            if loop_candidate and len(section.loopInfo) == 1 and section.loopInfo[0].label == loop_candidate.label:
+                # fold this section into the candidate and skip writing it
+                loop_candidate.numLoops += section.loopInfo[0].numLoops
+                section.skip_write = True
+                if loop_candidate not in condensed_loops and not loop_candidate.isRepeat:
+                    condensed_loops.append(loop_candidate)
+                    condensed_labels.add(loop_candidate.label)
+            elif section.loopInfo[-1].label:
+                loop_candidate = section.loopInfo[-1]
+            else:
+                loop_candidate = None
+
+            # keep track track of standalone labels that will no longer be needed
+            if not section.skip_write:
+                section_labels = [loop.label for loop in section.loopInfo if loop.label is not None]
+                repeated_labels = [label for label in section_labels if label in condensed_labels]
+                for loop in condensed_loops:
+                    if loop.label in repeated_labels:
+                        condensed_loops.remove(loop)
+
+        #finally, remove vestigial labels
+        for loop in condensed_loops:
+            loop.label = None
+
+
+    def simplify_loops(self, sections: List[MMLSection]):
+        # simplify case of single repeated subloop within a loop
+        multed_labels: dict[int, int] = dict() # label, multiplier
+        for section in sections:
+            for loop in section.loopInfo:
+                if loop.subLoops:
+                    subloop = loop.subLoops[0]
+                    if len(loop.subLoops) == 1 and subloop.numLoops > 1:
+                        loop.sentenceIndices = subloop.sentenceIndices
+                        loop.numLoops = subloop.numLoops * loop.numLoops
+                        loop.subLoops = None
+
+                        if loop.label is not None:
+                            multed_labels[loop.label] = subloop.numLoops
+
+        # propagate multipliers to repeated labels
+        for section in sections:
+            for loop in section.loopInfo:
+                if loop.label in multed_labels and loop.isRepeat:
+                    loop.numLoops *= multed_labels[loop.label]
+
+    def _rle_lz(self, sentences: List[MMLSentence]) -> List[SubLoopInfo]:
+        """compression alg for MML sentences
+           Identifies consecutive repeated sentences and returns loop info for them
+           Hybrid of run-length encoding and lz77
+           """
         
         loopInfo: List[SubLoopInfo] = []
 
@@ -278,60 +400,34 @@ class LoopOptimizer:
                             
         return loopInfo
 
+    def _lz77_duplex(self, sentences1: List[MMLSentence], sentences2: List[MMLSentence]) -> List[Tuple[List[int], List[int]]]:
+        """modified lz77 for finding repeated sentences groups between two sets of sentences
+           Returns tuples of sentence group pairs, indexed relative to start of sentences passed in."""
 
-    def condense_sections(self, sections: List[MMLSection], loop_tick: int):
-        # a section that is a candidate for condensation is a section that is one self-contained labelled loop
-        # if any following sections are just a repeat of that label, they should be folded into the first instance
-        loop_candidate: LoopInfo = None
-        # labels we condensed. Store for performant cleanup
-        condensed_loops: List[LoopInfo] = []
-        condensed_labels: set = set()
-        for section in sections:
-            # can't condense across the loop point
-            if section.tick() == loop_tick:
-                loop_candidate = None
-            if loop_candidate and len(section.loopInfo) == 1 and section.loopInfo[0].label == loop_candidate.label:
-                # fold this section into the candidate and skip writing it
-                loop_candidate.numLoops += section.loopInfo[0].numLoops
-                section.skip_write = True
-                if loop_candidate not in condensed_loops and not loop_candidate.isRepeat:
-                    condensed_loops.append(loop_candidate)
-                    condensed_labels.add(loop_candidate.label)
-            elif section.loopInfo[-1].label:
-                loop_candidate = section.loopInfo[-1]
-            else:
-                loop_candidate = None
+        # well this is complicated to write
+        # think it's just the same as lz77 expect the search buffer is limited to sentences1
+        # and lookahead buffer is limited to sentences2
+        # we pop sentences one by one from sentences1 into search buffer
+        # some constraints made the original implementation simpler.
+        # namely that matches had ot be consecutive. Computation time will go up by removing that constraint.
+        # have to check all possibilities at every step.
+        
+        return []
 
-            # keep track track of standalone labels that will no longer be needed
-            if not section.skip_write:
-                section_labels = [loop.label for loop in section.loopInfo if loop.label is not None]
-                repeated_labels = [label for label in section_labels if label in condensed_labels]
-                for loop in condensed_loops:
-                    if loop.label in repeated_labels:
-                        condensed_loops.remove(loop)
+    def _split_loopInfo(self, info: LoopInfo, split_idcs: List[int], label: int = None, isRepeat: bool = False) -> List[LoopInfo]:
+        """Splits a loopInfo object into smaller loopinfo objects, given indices you want to split out
+           split_idcs is relative to start of info
+           Optionally labels the split section"""
+        newLoopInfos: List[LoopInfo] = []
 
-        #finally, remove vestigial labels
-        for loop in condensed_loops:
-            loop.label = None
+        first_info_sent_idx = info.sentenceIndices[0]
+        if split_idcs[0] > 0:
+            newLoopInfos.append(LoopInfo(list(range(first_info_sent_idx, first_info_sent_idx + split_idcs[0]))))
+        split_loop_info = LoopInfo(list(range(first_info_sent_idx + split_idcs[0], first_info_sent_idx + split_idcs[-1] + 1)))
+        split_loop_info.label = label
+        split_loop_info.isRepeat = isRepeat
+        newLoopInfos.append(split_loop_info)
+        if split_idcs[-1] < len(info.sentenceIndices) - 1:
+            newLoopInfos.append(LoopInfo(list(range(first_info_sent_idx + split_idcs[-1] + 1, info.sentenceIndices[-1] + 1))))
 
-
-    def simplify_loops(self, sections: List[MMLSection]):
-        # simplify case of single repeated subloop within a loop
-        multed_labels: dict[int, int] = dict() # label, multiplier
-        for section in sections:
-            for loop in section.loopInfo:
-                if loop.subLoops:
-                    subloop = loop.subLoops[0]
-                    if len(loop.subLoops) == 1 and subloop.numLoops > 1:
-                        loop.sentenceIndices = subloop.sentenceIndices
-                        loop.numLoops = subloop.numLoops * loop.numLoops
-                        loop.subLoops = None
-
-                        if loop.label is not None:
-                            multed_labels[loop.label] = subloop.numLoops
-
-        # propagate multipliers to repeated labels
-        for section in sections:
-            for loop in section.loopInfo:
-                if loop.label in multed_labels and loop.isRepeat:
-                    loop.numLoops *= multed_labels[loop.label]
+        return newLoopInfos
