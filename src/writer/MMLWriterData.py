@@ -1,5 +1,5 @@
 from typing import List, Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from ..model.MMLData import *
 from ..model.MMLCommands import *
@@ -186,6 +186,16 @@ class LoopInfo:
     numLoops: int = 1
     # subloops within this loop (uses AMK superloops)
     subLoops: List[SubLoopInfo] = None
+
+# convenience class holding state information for a loopInfo opject
+# Useful during loop optimization
+@dataclass
+class GroupInfo:
+    section_index: int = None
+    info_index: int = None
+    info: LoopInfo = None
+    sentences: List[MMLSentence] = field(default_factory=list)
+
 
 # a segment of MML usually representing a musical section
 # the MMLSection will be labelled in the MML with the section number

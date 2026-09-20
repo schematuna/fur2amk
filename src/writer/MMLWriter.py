@@ -290,6 +290,7 @@ class MMLWriter:
                 self.label_count = optimizer.label_repeated_sections(sections, self.label_count)
                 optimizer.optimize_subloops(sections)
                 self.label_count = optimizer.optimize_loops(sections, self.label_count)
+                self.label_count = optimizer.optimize_repeats(sections, self.label_count)
                 optimizer.condense_sections(sections, self.mml_data.loop_tick)
                 optimizer.simplify_loops(sections)
             else:

@@ -177,9 +177,7 @@ class LoopOptimizer:
         labels_assigned: Dict[int, List[MMLSentence]] = {}
         # links unique groups of sentences to the LoopInfo object from their first occurrence
         unique_groups: List[Tuple[List[MMLSentence], LoopInfo]] = []
-        # loops that aren't optimized by lz77, tracked on this pass for later use
-        unoptimized_loops: List[Tuple[int, int]] = {} # ec idx, loopinfo idx
-        for i, section in enumerate(sections):
+        for section in sections:
             # Only optimize section if it hasn't been touched yet. i.e. doesn't have a label
             if len(section.loopInfo) == 1 and section.loopInfo[0].label is None:
                 subloops = self._rle_lz(section.sentences)
@@ -187,7 +185,6 @@ class LoopOptimizer:
                 loopInfo: List[LoopInfo] = []
                 for j, info in enumerate(subloops):
                     newLoopInfo = LoopInfo(info.sentenceIndices, None, False, info.numLoops)
-                    # TODO: calculate all loopInfo sentences outside the loop, reuse for both lz77 passes
                     sentences = [section.sentences[idx] for idx in info.sentenceIndices]
                     if not any(g == sentences for g, _ in unique_groups):
                         unique_groups.append((sentences, newLoopInfo))
@@ -212,27 +209,30 @@ class LoopOptimizer:
                                 break
 
                     loopInfo.append(newLoopInfo)
-                    # if unlooped/unlabelled, then lz77 didn't optimize it. Store it for future optimizations
-                    if newLoopInfo.numLoops == 1 and newLoopInfo.label == None:
-                        unoptimized_loops.append((i, j))
 
                 section.loopInfo = loopInfo
 
-        # resolve unoptimized loops to their actual sentences ahead of time
-        if len(unoptimized_loops) == 0:
+        return label_count
+
+    def optimize_repeats(self, sections: List[MMLSection], label_count: int) -> int:
+        # find unoptimized sentence groups
+        unoptimized_sent_grps: List[GroupInfo] = []
+        for sec_idx, sec in enumerate(sections):
+            for info_idx, info in enumerate(sec.loopInfo):
+                if info.label == None and info.numLoops == 1 and info.subLoops == None:
+                    # this is an untouched subloop, store it as an optimization candidate
+                    loop_sentences = [sec.sentences[idx] for idx in info.sentenceIndices]
+                    if len(loop_sentences) == 1 and len(loop_sentences[0].words) == 1:
+                        # don't optimize ultra-short sentence groups
+                        continue
+                    unoptimized_sent_grps.append(GroupInfo(sec_idx, info_idx, info, loop_sentences))
+
+        if len(unoptimized_sent_grps) == 0:
             # return early if everything miraculously got optimized
             self.logger.info("Optimized every loopInfo on the first compression pass. Nice!")
             return label_count
-        unoptimized_sent_grps: List[Tuple[LoopInfo, List[MMLSentence]]] = []
-        for section_idx, info_idx in unoptimized_loops:
-            section = sections[section_idx]
-            info = section.loopInfo[info_idx]
-            loop_sentences = [section.sentences[idx] for idx in info.sentenceIndices]
-            unoptimized_sent_grps.append((info, loop_sentences))
-
+        
         # now do proper lz77 on all untouched sentence groups
-        # reused labels_assigned data structure here, same purpose
-        labels_assigned.clear()
         # lz77 principles hold here
         # we iterate through unoptimized loopInfos sequentially.
         # at each step, it looks through entire search buffer to see if any sentence group within any loopInfo 
@@ -242,14 +242,14 @@ class LoopOptimizer:
         #       and keep the loopInfo object around until all sentences are matched.
         # then, the cursor position is increments, the current loopInfo is added to the search buffer.
         # TODO: move this pass into its own function and unit test so you dont go crazy debugging
-        search_buffer: List[Tuple[LoopInfo, List[MMLSentence]]] = []
-        search_buffer.append(unoptimized_sent_grps[0])
+        labels_assigned: Dict[int, List[MMLSentence]] = {}
+        search_buffer: List[GroupInfo] = []
         # current lookahead position relative to start of unoptimized_sent_grps
-        for cur_info, cur_sentences in unoptimized_sent_grps:
+        for cur_grp_info in unoptimized_sent_grps:
             matched: bool = False
-            for i, (search_info, search_sentences) in enumerate(search_buffer):
+            for search_idx, search_grp_info in enumerate(search_buffer):
                 # TODO: implement the duplex lz77
-                matches = self._lz77_duplex(search_sentences, cur_sentences)
+                matches = self._lz77_duplex(search_grp_info.sentences, cur_grp_info.sentences)
                 if len(matches) == 0:
                     continue
                 matched = True
@@ -257,23 +257,27 @@ class LoopOptimizer:
                 match = matches[0]
                 matched_search_idcs = match[0]
                 matched_cursor_idcs = match[1]
-                newSearchLoopInfos = self._split_loopInfo(search_info, matched_search_idcs, label_count)
-                newCurLoopInfos = self._split_loopInfo(cur_info, matched_cursor_idcs, label_count, True)
-                matched_group = [search_info.sentenceIndices[idx] for idx in matched_search_idcs]
+                newSearchLoopInfos = self._split_loopInfo(search_grp_info.info, matched_search_idcs, label_count)
+                newCurLoopInfos = self._split_loopInfo(cur_grp_info.info, matched_cursor_idcs, label_count, True)
+                matched_group = [search_grp_info.info.sentenceIndices[idx] for idx in matched_search_idcs]
+                # remember this matched sentence group
                 labels_assigned[label_count] = matched_group
                 label_count += 1
-                # update infos in original data
-                # TODO: need to use section/loopinfo idcs from unoptimized_loops object to find and replace relevant loopinfo
+
+                # process cur info before search info, since processing earlier loopInfo first
+                # can cause indexing issues if both groups were in the same section
+                self._replace_loopInfo(sections, cur_grp_info, newCurLoopInfos)
+                self._replace_loopInfo(sections, search_grp_info, newSearchLoopInfos)
 
                 # this loopinfo is no longer a candidate in search buffer
                 # TODO: minor optimization - keep unmatched splits in search buffer
-                search_buffer.pop(i)
+                search_buffer.pop(search_idx)
                 break
             if matched == False:
                 # only add this info to search buffer if it had no matches
                 # TODO: need to change this if we support unmatched splits
-                search_buffer.append(cur_info, cur_sentences)
-                    
+                search_buffer.append(cur_grp_info)
+
         return label_count
 
     def condense_sections(self, sections: List[MMLSection], loop_tick: int):
@@ -405,14 +409,36 @@ class LoopOptimizer:
            Returns tuples of sentence group pairs, indexed relative to start of sentences passed in."""
 
         # well this is complicated to write
-        # think it's just the same as lz77 expect the search buffer is limited to sentences1
+        # think it's just the same as lz77 except the search buffer is limited to sentences1
         # and lookahead buffer is limited to sentences2
         # we pop sentences one by one from sentences1 into search buffer
         # some constraints made the original implementation simpler.
         # namely that matches had ot be consecutive. Computation time will go up by removing that constraint.
         # have to check all possibilities at every step.
-        
-        return []
+
+        # shallow copy for nomenclature
+        search_buffer = sentences1
+        lookahead_buffer = sentences2
+        matches: List[Tuple[List[int], List[int]]] = []
+        for cur_idx in range(len((lookahead_buffer))):
+            for search_idx in range(len(search_buffer)):
+                matched_group: List[MMLSentence] = []
+                _cur_idx = cur_idx
+                _search_idx = search_idx
+                while (_cur_idx < len(lookahead_buffer)) \
+                      and (_search_idx < len(search_buffer)) \
+                      and (search_buffer[_search_idx] == lookahead_buffer[_cur_idx]):
+                    matched_group.append(lookahead_buffer[_cur_idx])
+                    _cur_idx += 1
+                    _search_idx += 1
+
+                if len(matched_group) > 0:
+                    # found one, now catalog it
+                    matches.append((list(range(search_idx, search_idx + len(matched_group))), list(range(cur_idx, cur_idx + len(matched_group)))))
+                    # just return the first match for now
+                    return matches
+                    
+        return matches
 
     def _split_loopInfo(self, info: LoopInfo, split_idcs: List[int], label: int = None, isRepeat: bool = False) -> List[LoopInfo]:
         """Splits a loopInfo object into smaller loopinfo objects, given indices you want to split out
@@ -431,3 +457,7 @@ class LoopOptimizer:
             newLoopInfos.append(LoopInfo(list(range(first_info_sent_idx + split_idcs[-1] + 1, info.sentenceIndices[-1] + 1))))
 
         return newLoopInfos
+
+    def _replace_loopInfo(self, sections: List[MMLSection], group_info: GroupInfo, new_loop_info: List[LoopInfo]):
+        sections[group_info.section_index].loopInfo.pop(group_info.info_index)
+        sections[group_info.section_index].loopInfo[group_info.info_index:group_info.info_index] = new_loop_info
