@@ -180,10 +180,10 @@ class LoopOptimizer:
         for section in sections:
             # Only optimize section if it hasn't been touched yet. i.e. doesn't have a label
             if len(section.loopInfo) == 1 and section.loopInfo[0].label is None:
-                subloops = self._rle_lz(section.sentences)
+                loopinfos = self._rle_lz(section.sentences)
 
                 loopInfo: List[LoopInfo] = []
-                for j, info in enumerate(subloops):
+                for j, info in enumerate(loopinfos):
                     newLoopInfo = LoopInfo(info.sentenceIndices, None, False, info.numLoops)
                     sentences = [section.sentences[idx] for idx in info.sentenceIndices]
                     if not any(g == sentences for g, _ in unique_groups):
@@ -241,7 +241,6 @@ class LoopOptimizer:
         # TODO: this approach means there can only be one match per loopInfo object. Ideally we just remove the matched sentences
         #       and keep the loopInfo object around until all sentences are matched.
         # then, the cursor position is increments, the current loopInfo is added to the search buffer.
-        # TODO: move this pass into its own function and unit test so you dont go crazy debugging
         labels_assigned: Dict[int, List[MMLSentence]] = {}
         search_buffer: List[GroupInfo] = []
         # current lookahead position relative to start of unoptimized_sent_grps
@@ -337,13 +336,13 @@ class LoopOptimizer:
                 if loop.label in multed_labels and loop.isRepeat:
                     loop.numLoops *= multed_labels[loop.label]
 
-    def _rle_lz(self, sentences: List[MMLSentence]) -> List[SubLoopInfo]:
+    def _rle_lz(self, sentences: List[MMLSentence]) -> List[LoopInfo]:
         """compression alg for MML sentences
            Identifies consecutive repeated sentences and returns loop info for them
            Hybrid of run-length encoding and lz77
            """
         
-        loopInfo: List[SubLoopInfo] = []
+        loopInfo: List[LoopInfo] = []
 
         search_buffer: List[MMLSentence] = []
         lookahead_buffer: List[MMLSentence] = copy.deepcopy(sentences)
@@ -383,8 +382,8 @@ class LoopOptimizer:
                         # set loop info
                         relative_pos = cur_buffer_pos + i
                         if i > 0:
-                            loopInfo.append(SubLoopInfo(list(range(cur_buffer_pos, relative_pos))))
-                        loopInfo.append(SubLoopInfo(list(range(relative_pos, relative_pos + match_len)), 2))
+                            loopInfo.append(LoopInfo(list(range(cur_buffer_pos, relative_pos))))
+                        loopInfo.append(LoopInfo(list(range(relative_pos, relative_pos + match_len)), None, False, 2))
                         found_match = True
                         break
 
@@ -400,21 +399,13 @@ class LoopOptimizer:
                 search_buffer.append(lookahead_buffer.pop(0))
 
         if len(search_buffer) > 0:
-            loopInfo.append(SubLoopInfo(list(range(cur_buffer_pos, cur_buffer_pos + len(search_buffer)))))
+            loopInfo.append(LoopInfo(list(range(cur_buffer_pos, cur_buffer_pos + len(search_buffer)))))
                             
         return loopInfo
 
     def _lz77_duplex(self, sentences1: List[MMLSentence], sentences2: List[MMLSentence]) -> List[Tuple[List[int], List[int]]]:
         """modified lz77 for finding repeated sentences groups between two sets of sentences
            Returns tuples of sentence group pairs, indexed relative to start of sentences passed in."""
-
-        # well this is complicated to write
-        # think it's just the same as lz77 except the search buffer is limited to sentences1
-        # and lookahead buffer is limited to sentences2
-        # we pop sentences one by one from sentences1 into search buffer
-        # some constraints made the original implementation simpler.
-        # namely that matches had ot be consecutive. Computation time will go up by removing that constraint.
-        # have to check all possibilities at every step.
 
         # shallow copy for nomenclature
         search_buffer = sentences1
