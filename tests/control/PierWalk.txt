@@ -1,0 +1,999 @@
+#amk 4
+
+#spc
+{
+    #title   "Pier Walk"
+    #author  "Jacob Mann"
+}
+
+#path "PierWalk"
+
+#samples
+{
+    #optimized
+    "21_Pier_Kick.brr"
+    "22_deep_bass_1.brr"
+    "23_Casio-CTK-611-Wood-Block.brr"
+    "24_filtered_square.brr"
+}
+
+#instruments
+{
+    @9                                 $EE $6A $80 $02 $AD ;@30
+    @13                                $FE $6A $80 $03 $00 ;@31
+    @6                                 $FA $6A $80 $03 $00 ;@32
+    @0                                 $EC $68 $80 $06 $00 ;@33
+    @8                                 $AE $26 $80 $1E $00 ;@34
+    @1                                 $FA $6A $80 $03 $00 ;@35
+    @1                                 $F7 $6A $80 $03 $00 ;@36
+    @1                                 $E9 $6A $80 $03 $00 ;@37
+    @5                                 $AE $26 $80 $07 $00 ;@38
+    @17                                $FE $6A $80 $05 $00 ;@39
+    @4                                 $A9 $6A $80 $03 $00 ;@40
+    @13                                $FC $6C $80 $03 $00 ;@41
+    @3                                 $FE $6A $80 $03 $00 ;@42
+    @2                                 $AE $2F $80 $03 $04 ;@43
+    "21_Pier_Kick.brr"                 $00 $00 $7F $0A $8D ;@44
+    @10                                $FE $6A $80 $08 $00 ;@45
+    @29                                $00 $00 $7F $03 $00 ;@46
+    @22                                $00 $00 $7F $07 $00 ;@47
+    @22                                $00 $00 $7F $07 $00 ;@48
+    @7                                 $9E $1F $80 $03 $00 ;@49
+    @24                                $EE $D3 $80 $07 $00 ;@50
+    @25                                $FE $6A $80 $08 $00 ;@51
+    @12                                $00 $00 $7F $04 $00 ;@52
+    @15                                $8E $E0 $80 $01 $E4 ;@53
+    @0                                 $EA $6D $80 $06 $00 ;@54
+    @13                                $D7 $8C $80 $03 $00 ;@55
+    "22_deep_bass_1.brr"               $CC $AC $80 $05 $FB ;@56
+    "22_deep_bass_1.brr"               $CC $A7 $80 $05 $FB ;@57
+    "23_Casio-CTK-611-Wood-Block.brr"  $FF $E0 $80 $10 $BF ;@58
+    @0                                 $EA $B2 $80 $06 $00 ;@59
+}
+
+; created with fur2amk 0.6.5
+
+w214 t48
+
+$EF $00 $7F $7F
+$F1 $06 $40 $01
+
+
+
+#0
+; enable light staccato
+$F4$02 
+; section 00
+@31 v213 y10
+(1)[o2 b4^8 a+2 v192 o3 d+2 v213 o2 f+2^8]
+; section 01
+(2)[b4^8 a+2 d+2 g+2^8]
+; section 02
+(1)
+; section 03
+(3)[b4^8 a+2 v192 d+2 f2^8]
+; section 04
+(4)[v202 o3 c4^8 v213 o2 b2 v202 e2 g2^8]
+; section 05
+(5)[v192 o3 c4^8 o2 b2 v202 e2 v213 a2^8]
+; section 06
+v202 o3 c4^8 v181 o2 b4^8 v192 e2^8 v181 g8 v192 g8 r8 v194 b1^1^8
+; section 07
+v206 c2
+; section 08
+v213 o3 e2 d2 o2 g2^4
+; section 09
+o1 b8 o2 f+8 b8^64^=1 o3 c+8^32^64^=2 e8^32^64 d+8^16 o2 g+8^16 f+2^4
+; section 0A
+v196 g4^8 a2 o3 d2 v206 o2 e2^8
+; section 0B
+v196 b4^8 v185 a+4^8 v208 d+2^8 f+8 f+8 r8 a+1^1^1^1^4
+; section 0E
+v213
+(1)
+; section 0F
+(2)
+; section 10
+(1)
+; section 11
+(3)
+; section 12
+(4)
+; section 13
+(5)
+; section 14
+v196 o3 c4^8 v174 o2 b2 v185 e2
+v174 g8 v185 g8 r8 @55 v219 $E5$00$1C$57 o4 c+1^1^8
+; section 15
+(7)[v221 d1^1]
+; section 16
+(8)[v223 c+1^1^8]
+; section 18
+(9)[v219 o3 a4^8 b2 v228 o4 c+2 v247 d+2^8]
+; section 19
+(10)[v219 c+4^8 d+4^8 f2^8 v218 c+8 v224 c+8 r8 v219 g+1^1^1^1^4]
+; section 1C
+(6)[v221 o3 b4^8 a+2 o4 d+2 v206 o3 f+2^8]
+; section 1D
+(11)[v221 b4^8 a+2 d+2 v219 g+2^8]
+; section 1E
+(6)
+; section 1F
+(12)[v221 b4^8 a+2 d+2 v219 f2^8]
+; section 20
+(13)[v233 o4 c4^8 v221 o3 b2 v233 e2 g2^8]
+; section 21
+(14)[v219 o4 c4^8 o3 b2 v233 e2 v224 a2^8]
+; section 22
+(15)[v233 o4 c4^8 v206 o3 b2 v219 e2 v206 g8 v219 g8 r8 v239 o4 c+1^1^8]
+; section 23
+(7)
+; section 24
+(8)
+; section 26
+(9)
+; section 27
+(10)
+; section 2A
+(6)
+; section 2B
+(11)
+; section 2C
+(6)
+; section 2D
+(12)
+; section 2E
+(13)
+; section 2F
+(14)
+; section 30
+(15)
+; section 31
+(7)
+; section 32
+(8)
+; section 34
+(9)
+; section 35
+v219 c+4^8 d+4^8 f2^8 v218 c+8 v224 c+8 r8 v219 g+1^1^1^1^8^16^32^64 $FD ^64
+; disable light staccato
+$F4$02 
+
+
+#1
+; section 00
+@31 y10
+(16)[v185 o3 a+4^8 v210 g+2 a+2 c+2^8]
+; section 01
+(17)[v196 f+4^8 v212 g+2 v196 o4 d2 v208 o3 d+2^8]
+; section 02
+(18)[v185 a+4^8 v210 g+2 a+2 v154 g+2^8]
+; section 03
+(19)[v196 f+4^8 v212 g+2 v174 o4 d2 v185 c2^8]
+; section 04
+(20)[v196 o3 b4^8 v185 a2 v162 b2 v206 a2^8]
+; section 05
+(21)[v196 o4 d4^8 c+2 v208 d+2 v156 o3 b2^8]
+; section 06
+v196 b4^8 v185 a4^8 v162 b2^8 v174 d8 d8 r8 v187 o4 c+1^1^8
+; section 07
+v185 d1^1
+; section 08
+o3 b1^1^8
+; section 0A
+v174 a4^8 v162 g2 a2 v208 f+2^8
+; section 0B
+v196 f+4^8 g+4^8 v208 a+2^8 v196 g+8 g+8 r8 v156 o4 c1^1^1^1^4
+; section 0E
+(16)
+; section 0F
+(17)
+; section 10
+(18)
+; section 11
+(19)
+; section 12
+(20)
+; section 13
+(21)
+; section 14
+v196 o3 b4^8 v185 a2 v162 b2 v174 d8 d8 r8 @55 v219 $E5$00$1C$57 o4 f+1^1^8
+; section 15
+(23)[v221 f+1^1]
+; section 16
+(24)[v223 e1^1^8]
+; section 18
+(25)[v192 d4^8 v206 d2 v192 e2 v219 f+2^8]
+; section 19
+f+4^8 v192 g+4^8 f2^8 v223 d+8 d+8 r8 v206 o5 c1^1^1^1^4
+; section 1C
+(22)[v221 o4 a+4^8 g+2 a+2 v206 c+2^8]
+; section 1D
+v221 f+4^8 g+2 o5 d2 v219 o4 d+2^8
+; section 1E
+(22)
+; section 1F
+v221 f+4^8 g+2 o5 d2 v219 c2^8
+; section 20
+v233 o4 b4^8 v219 a2 v192 b2 v219 a2^8
+; section 21
+v233 o5 d4^8 c+2 v237 d+2 v185 o4 b2^8
+; section 22
+v233 b4^8 v219 a2 v192 b2 v206 d8 d8 r8 v239 f+1^1^8
+; section 23
+(23)
+; section 24
+(24)
+; section 26
+(25)
+; section 27
+f+4^8 v192 g+4^8 f2^8 v223 d+8 d+8 r8 v206 o5 c1^1^1^1^4 y14 ^16
+; section 2A
+@59 v169 $FD
+(26)[
+o2 f+16 v181 a+16 v179 o3 c+16
+v169 f+16 v181 o4 c+16 v162 o3 g16 v183 d+16
+v137 c16 v169 o2 g+16 v137 f16 v167 o1 a+16
+o3 g16 v179 o2 a+16 v167 o3 f16 v169 o2 a+16
+v162 g16 v156 f16 v171 o1 a+16 v169 d+16 y7 ^8
+v162 o3 f16 v169 o2 a+16
+g+16 r16 v174 c+16 v174 f+16
+v174 a+16 v154 o3 c+16 v174 d+16 v174 a+16 y14 ^16
+]
+; section 2B
+v169 o2 f+16 v176 a+16 v174 o3 c+16
+v164 f+16 v176 o4 c+16 v156 o3 g16 v179 d+16
+v137 c16 v169 o2 g+16 v137 f16 v159 o1 a+16
+(27)[
+o3 g16 v174 o2 a+16 v159 o3 f16 v171 o2 a+16
+v159 g16 v149 f16 v171 o1 a+16 v169 d+16 y7 ^8
+]
+v149 o3 f16 c16
+v171 o2 a+16 r16 d+16 g+16
+v174 a+16 v149 o3 c+16 v171 d+16 v169 a+16 y14 ^16
+; section 2C
+(26)
+; section 2D
+v162 o2 f+16 v174 a+16 v171 o3 c+16
+v162 f+16 v174 o4 c+16 v151 o3 g16 v174 d+16
+v128 c16 v162 o2 g+16 v128 f16 v159 o1 a+16
+(27)
+v162 o3 e16 v171 o2 a16
+v162 g16 r16 v128 c16 v162 f16
+v174 g16 v140 o3 c16 v171 d16 g16 y14 ^8
+; section 2E
+(28)[v171 g16 v162 d16]
+g16 v174 o4 d16 v144 o3 b16 e16
+v174 c+16 v169 o2 a16 v149 f+16 v159 o1 b16
+v169 o3 g+16 v125 o2 a16 v171 o3 f+16 v149 o2 b16
+v169 g+16 v149 f+16 v159 o1 b16 e16 y7 ^8
+v171 o3 f+16 v128 o2 b16
+v162 a16 r16 v131 c16 v151 g16
+v144 b16 v151 o3 e16 v171 f+16 v128 b16 y14 ^8
+; section 2F
+(28)
+g16 v174 o4 d16 v140 o3 b16 e16
+v174 c+16 v171 o2 a16 v151 f+16 v159 o1 b16
+v169 o3 g+16 v125 o2 a16 v171 o3 f+16 v149 o2 b16
+v169 g+16 v149 f+16 v159 o1 b16 e16 y7 ^8
+v151 o3 f+16 c+16
+v174 o2 b16 r16 v171 e16 a16
+v174 b16 v149 o3 d16 v171 e16 v169 b16 y14 ^8
+; section 30
+v171 g16 v162 d16
+g16 v174 o4 d16 v137 o3 b16 e16
+v171 c+16 v169 o2 a16 v149 f+16 v159 o1 b16
+v169 o3 g+16 v121 o2 a16 v162 o3 f+16 v149 o2 b16
+v169 g+16 v149 f+16 v159 o1 b16 e8^16 v162 o2 a8 a8 r8 v131 b16 v162 o3 c+1^1^16
+; section 31
+@55 $E5$00$1C$57
+(23)
+; section 32
+v223 o4 e1^1^4
+; section 34
+@59 v131 $FD o2 b16 v154 o3 e16
+v169 f+16 v164 b16 v154 o4 e16 v131 o3 b16
+v154 a16 v149 e16 d16 o2 a16
+v128 o3 b16 v149 e16 v162 f+16 v164 c+16
+v162 o2 b16 v164 f+16 v149 o1 b16 v128 a8^16
+v162 y7 o3 f+16 v144 c+16
+v162 o2 b16 r16 v131 e16 v162 f+16
+v115 b16 v162 o3 d+16 v115 e16 v131 b16
+; section 35
+v154 $DC$C0$09 a+16 v174 f+16 v121 c+16 v174 g+16
+v176 d+16 v174 o2 a+16 v154 o3 c16 v174 d+16
+v164 g+16 v146 d16 v154 f16 v174 a+16
+v131 g16 v164 a+16 v125 f16 v164 a+16
+$DC$C0$0A v134 g16 v128 f16 v131 d+16 v154 f16
+v174 g16 a+16 o4 d+16 f+16
+v164 a+16 v128 o5 c16 v176 d+16 v149 f16
+@41 $F4$03 v221 $E5$00$15$7D o6 g4 $DC$C0$0B ^1 $DC$C0$0D ^1 $DC$C0$10 ^1 $DC$C0$14 ^2^4^8^16 $F4$03 ^32^64 $FD ^64
+
+
+#2
+; section 00
+@31 y10
+(29)[v208 o4 c+4^8 v185 c2 v174 d2 v206 o3 g+2^8]
+; section 01
+(30)[v210 o4 c+4^8 v185 c2 v196 f2 v208 o3 a+2^8]
+; section 02
+(31)[o4 c+4^8 v185 c2 v174 d2 r2^8]
+; section 03
+(32)[v210 c+4^8 v185 c2 v196 f2 v185 e2^8]
+; section 04
+(33)[v162 g4^8 v185 c+2 v210 d+2 r2^8]
+; section 05
+(34)[v174 g4^8 v162 a2 b2 v196 e2^8]
+; section 06
+v162 g4^8 v185 c+4^8 v206 o3 f+2^8 v156 a8 v185 a8 r8 v187 o4 d1^1^8
+; section 07
+v206 f+1^1
+; section 08
+v196 c+1^1^8^64
+; section 0A
+v185 d4^16^32^64 d2 v162 e2 v185 o3 b2^8
+; section 0B
+o4 c+4^8 c4^8 v162 d2^8 v206 o3 a+8 a+8 r8 v185 o4 c+1^1^1^1^4
+; section 0E
+(29)
+; section 0F
+(30)
+; section 10
+(31)
+; section 11
+(32)
+; section 12
+(33)
+; section 13
+(34)
+; section 14
+v162 g4^8 v185 c+2 v206 o3 f+2
+v156 a8 v185 a8 r8 @55 v221 $E5$00$1C$57 o4 a1^1^8
+; section 15
+(36)[v192 a1^1]
+; section 16
+(37)[v221 b1^1^8]
+; section 18
+(38)[v192 a4^8 v185 g2 v228 a2 v219 b2^8]
+; section 19
+(39)[a+4^8 g+4^8 v233 a+2^8 v219 f8 v206 f8 r8 v239 o5 c+1^1^1^1^4]
+; section 1C
+(35)[v221 c+4^8 c2 v219 d2 v208 o4 g+2^8]
+; section 1D
+(40)[v221 o5 c+4^8 c2 f2 v208 o4 a+2^8]
+; section 1E
+(35)
+; section 1F
+(41)[v221 o5 c+4^8 c2 f2 v219 e2^8]
+; section 20
+(42)[v192 g4^8 v219 c+2 v221 d+2 r2^8]
+; section 21
+(43)[v206 g4^8 v192 a2 b2 v233 e2^8]
+; section 22
+(44)[v192 g4^8 v219 c+2 v221 o4 f+2 v185 a8 v219 a8 r8 v239 a1^1^8]
+; section 23
+(36)
+; section 24
+(37)
+; section 26
+(38)
+; section 27
+(39)
+; section 2A
+(35)
+; section 2B
+(40)
+; section 2C
+(35)
+; section 2D
+(41)
+; section 2E
+(42)
+; section 2F
+(43)
+; section 30
+(44)
+; section 31
+(36)
+; section 32
+(37)
+; section 34
+(38)
+; section 35
+a+4^8 g+4^8 v233 a+2^8
+v219 f8 v206 f8 r8 v239 o5 c+1^1^1^1^8^16^32^64 $FD ^64
+
+
+#3
+; section 00
+@31 v149 y10 o4 a+4^8 v210 d+2 v206 f2 v208 o3 a+2^32^=2 v156 o4 a+8
+; section 01
+v185 a+8^32^64^=1 v206 a+8^32 v174 o5 c4 v162 f4 v206 o4 a+4 v185 a+4 g2^8
+; section 02
+v206 a+4^8 v210 d+2 v206 f2 v208 o3 a+2^32 v156 o4 a+8
+; section 03
+v185 a+8^32^64^=1 v206 a+8^32^=2 v174 o5 c4 v162 f4 v171 d4
+v185 o4 a+4 v151 g2^8
+; section 04
+v196 b4^8 e2 v210 f+2 v208 o3 b2^32^=2 v162 o4 b8
+; section 05
+v185 b8^32^64^=1 v196 b8^32 o5 c+4 v208 f+4 v196 d+4 v185 o4 b4 v156 g+2^8
+; section 06
+v196 b4^8 e4^8 v210 f+2^8 v156 o3 b8 v174 b8 r8 v190 o4 e1^1
+; section 07
+v196 a8 v208 f+1^2^4^8
+; section 08
+v131 a8 v154 g+1^1
+; section 09
+v156 a8
+; section 0A
+v174 a4 v149 a8 b4 v174 o5 e4 v156 c+4 v154 o4 a4 v171 f+2^8
+; section 0B
+v206 a+4^8 v208 d+4^8 v196 f2^8 v185 o3 a+8 v154 a+8 r8 v185 o4 d+1^1^1^1^4
+; section 0E
+(45)[
+@56 v255 o1 b8 o2 f+8 v208 b16 r16 v255 a+4 v235 f8 v255 o1 a+16 r16 v244 o2 d+4
+v255 o1 a+8 r8 f+4 f+4 r8
+]
+; section 0F
+(46)[
+v219 b8 v247 o2 f+8 v219 b16 r16 a+4 v208 f8 r8 v249 o1 d+4
+v255 a+8 r8 v252 g+4 v255 o2 g+8 d+8 o1 g+8
+]
+; section 10
+(47)[
+v202 b8 v255 o2 f+8 v208 b16 r16 a+4 v179 f8 v255 o1 a+16 r16 d+4
+v179 o2 a+8 v200 o3 d16 r16 v255 o2 f+4 o1 f+4^8
+]
+; section 11
+(48)[
+v219 b8 v255 o2 f+8 v202 b16 r16 a+4 v247 f4 v255 o1 d+4
+a+8 v247 o2 d+16 r16 v219 o1 f4 v255 o2 f4^8
+]
+; section 12
+(49)[
+v219 c8 g8 v200 o3 c16 r16 v235 o2 b8 r8 v255 f+4 v247 e4
+b8 r8 v219 g4 v255 o1 g4^8
+]
+; section 13
+(50)[
+o2 c8 v247 g8 v202 o3 c16 r16 o2 b4 v255 f+8 r8 o1 e4
+b8 r8 a4 o2 a8 v247 e8 v255 o1 a8
+]
+; section 14
+(51)[
+v208 o2 c8 v219 g8 v200 o3 c16 r16 v219 o2 b4 v242 f+8 r8 v221 e4
+v255 o1 e4 v247 g8 g8 r8 v255 b1^1^8
+]
+; section 15
+(52)[v233 o2 c2]
+; section 16
+(53)[v247 o3 e2 v233 d2 v247 o2 g2^4]
+; section 17
+(54)[
+v233 o1 b8 v250 o2 f+8 v206 b8^64^=1 v233 o3 c+8^32^64^=2 v185 e8^32^64 d+8^16
+v249 o2 g+8^16 v206 f+2^4
+]
+; section 18
+(55)[v219 o1 g8 v192 o2 d8 g16 r16 v233 a4 v249 e8 r8 v242 d4 v247 a8 r8 v249 e2^8]
+; section 19
+(56)[v247 o1 b4^8 a+4^8 v255 d+2^8 v245 f+8 v242 f+8 r8 @57 v198 a+1^1^1^1]
+; section 1B
+(57)[r4]
+; section 1C
+(45)
+; section 1D
+(46)
+; section 1E
+(47)
+; section 1F
+(48)
+; section 20
+(49)
+; section 21
+(50)
+; section 22
+(51)
+; section 23
+(52)
+; section 24
+(53)
+; section 25
+(54)
+; section 26
+(55)
+; section 27
+(56)
+; section 29
+(57)
+; section 2A
+(45)
+; section 2B
+(46)
+; section 2C
+(47)
+; section 2D
+(48)
+; section 2E
+(49)
+; section 2F
+(50)
+; section 30
+(51)
+; section 31
+(52)
+; section 32
+(53)
+; section 33
+(54)
+; section 34
+(55)
+; section 35
+(56)
+; section 37
+(57)
+
+
+#4
+; section 00
+@33 v237 y11 $E5$12$11$54 o4 a+4^8 v235 d+2 v190 f2
+v233 o3 a+2^32^=2 v237 o4 a+8
+; section 01
+a+8^32^64^=1 v233 a+8^32 v204 o5 c4 f4 v218 d4 v233 o4 a+4 v174 g2^8
+; section 02
+v218 a+4^8 v235 d+2 v190 f2 v233 o3 a+2^32 v237 o4 a+8
+; section 03
+a+8^32^64^=1 v233 a+8^32^=2 v204 o5 c4 f4 v218 d4 v190 o4 a+4 g2^8
+; section 04
+v218 b4^8 v204 e2 v235 f+2 o3 b2^32^=2 v154 o4 b8
+; section 05
+v164 b8^32^64^=1 v174 b8^32 v233 o5 c+4 v235 f+4 v233 d+4
+v204 o4 b4 v218 g+2^8
+; section 06
+v174 b4^8 v235 e4^8 f+2^8 v233 o3 b8 v235 b8 r8 v233 o4 e1^1
+; section 07
+(58)[a8 v249 f+1^2^4^8]
+; section 08
+v206 a8 v247 g+1^1
+; section 09
+(59)[v219 a8]
+; section 0A
+v237 a4 v219 a8 v185 b4 v192 o5 e4 v233 c+4 v185 o4 a4 v247 f+2^8
+; section 0B
+v219 a+4^8 v249 d+4^8 v219 f2^8 v247 o3 a+8 v249 a+8 r8 o4 d+1^1^1^4
+; section 0D
+r1
+; section 0E
+y12
+(60)[v224 a+4^8 v223 d+2 v176 f2 v221 o3 a+2^32^=2 v224 o4 a+8]
+; section 0F
+(61)[a+8^32^64^=1 v221 a+8^32 v192 o5 c4 f4 v206 d4 v221 o4 a+4 v159 g2^8]
+; section 10
+(62)[v224 a+4^8 v223 d+2 v176 f2 v221 o3 a+2^32^=2 v224 o4 a+16^32^64^=1]
+; section 11
+(63)[a+8^32^64^=1 v221 a+8^32^=2 v192 o5 c4 f4 v206 d4 v176 o4 a+4 g2^8]
+; section 12
+(64)[v206 b4^8 v192 e2 v223 f+2 o3 b2^32^=2 v137 o4 b8]
+; section 13
+(65)[
+v149 b8^32^64^=1 v159 b8^32 v221 o5 c+4 v223 f+4 v221 d+4
+v192 o4 b4 v206 g+2^8
+]
+; section 14
+(66)[v159 b4^8 v223 e2 f+2 v221 o3 b8 v223 b8 r8 v221 o4 e1^1]
+; section 15
+v233
+(58)
+; section 16
+(67)[v206 a8 v233 g+1^1]
+; section 17
+(59)
+; section 18
+(68)[a4 v206 a8 b4 v233 o5 e4 v242 c+4 v192 o4 a4 v252 f+2^8]
+; section 19
+(69)[v250 a+4^8 d+4^8 v233 f2^8 v245 o3 a+8 v219 a+8 r8 v250 o4 d+1^1^1^1^4]
+; section 1C
+(60)
+; section 1D
+(61)
+; section 1E
+(62)
+; section 1F
+(63)
+; section 20
+(64)
+; section 21
+(65)
+; section 22
+(66)
+; section 23
+v233
+(58)
+; section 24
+(67)
+; section 25
+(59)
+; section 26
+(68)
+; section 27
+(69)
+; section 2A
+(60)
+; section 2B
+(61)
+; section 2C
+(62)
+; section 2D
+(63)
+; section 2E
+(64)
+; section 2F
+(65)
+; section 30
+(66)
+; section 31
+v233
+(58)
+; section 32
+(67)
+; section 33
+(59)
+; section 34
+(68)
+; section 35
+v250 a+4^8 d+4^8 v233 f2^8
+v245 o3 a+8 v219 a+8 r8 v250 o4 d+1^1^1^1^8^16^32^64 $FD ^64
+
+
+#5
+; section 00
+r1^1^1^1^1^1^2^4^8
+; section 03
+@31 v115 o4 a+4 r1^1^1^1^1^1^1^1^1^1^1^1^2^4^8
+; section 0A
+v208 f+4^8 v174 g2 v151 a2 v206 d+2^8
+; section 0B
+r1^1^2^4^8
+; section 0C
+@41 $F4$03 v249 $E5$00$15$7D o5 d+4 v219 o4 f4 v192 o5 c4 v247 o4 d+4 v185 c+2
+; section 0D
+v219 a+1^2^8
+; section 0E
+@54 $F4$03 y6 $FD
+(70)[
+v174 o3 a+8 v176 f+8 r8 v144 g4 v174 d+8 r8 v151 d4
+v171 o2 a+8 v99 f16 r16 v171 g+2^8
+]
+; section 0F
+(71)[
+a+8 v162 o3 c+8 v174 f+16 r16 v162 g+4 v128 a+16 v162 o4 c8^16 v169 o3 a+4
+v174 d4 d+2^8
+]
+; section 10
+(70)
+; section 11
+(72)[
+o2 a+8 v162 o3 c+8 v174 f+16 r16 v162 g+4 v128 a+16 v162 o4 c8^16 v174 o3 a+4
+v174 d4 e2^8
+]
+; section 12
+(73)[
+v174 b8 v174 g8
+v131 d16 r16 v144 g16 v185 g+8^16
+v174 e8 v99 c+16 r16 v162 d16 v174 d+8^16
+o2 b8 v87 f+16 r16 v162 a2^8
+]
+; section 13
+(74)[
+v137 b8 v151 o3 d8 v121 g16 r16 v174 a4 v128 b16 v171 o4 c+8^16 v174 o3 b4
+v176 d+4 v176 e4 r4^8
+]
+; section 14
+(78)[
+v174 b8 v174 g8
+v131 d16 r16 v144 g16 v176 g+8^16
+v174 e8 v99 c+16 r16 v162 d16 v174 d+8^16
+]
+o2 b8 v87 f+16 r16 v162 a8 a8 r8 v131 b16 v162 o3 c+2^16^32
+; section 15
+@41 $F4$03 v249 $E5$00$15$7D o6 c+8^16^32^64 v219 o5 e8^16^32^64 v185 d4^64
+v219 c+8^16^64 v192 a4^8^32 @54 $F4$03 v162 $FD o2 a8 o3 d1^2^4^8
+; section 16
+(75)[v183 o2 b8 v174 o3 e1^1]
+; section 17
+(76)[v171 e8]
+; section 18
+(77)[v176 f+4 v174 f+8 v176 g4 v171 b4 v167 a4 v174 c+4 v176 d+2^8]
+; section 19
+v176 f+4^8 v176 c4^8 v171 d2^8
+v171 o2 a+8 v171 a+8 r8 v169 o3 c4 y9 ^2^4^8^32
+; section 1A
+@41 $F4$03 v206 $E5$00$15$7D o5 f8^32
+v247 o6 d+4^16^32 o5 c+8^32 v219 o6 c4^16^32 v252 o4 a+8^32
+; section 1B
+v250 o5 g+1^2^4^8^16
+; section 1C
+@54 $F4$03 y6 $FD
+(70)
+; section 1D
+(71)
+; section 1E
+(70)
+; section 1F
+(72)
+; section 20
+(73)
+; section 21
+(74)
+; section 22
+(78)
+o2 b8 v87 f+16 r16 v162 a8 a8 r8 v131 b16 v162 o3 c+2^4^16
+; section 23
+@41 $F4$03 v247 $E5$00$15$7D o5 d8 v206 e8 v247 o6 c+8
+v219 o5 d8^64^=1 v233 c+8^16^=2 v219 a1^1^4^8^32
+; section 24
+@54 $F4$03 $FD
+(75)
+; section 25
+(76)
+; section 26
+(77)
+; section 27
+v176 o3 f+4^8 v176 c4^8 v171 d2^8 v171 o2 a+8 v171 a+8 r8 v169 o3 c1^2^8
+; section 28
+@41 $F4$03 v159 $E5$00$15$7D o6 g4 v171 o5 a+4 g+2
+; section 29
+v131 o6 c4 v183 o5 f4 v219 d+4 v131 o6 c8 v159 o5 a+2^4
+; section 2A
+@54 $F4$03 $FD
+(70)
+; section 2B
+(71)
+; section 2C
+(70)
+; section 2D
+(72)
+; section 2E
+(73)
+; section 2F
+(74)
+; section 30
+v174 o3 b8 v174 g8
+v131 d16 r16 v144 g16 v176 g+8^16
+v174 e8 v99 c+16 r16 v162 d16 v174 d+8^16
+o2 b8 v87 f+16 r16 v162 a8 a8 r8 v131 b16 v162 o3 c+2^16
+; section 31
+@41 $F4$03 v219 $E5$00$15$7D o6 c+8^32 v249 c+8^16 v233 o5 a8^64 v206 e8^32
+v219 d4^16^32^64 v233 b1^1^4^8
+; section 32
+@54 $F4$03 $FD
+(75)
+; section 33
+(76)
+; section 34
+(77)
+; section 35
+v176 o3 f+4^8 v176 c4^8 v171 d2^8 v171 o2 a+8 v171 a+8 r8 v169 o3 c1^8
+; section 36
+@41 $F4$03 v192 y11 $E5$00$15$7D o6 c4 v179 o5 a+4 v121 o6 f8 v179 o5 f2^8
+; section 37
+v233 o6 c8 v247 o4 a+1^2^8^16^32^64 $FD ^64
+
+
+#6
+; section 00
+r1^1^1^1^1^1^1^1^1^1^1^1^1^1^1^1^1^1^1^1^1^1^1^1^1^1^1^2^4^8
+; section 0D
+@44 v233 o4 c8
+; section 0E
+v255
+(79)[o3 a+4^8 o4 c2 c2 c2 c8]6
+; section 14
+(80)[o3 a+4^8 o4 c2 c2 c8 c4 c1^1]
+; section 15
+(81)[r8 c1^1]
+; section 16
+(82)[c4]
+; section 17
+(83)[
+@31 v128 o2 b8
+v208 o3 f+8 v196 b8^64^=1
+c+8^32^64^=2 v210 o4 e8^32^64
+v206 d+8^16
+v196 o3 g+8^16 v206 f+2^8 @44 v255 o4 c8
+]
+; section 18
+(84)[c4^8 c2 c2 c2 c8]
+; section 19
+c4^8 c4^8 c2^8 c8 c4 c1^1^1^1
+; section 1B
+r8 c8
+; section 1C
+(79)6
+; section 22
+(80)
+; section 23
+(81)
+; section 24
+(82)
+; section 25
+(83)
+; section 26
+(84)
+; section 27
+c4^8 c4^8 c2^8 c8 c4 c1^1^1^1^8
+; section 29
+o3 a+8
+; section 2A
+(79)6
+; section 30
+(80)
+; section 31
+(81)
+; section 32
+(82)
+; section 33
+(83)
+; section 34
+(84)
+; section 35
+o4 c4^8 c4^8 c2^8 c8 c4 c1^1^1^1^4
+
+
+#7
+; section 00
+@50
+(85)[
+$F4$01 v255 o5 d+=2 o4 b=1 f+=1 d+16^32^=2 $F4$01 $F4$01 v0 o5 d+=2 o4 b=1 f+=1 d+16^32^=2
+$F4$01 $F4$01 v255 o5 d+=2 o4 b=1 f+=1 d+16^32^=2 $F4$01 $F4$01 v82 o5 d+=2 o4 b=1 f+=1 d+16^32^=2
+$F4$01 $F4$01 v174 o5 d+=2 o4 b=1 f+=1 d+16^32^=2 $F4$01 $F4$01 v0 o5 d+=2 o4 b=1 f+=1 d+16^32^=2
+$F4$01 $F4$01 v219 o5 d+=2 o4 b=1 f+=1 d+16^32^=2 $F4$01 $F4$01 v70 o5 d+=2 o4 b=1 f+=1 d+16^32^=2
+$F4$01 $F4$01 v249 o5 d+=2 o4 b=1 f+=1 d+16^32^=2 $F4$01 $F4$01 v0 o5 d+=2 o4 b=1 f+=1 d+16^32^=2
+$F4$01 $F4$01 v219 o5 d+=2 o4 b=1 f+=1 d+16^32^=2 $F4$01 $F4$01 v0 o5 d+=2 o4 b=1 f+=1 d+16^32^=2
+$F4$01 $F4$01 v233 o5 d+=2 o4 b=1 f+=1 d+16^32^=2 $F4$01 $F4$01 v131 o5 d+=2 o4 b=1 f+=1 d+16^32^=2
+$F4$01 $F4$01 v250 o5 d+=2 o4 b=1 f+=1 d+16^32^=2 $F4$01 $F4$01 v77 o5 d+=2 o4 b=1 f+=1 d+16^32^=2
+]
+; section 01
+$F4$01
+(85)
+; section 02
+$F4$01
+(85)
+; section 03
+$F4$01
+(85)
+; section 04
+$F4$01
+(85)
+; section 05
+$F4$01
+(85)
+; section 06
+$F4$01
+(85)
+; section 07
+$F4$01
+(85)
+; section 08
+$F4$01
+(85)
+; section 09
+$F4$01
+(85)
+; section 0A
+$F4$01
+(85)
+; section 0B
+$F4$01
+(85)
+; section 0C
+$F4$01
+(85)
+; section 0D
+$F4$01
+(85)
+; section 0E
+$F4$01
+(85)
+; section 0F
+$F4$01
+(85)
+; section 10
+$F4$01
+(85)
+; section 11
+$F4$01
+(85)
+; section 12
+$F4$01
+(85)
+; section 13
+$F4$01
+(85)
+; section 14
+$F4$01
+(85)
+; section 15
+$F4$01
+(85)
+; section 16
+$F4$01
+(85)
+; section 17
+$F4$01
+(85)
+; section 18
+$F4$01
+(85)
+; section 19
+$F4$01
+(85)
+; section 1A
+$F4$01
+(85)
+; section 1B
+$F4$01
+(85)
+; section 1C
+(86)[
+$F4$01 $F4$01 v255 o5 d+=2 o4 b=1 f+=1 d+16^32^=2 $F4$01 $F4$01 v0 o5 d+=2 o4 b=1 f+=1 d+16^32^=2
+$F4$01 @58 v221 g8 @59 $EB$00$12$09 $F4$03 v99 y6 a+16^32 r32
+$F4$01 @50 $FE $F4$03 v174 y10 o5 d+=2 o4 b=1 f+=1 d+16^32^=2 $F4$01 $F4$01 v219 o5 c+=2 o4 a=1 e=1 c+16^32^=2
+$F4$01 @47 v192 o3 c8 $F4$01 @50 v82 o5 d+=2 o4 b=1 f+=1 d+16^32^=2
+$F4$01 $F4$01 v249 o5 d+=2 o4 b=1 f+=1 d+16^32^=2 $F4$01 $F4$01 v0 o5 d+=2 o4 b=1 f+=1 d+16^32^=2
+$F4$01 @58 v218 g8 @59 $EB$00$12$09 $F4$03 v99 y6 a+16^32 r32
+$F4$01 @50 $FE $F4$03 v233 y10 o5 d+=2 o4 b=1 f+=1 d+16^32^=2 $F4$01 $F4$01 v219 o5 c+=2 o4 a=1 e=1 c+16^32^=2
+$F4$01 @47 v249 o3 c8 $F4$01 @50 v77 o5 d+=2 o4 b=1 f+=1 d+16^32^=2
+]7
+; section 23
+$F4$01
+(85)
+; section 24
+$F4$01
+(85)
+; section 25
+$F4$01
+(85)
+; section 26
+$F4$01
+(85)
+; section 27
+$F4$01
+(85)
+; section 28
+$F4$01
+(85)
+; section 29
+$F4$01
+(85)
+; section 2A
+(86)7
+; section 31
+$F4$01
+(85)
+; section 32
+$F4$01
+(85)
+; section 33
+$F4$01
+(85)
+; section 34
+$F4$01
+(85)
+; section 35
+$F4$01
+(85)
+; section 36
+$F4$01
+(85)
+; section 37
+$F4$01 $F4$01 v255 o5 d+=2 o4 b=1 f+=1 d+16^32^=2 $F4$01 $F4$01 v0 o5 d+=2 o4 b=1 f+=1 d+16^32^=2
+$F4$01 $F4$01 v255 o5 d+=2 o4 b=1 f+=1 d+16^32^=2 $F4$01 $F4$01 v82 o5 d+=2 o4 b=1 f+=1 d+16^32^=2
+$F4$01 $F4$01 v174 o5 d+=2 o4 b=1 f+=1 d+16^32^=2 $F4$01 $F4$01 v0 o5 d+=2 o4 b=1 f+=1 d+16^32^=2
+$F4$01 $F4$01 v219 o5 d+=2 o4 b=1 f+=1 d+16^32^=2 $F4$01 $F4$01 v70 o5 d+=2 o4 b=1 f+=1 d+16^32^=2
+$F4$01 $F4$01 v249 o5 d+=2 o4 b=1 f+=1 d+16^32^=2 $F4$01 $F4$01 v0 o5 d+=2 o4 b=1 f+=1 d+16^32^=2
+$F4$01 $F4$01 v219 o5 d+=2 o4 b=1 f+=1 d+16^32^=2 $F4$01 $F4$01 v0 o5 d+=2 o4 b=1 f+=1 d+16^32^=2
+$F4$01 $F4$01 v233 o5 d+=2 o4 b=1 f+=1 d+16^32^=2 $F4$01 $F4$01 v131 o5 d+=2 o4 b=1 f+=1 d+16^32^=2
+$F4$01 $F4$01 v250 o5 d+=2 o4 b=1 f+=1 d+16^32^=2 $F4$01 $F4$01 v77 o5 d+=2 o4 b=1 f+=1 d+16^32^=1 $F4$01 ^=1
+
+
