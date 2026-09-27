@@ -180,7 +180,7 @@ class LoopOptimizer:
         for section in sections:
             # Only optimize section if it hasn't been touched yet. i.e. doesn't have a label
             if len(section.loopInfo) == 1 and section.loopInfo[0].label is None:
-                loopinfos = self._rle_lz(section.sentences)
+                loopinfos = self._lz77(section.sentences)
 
                 loopInfo: List[LoopInfo] = []
                 for j, info in enumerate(loopinfos):
@@ -247,7 +247,6 @@ class LoopOptimizer:
         for cur_grp_info in unoptimized_sent_grps:
             matched: bool = False
             for search_idx, search_grp_info in enumerate(search_buffer):
-                # TODO: implement the duplex lz77
                 matches = self._lz77_duplex(search_grp_info.sentences, cur_grp_info.sentences)
                 if len(matches) == 0:
                     continue
@@ -335,6 +334,79 @@ class LoopOptimizer:
             for loop in section.loopInfo:
                 if loop.label in multed_labels and loop.isRepeat:
                     loop.numLoops *= multed_labels[loop.label]
+
+    def _lz77(self, sentences: List[MMLSentence]) -> List[LoopInfo]:
+        """compression alg for MML sentences"""
+        
+        loopInfo: List[LoopInfo] = []
+
+        search_buffer: List[MMLSentence] = []
+        lookahead_buffer: List[MMLSentence] = copy.deepcopy(sentences)
+        last_match: List[MMLSentence] = None
+        # last_match_was_consecutive
+        # absolute buffer start indices
+        search_pos = 0
+        la_pos = 0
+        while len(lookahead_buffer) > 0:
+            found_match = False
+            match_was_consecutive = False
+            for s_idx in range(len(search_buffer)):
+                matched_group: List[MMLSentence] = []
+                _cur_idx = 0
+                _search_idx = s_idx
+                while (_cur_idx < len(lookahead_buffer)) \
+                    and (_search_idx < len(search_buffer)) \
+                    and (search_buffer[_search_idx] == lookahead_buffer[_cur_idx]):
+                    matched_group.append(lookahead_buffer[_cur_idx])
+                    _cur_idx += 1
+                    _search_idx += 1
+
+                match_len = len(matched_group)
+                if match_len > 0:
+                    # we have a consecutive match
+                    last_match = matched_group
+                    # set loop info
+                    relative_pos = search_pos + s_idx
+                    if s_idx > 0:
+                        # handle segment prior to match
+                        loopInfo.append(LoopInfo(list(range(search_pos, relative_pos))))
+                    if relative_pos + match_len == la_pos:
+                        # this is a consecutive match, mark as a repeat
+                        loopInfo.append(LoopInfo(list(range(relative_pos, relative_pos + match_len)), None, False, 2))
+                        match_was_consecutive = True
+                    else:
+                        # handle matches and in-between segment
+                        loopInfo.append(LoopInfo(list(range(relative_pos, relative_pos + match_len))))
+                        loopInfo.append(LoopInfo(list(range(relative_pos + match_len, la_pos))))
+                        loopInfo.append(LoopInfo(list(range(la_pos, la_pos + match_len))))
+
+                    found_match = True
+                    break
+
+            # update state after this check
+            if found_match:
+                lookahead_buffer = lookahead_buffer[len(last_match):]
+                la_pos += len(last_match)
+                if match_was_consecutive:
+                    # look ahead for more consecutive matches
+                    while len(lookahead_buffer) >= len(last_match) \
+                          and lookahead_buffer[:len(last_match)] == last_match:
+                        lookahead_buffer = lookahead_buffer[len(last_match):]
+                        la_pos += len(last_match)
+                        loopInfo[-1].numLoops += 1
+
+                # start looking again beyond latest match
+                # TODO: could keep unmatched lines in search buffer, and track matched lines and skip them
+                search_buffer.clear()                
+                search_pos = la_pos
+            else:
+                search_buffer.append(lookahead_buffer.pop(0))
+                la_pos += 1
+
+        if len(search_buffer) > 0:
+            loopInfo.append(LoopInfo(list(range(search_pos, search_pos + len(search_buffer)))))
+                            
+        return loopInfo
 
     def _rle_lz(self, sentences: List[MMLSentence]) -> List[LoopInfo]:
         """compression alg for MML sentences

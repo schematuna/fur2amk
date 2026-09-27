@@ -108,7 +108,7 @@ v156 e32 v255 e32 v156 e32 e32 v255 e32 v156 e32 v111 e32 v255 e32
 ; section 03
 (10)[v156 e32 v255 e32 v156 e32 v111 e32 v255 e32 v156 e32 v111 e32 v255 e32]
 v156 e32 v255 e32 v156 e32 e32 v255 e32 v156 e32 v111 e32 v255 e32
-v156 e32 v255 e32 v156 e32 v111 e32 v255 e32 v156 e32 v111 e32 v255 e32
+(10)
 v156 e32 v255 e32 @31 v156 y10 o3 d+32 @32 y11 o5 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 @31 v255 y10 o3 d+32 d+32
 /
 ; reset state on loop
@@ -119,9 +119,9 @@ v156 e32 v255 e32 @31 v156 y10 o3 d+32 @32 y11 o5 e32 @31 v255 y10 o3 d+32 @32 v
 @32 v156 y11 o5 e32 v255 e32 @31 v250 y10 o3 d+32 @32 v156 y11 o5 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 @31 v255 y10 o3 d+32
 ]2
 ; section 05
-@32 v156 y11 o5 e32 v255 e32 v156 e32 v111 e32 @31 v250 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 @31 v250 y10 o3 d+32
+(11)[@32 v156 y11 o5 e32 v255 e32 v156 e32 v111 e32 @31 v250 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 @31 v250 y10 o3 d+32]
 @32 v156 y11 o5 e32 v255 e32 @31 v250 y10 o3 d+32 @32 v156 y11 o5 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 @31 v255 y10 o3 d+32
-@32 v156 y11 o5 e32 v255 e32 v156 e32 v111 e32 @31 v250 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 @31 v250 y10 o3 d+32
+(11)
 @32 v156 y11 o5 e32 v255 e32 @31 v250 y10 o3 d+32 @32 v156 y11 o5 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 @31 v255 y10 o3 d+32 d+32
 ; section 06
 (7)2
@@ -146,17 +146,17 @@ v156 e32 v255 e32 v156 e32 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 @31 v255
 (8)2
 ; section 0B
 v156 e32 v255 e32 v156 e32 v111 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 v255 e32
-v156 e32 v255 e32 v156 e32 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 v255 e32
-(10)
+(13)[v156 e32 v255 e32 v156 e32 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 v255 e32]
+v156 e32 v255 e32 v156 e32 v111 e32 v255 e32 v156 e32 v111 e32 v255 e32
 @31 v156 y10 o3 d+32 v255 d+32 @32 v156 y11 o5 e32 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 @31 v255 y10 o3 d+32 @32 y11 o5 e32
 ; section 0C
 (8)2
 ; section 0D
 (9)
 ; section 0E
-v156 e32 v255 e32 v156 e32 v111 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 v255 e32
-v156 e32 v255 e32 v156 e32 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 v255 e32
-v156 e32 v255 e32 v156 e32 v111 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 v255 e32
+(12)[v156 e32 v255 e32 v156 e32 v111 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 v111 e32 v255 e32]
+(13)
+(12)
 v156 e32 v255 e32 v156 e32 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 @31 v202 y10 o3 d+32 @32 v255 y11 o5 e32
 ; section 0F
 @31 y10 o3 d+32 @32 y11 o5 e32 v156 e32 v111 e32 @31 v255 y10 o3 d+32 @32 v156 y11 o5 e32 @31 v255 y10 o3 d+32 @32 y11 o5 e32
@@ -172,7 +172,7 @@ o2 g+16 b32 r32 o3 c+8^32
 o2 b32 r32 b16^32 g+16
 r32 g+16 b16 o3 c+32 r32
 ; section 01
-(14)[o2 f+8 f+32 r32 f+32 r32]
+(17)[o2 f+8 f+32 r32 f+32 r32]
 f+64 r64 f+16 f+32 r32 f+8^32
 f+32 r32 f+16 g+16^32
 g+64 r64 a16 b32 r32 o3 e16
@@ -182,7 +182,7 @@ c+64 r64 o2 g+16 b32 r32 o3 c+8^32
 o2 b32 r16^32 g+16^32
 r32 g+32 b64 r32^64 o3 c+16^32
 ; section 03
-(14)
+(17)
 o2 f+64 r64 f+16 f+64 r64 f+16^32 f+64 r64
 g+32 g+32 r32 b16^32 g+16
 b32 g+64 r32^64 g+32 o3 e32 o2 b32 r32 g+32
@@ -191,27 +191,27 @@ b32 g+64 r32^64 g+32 o3 e32 o2 b32 r32 g+32
 @33 
 ; section 04
 r32 o3 c+32 c+32 r32 e16 e64 r64 c+16
-(15)[
+(18)[
 c+64 r64 g+16 f+16 o2 b16
 a16 a64 r64 o3 e16 e64 r64 o2 a16
 a64 r64 a64 r32^64 o3 f+16 e32 r32 c+32
 ]
 ; section 05
-(11)[
+(14)[
 o2 b16 b64 r64 o3 d+16 d+64 r64 o2 b16
 b64 r64 b64 r64 g+16 o3 f+16 o2 b32 r32
 g+16 g+64 r64 g+64 r64 g+16 b32 r32
 o3 d+16 d+64 r64 o2 g+16 o3 f+32 d+16^64
 ]
 ; section 06
-(12)[
+(15)[
 r64 o2 a16 a32 r32 o3 c+64 r64 c+16
 r32 c+16 o2 a64 r64 o3 e16 o2 a16
 b16 b64 r64 o3 d+16^32 o2 b32 r32
 o3 f+32 r32 o2 b16 o3 g+32 r32 o2 b8
 ]
 ; section 07
-(13)[
+(16)[
 b64 r64 o3 c+4^16^32
 o2 g+32 r32
 o3 e64 r64 d+32 r32 c+32 r32 o2 b32 o3 c+16
@@ -219,13 +219,13 @@ o2 b32 a32 g+32 f+32 g+32 b32 o3 e32 e32
 ]
 ; section 08
 o2 g+32 o3 c+32 c+32 r32 e16 e64 r64 c+16
-(15)
+(18)
 ; section 09
-(11)
+(14)
 ; section 0A
-(12)
+(15)
 ; section 0B
-(13)
+(16)
 ; section 0C
 o2 a16^32 a64 r64 a32 a32 r32 a16^32
 o3 e32 r32 e16 o2 b32 r32
@@ -251,31 +251,31 @@ g+64 r64 g+64 r32^64 f+64 r64 e8
 #3
 ; section 00
 @34 v174
-(16)[o5 d+1]
+(19)[o5 d+1]
 ; section 01
-(17)[o4 g+1]
+(20)[o4 g+1]
 ; section 02
-(16)
+(19)
 ; section 03
-(17)
+(20)
 /
 ; reset state on loop
 @34 
 ; section 04
 r8^16 @35 v174 c+8^16
 g+32 r32 v131 c+16
-(20)[
+(23)[
 v174 b8 a32 v131 b32 v174 g+8
 f+32 v131 g+16^32 v174 g+4^8
 ]
 ; section 05
-(18)[
+(21)[
 f+16 e16 f+16
 e8 d+16 c+16
 v131 d+16 v174 o3 b32 r32 v131 o4 c+32 v108 o3 b32 v174 o4 c+4^16
 ]
 ; section 06
-(19)[
+(22)[
 e32 v131 c+16^32 v174 f+16 v131 e32 r32
 v174 g+8 f+32 v131 g+32 v174 d+16
 v131 f+16 v174 o3 b16 g+64 r32^64 b16
@@ -284,11 +284,11 @@ v131 f+16 v174 o3 b16 g+64 r32^64 b16
 v131 g+64 r32^64 v174 o4 c+32 r32 c+2^8 r4^8^16
 ; section 08
 c+8^16 g+32 r32 v131 c+16
-(20)
+(23)
 ; section 09
-(18)
+(21)
 ; section 0A
-(19)
+(22)
 ; section 0B
 v131 o3 g+64 r32^64 v174 o4 c+32 r32 c+2^8
 r16 @36 v169 c64 c+32 r64 e32^64 r64 f+16
@@ -307,31 +307,31 @@ b8 a32 r16^32 g+16^32 r32 f+32 r32 f+8 g+32 r32 g+4^8
 #4
 ; section 00
 @34 v162 y7
-(21)[o4 e1]
+(24)[o4 e1]
 ; section 01
-(22)[o3 a1]
+(25)[o3 a1]
 ; section 02
-(21)
+(24)
 ; section 03
-(22)
+(25)
 /
 ; reset state on loop
 @34 
 ; section 04
 v156 y10
-(23)[o5 d+2 e2]
+(26)[o5 d+2 e2]
 ; section 05
-(24)[f+2 f+2]
+(27)[f+2 f+2]
 ; section 06
-(25)[c+2 f+2]
+(28)[c+2 f+2]
 ; section 07
 c+2^4 d+8^16 e16
 ; section 08
-(23)
+(26)
 ; section 09
-(24)
+(27)
 ; section 0A
-(25)
+(28)
 ; section 0B
 c+2^4^8 o4 b8
 ; section 0C
@@ -354,19 +354,19 @@ o4 c+2 o3 b1^2
 @34 
 ; section 04
 y7
-(27)[v156 o4 e2 g+2]
+(30)[v156 o4 e2 g+2]
 ; section 05
-(28)[o5 d+2 o4 b2]
+(31)[o5 d+2 o4 b2]
 ; section 06
-(29)[g+2 b2]
+(32)[g+2 b2]
 ; section 07
 e2^4 v104 o5 c+4
 ; section 08
-(27)
+(30)
 ; section 09
-(28)
+(31)
 ; section 0A
-(29)
+(32)
 ; section 0B
 o4 e1
 ; section 0C
@@ -382,11 +382,11 @@ g+2 o4 c2
 #6
 ; section 00
 @34 v156
-(30)[o3 c+1]
+(33)[o3 c+1]
 ; section 01
 o2 f+1
 ; section 02
-(30)
+(33)
 ; section 03
 o3 e1
 /
@@ -394,19 +394,19 @@ o3 e1
 @34 
 ; section 04
 y13
-(31)[v156 b2 o4 c+2]
+(34)[v156 b2 o4 c+2]
 ; section 05
-(32)[g+2 f+2]
+(35)[g+2 f+2]
 ; section 06
-(33)[o3 a2 o4 d+2]
+(36)[o3 a2 o4 d+2]
 ; section 07
 c+2^4 v131 b4
 ; section 08
-(31)
+(34)
 ; section 09
-(32)
+(35)
 ; section 0A
-(33)
+(36)
 ; section 0B
 c+1
 ; section 0C
@@ -423,9 +423,9 @@ $FE y7 e2 d+2
 ; section 00
 r8^16 @37 v252 y8 o3 e1
 ; section 01
-(34)[y12 o2 b1]
+(37)[y12 o2 b1]
 ; section 02
-(35)[y8 o3 e1]
+(38)[y8 o3 e1]
 ; section 03
 y12 o2 b2^4^16
 /
@@ -434,27 +434,27 @@ y12 o2 b2^4^16
 ; section 04
 r8^16 y8 o3 e2^4^16
 ; section 05
-(34)
+(37)
 ; section 06
 y8 e2 y12 d+2
 ; section 07
 y10
-(36)[o2 b1^8^16]
+(39)[o2 b1^8^16]
 ; section 08
-(37)[y8 o3 e2^4^16]
+(40)[y8 o3 e2^4^16]
 ; section 09
-(34)
+(37)
 ; section 0A
 y8 e2 y12 d+2^8
 ; section 0B
 y10 o2 b2^4^8
 ; section 0C
-(35)
+(38)
 ; section 0D
 y12
-(36)
+(39)
 ; section 0E
-(37)
+(40)
 ; section 0F
 y12 o3 f+2 y10 d+2
 
