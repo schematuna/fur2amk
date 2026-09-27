@@ -233,14 +233,6 @@ class LoopOptimizer:
             return label_count
         
         # now do proper lz77 on all untouched sentence groups
-        # lz77 principles hold here
-        # we iterate through unoptimized loopInfos sequentially.
-        # at each step, it looks through entire search buffer to see if any sentence group within any loopInfo 
-        # matches any sentence group within the currently considered loopinfo.
-        # If a match is found, it creates a new label and removes the loopInfo with the match from the search buffer.
-        # TODO: this approach means there can only be one match per loopInfo object. Ideally we just remove the matched sentences
-        #       and keep the loopInfo object around until all sentences are matched.
-        # then, the cursor position is increments, the current loopInfo is added to the search buffer.
         labels_assigned: Dict[int, List[MMLSentence]] = {}
         search_buffer: List[GroupInfo] = []
         # current lookahead position relative to start of unoptimized_sent_grps
@@ -259,6 +251,7 @@ class LoopOptimizer:
                 newCurLoopInfos = self._split_loopInfo(cur_grp_info.info, matched_cursor_idcs, label_count, True)
                 matched_group = [search_grp_info.info.sentenceIndices[idx] for idx in matched_search_idcs]
                 # remember this matched sentence group
+                # TODO: need to actually make use of this
                 labels_assigned[label_count] = matched_group
                 label_count += 1
 
