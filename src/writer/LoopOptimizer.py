@@ -235,6 +235,9 @@ class LoopOptimizer:
         # now do proper lz77 on all untouched sentence groups
         labels_assigned: Dict[int, List[MMLSentence]] = {}
         search_buffer: List[GroupInfo] = []
+        # defer actual list mutation until every match has been found, since replacing one
+        # group_info's loopInfo entry can shift the cached info_index of others in the same section
+        pending_replacements: List[Tuple[GroupInfo, List[LoopInfo]]] = []
         # current lookahead position relative to start of unoptimized_sent_grps
         for cur_grp_info in unoptimized_sent_grps:
             matched: bool = False
@@ -255,10 +258,8 @@ class LoopOptimizer:
                 labels_assigned[label_count] = matched_group
                 label_count += 1
 
-                # process cur info before search info, since processing earlier loopInfo first
-                # can cause indexing issues if both groups were in the same section
-                self._replace_loopInfo(sections, cur_grp_info, newCurLoopInfos)
-                self._replace_loopInfo(sections, search_grp_info, newSearchLoopInfos)
+                pending_replacements.append((cur_grp_info, newCurLoopInfos))
+                pending_replacements.append((search_grp_info, newSearchLoopInfos))
 
                 # this loopinfo is no longer a candidate in search buffer
                 # TODO: minor optimization - keep unmatched splits in search buffer
@@ -268,6 +269,11 @@ class LoopOptimizer:
                 # only add this info to search buffer if it had no matches
                 # TODO: need to change this if we support unmatched splits
                 search_buffer.append(cur_grp_info)
+
+        # now apply all the replacements, end-to-start so loopinfo indices don't get messed up
+        pending_replacements.sort(key=lambda item: (item[0].section_index, item[0].info_index), reverse=True)
+        for group_info, new_loop_info in pending_replacements:
+            self._replace_loopInfo(sections, group_info, new_loop_info)
 
         return label_count
 
