@@ -187,8 +187,8 @@ class LoopInfo:
     # subloops within this loop (uses AMK superloops)
     subLoops: List[SubLoopInfo] = None
 
-# convenience class holding state information for a loopInfo opject
-# Useful during loop optimization
+
+# convenience classes for loop optimization alg
 @dataclass
 class GroupInfo:
     section_index: int = None
@@ -196,6 +196,11 @@ class GroupInfo:
     info: LoopInfo = None
     sentences: List[MMLSentence] = field(default_factory=list)
 
+@dataclass
+class LabelInfo:
+    section_index: int = None
+    info_index: int = None
+    label: int = None
 
 # a segment of MML usually representing a musical section
 # the MMLSection will be labelled in the MML with the section number

@@ -98,7 +98,7 @@ AMK only supports C1 -> A6. If any notes are out of this range they will be octa
 ## Limitations
 
 - **Wavetables** are not supported. All instruments must use samples or noise.
-- **Macros** have limited support. Volume and Arpeggio sequence macros are supported. Additionally, 1 Noise Freq value, up to 2 Gain values, and the Special Echo and Noise flags are supported. 
+- **Macros** have limited support. Volume and Arpeggio sequence macros are supported. Additionally, 1 Noise Freq value, up to 2 Gain values, and the Special Echo and Noise flags are supported. The Volume LFO macro is also supported for tremolo.
 - **Compatibility Flags** are not supported. Conversion assumes that all compatibility flags are disabled.
 
 ## Removing the N-SPC 1-tick gap

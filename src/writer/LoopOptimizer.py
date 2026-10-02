@@ -147,6 +147,43 @@ class LoopOptimizer:
 
                         break
         return label_count
+
+    def condense_sections(self, sections: List[MMLSection], loop_tick: int):
+        # first, gather groups of sections optimised by label_repeated_sections
+        label_groups = self._get_label_groups(sections, loop_tick)
+
+
+        for grp in label_groups:
+            for labelled_sec in grp:
+                label = labelled_sec.label
+
+
+    def _get_label_groups(self, sections: List[MMLSection], loop_tick: int) -> List[List[LabelInfo]]:
+        group_candidate = None
+        label_groups: List[List[LabelInfo]] = []
+        group_idx: int = 0
+        for i, section in enumerate(sections):
+            if section.tick() == loop_tick:
+                if group_candidate is not None:
+                    group_candidate = None
+                    group_idx += 1
+            if group_candidate is not None and len(section.loopInfo) == 1 and section.loopInfo[0].label is not None:
+                label_groups[group_idx].append(LabelInfo(i, 0, section.loopInfo[0].label))
+            elif section.loopInfo[-1].label is not None:
+                group_candidate = section.loopInfo[-1]
+                label_groups.append([LabelInfo(i, len(section.loopInfo) - 1, section.loopInfo[-1].label)])
+            else:
+                if group_candidate is not None:
+                    group_candidate = None
+                    group_idx += 1
+
+        # only want sequences of labelled sections
+        for grp in label_groups:
+            if len(grp) < 2:
+                label_groups.remove(grp)
+
+        return label_groups
+
     
     def optimize_subloops(self, sections: List[MMLSection]):
         """optimize finer tuned intra-section subloops
@@ -277,7 +314,7 @@ class LoopOptimizer:
 
         return label_count
 
-    def condense_sections(self, sections: List[MMLSection], loop_tick: int):
+    def condense_sections_original(self, sections: List[MMLSection], loop_tick: int):
         # a section that is a candidate for condensation is a section that is one self-contained labelled loop
         # if any following sections are just a repeat of that label, they should be folded into the first instance
         loop_candidate: LoopInfo = None
@@ -342,7 +379,6 @@ class LoopOptimizer:
         search_buffer: List[MMLSentence] = []
         lookahead_buffer: List[MMLSentence] = copy.deepcopy(sentences)
         last_match: List[MMLSentence] = None
-        # last_match_was_consecutive
         # absolute buffer start indices
         search_pos = 0
         la_pos = 0
@@ -362,7 +398,7 @@ class LoopOptimizer:
 
                 match_len = len(matched_group)
                 if match_len > 0:
-                    # we have a consecutive match
+                    # we have a match
                     last_match = matched_group
                     # set loop info
                     relative_pos = search_pos + s_idx
@@ -406,6 +442,63 @@ class LoopOptimizer:
             loopInfo.append(LoopInfo(list(range(search_pos, search_pos + len(search_buffer)))))
                             
         return loopInfo
+
+    def _lz77_generic(self, items) -> List[Tuple[List[int], int]]:
+        """lz77 implementation for an arbitrary group of objects
+           returns of match start indices and the match length for each match found"""
+        
+        match_info: List[Tuple[List[int], int]] = []
+
+        search_buffer: List = []
+        lookahead_buffer: List = copy.deepcopy(items)
+        last_match: List = None
+        # absolute buffer start indices
+        search_pos = 0
+        la_pos = 0
+        while len(lookahead_buffer) > 0:
+            found_match = False
+            for s_idx in range(len(search_buffer)):
+                matched_group: List = []
+                _cur_idx = 0
+                _search_idx = s_idx
+                while (_cur_idx < len(lookahead_buffer)) \
+                    and (_search_idx < len(search_buffer)) \
+                    and (search_buffer[_search_idx] == lookahead_buffer[_cur_idx]):
+                    matched_group.append(lookahead_buffer[_cur_idx])
+                    _cur_idx += 1
+                    _search_idx += 1
+
+                match_len = len(matched_group)
+                if match_len > 0:
+                    # we have a match
+                    last_match = matched_group
+                    # set loop info
+                    relative_pos = search_pos + s_idx
+                    match_info.append(([relative_pos, la_pos], match_len))
+                    found_match = True
+                    break
+
+            # update state after this check
+            if found_match:
+                lookahead_buffer = lookahead_buffer[len(last_match):]
+                la_pos += len(last_match)
+                # look ahead for more consecutive matches
+                # TODO: do this for any future match, not just consecutive
+                while len(lookahead_buffer) >= len(last_match) \
+                        and lookahead_buffer[:len(last_match)] == last_match:
+                    lookahead_buffer = lookahead_buffer[len(last_match):]
+                    match_info[-1][0].append(la_pos)
+                    la_pos += len(last_match)
+
+                # start looking again beyond latest match
+                # TODO: could keep unmatched lines in search buffer, and track matched lines and skip them
+                search_buffer.clear()                
+                search_pos = la_pos
+            else:
+                search_buffer.append(lookahead_buffer.pop(0))
+                la_pos += 1
+                            
+        return match_info
 
     def _rle_lz(self, sentences: List[MMLSentence]) -> List[LoopInfo]:
         """compression alg for MML sentences
@@ -474,13 +567,13 @@ class LoopOptimizer:
                             
         return loopInfo
 
-    def _lz77_duplex(self, sentences1: List[MMLSentence], sentences2: List[MMLSentence]) -> List[Tuple[List[int], List[int]]]:
-        """modified lz77 for finding repeated sentences groups between two sets of sentences
-           Returns tuples of sentence group pairs, indexed relative to start of sentences passed in."""
+    def _lz77_duplex(self, group1, group2) -> List[Tuple[List[int], List[int]]]:
+        """modified lz77 for finding repeated groups between two sets of items
+           Returns tuples of group pairs, indexed relative to start of groups passed in."""
 
         # shallow copy for nomenclature
-        search_buffer = sentences1
-        lookahead_buffer = sentences2
+        search_buffer = group1
+        lookahead_buffer = group2
         matches: List[Tuple[List[int], List[int]]] = []
         for cur_idx in range(len((lookahead_buffer))):
             for search_idx in range(len(search_buffer)):
@@ -498,6 +591,7 @@ class LoopOptimizer:
                     # found one, now catalog it
                     matches.append((list(range(search_idx, search_idx + len(matched_group))), list(range(cur_idx, cur_idx + len(matched_group)))))
                     # just return the first match for now
+                    # TODO: return all matches...
                     return matches
                     
         return matches
