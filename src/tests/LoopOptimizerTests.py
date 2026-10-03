@@ -6,6 +6,17 @@ from ..writer.LoopOptimizer import LoopOptimizer
 
 optimizer = LoopOptimizer()
 
+def make_section(loopInfo: List[LoopInfo]) -> MMLSection:
+    section = MMLSection([], 0, 16)
+    section.loopInfo = loopInfo
+    return section
+
+def make_word(note: int, duration: int = 24, tick: int = 0) -> MMLWord:
+    return MMLWord(tick, duration, note)
+
+def make_sentence(notes: List[int], duration: int = 24) -> MMLSentence:
+    return MMLSentence([make_word(note, duration, i * duration) for i, note in enumerate(notes)])
+
 def check_match(expected: List[LoopInfo], actual: List[LoopInfo]) -> Tuple[bool, str]:
     ret_str = ''
     if expected != actual:
@@ -23,11 +34,6 @@ def split_test(info: LoopInfo, idcs: List[int], expected: List[LoopInfo]) -> boo
     else:
         print("Pass")
 
-def make_section(loopInfo: List[LoopInfo]) -> MMLSection:
-    section = MMLSection([], 0, 16)
-    section.loopInfo = loopInfo
-    return section
-
 def replace_test(sections: List[MMLSection], group_info: GroupInfo, new_loop_info: List[LoopInfo], expected: List[LoopInfo]) -> bool:
     optimizer._replace_loopInfo(sections, group_info, new_loop_info)
     success, err = check_match(expected, sections[group_info.section_index].loopInfo)
@@ -35,12 +41,6 @@ def replace_test(sections: List[MMLSection], group_info: GroupInfo, new_loop_inf
         print(err)
     else:
         print("Pass")
-
-def make_word(note: int, duration: int = 24, tick: int = 0) -> MMLWord:
-    return MMLWord(tick, duration, note)
-
-def make_sentence(notes: List[int], duration: int = 24) -> MMLSentence:
-    return MMLSentence([make_word(note, duration, i * duration) for i, note in enumerate(notes)])
 
 def duplex_test(sentences1: List[MMLSentence], sentences2: List[MMLSentence], expected: List[Tuple[List[int], List[int]]]) -> bool:
     output = optimizer._lz77_duplex(sentences1, sentences2)

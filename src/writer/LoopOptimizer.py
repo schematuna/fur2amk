@@ -206,10 +206,7 @@ class LoopOptimizer:
                     loop.subLoops = loopInfo
 
     def optimize_loops(self, sections: List[MMLSection], label_count: int) -> int:
-        """optimize finer tuned intra-section loops
-           First pass uses a modified lz77 alg, only allowing consecutive repeats
-           Second pass does full lz77 on all remaining sentence groups
-           Both passes assign labels for repeated sentence groups across sections"""
+        """optimize finer tuned intra-section loops"""
 
         labels_assigned: Dict[int, List[MMLSentence]] = {}
         # links unique groups of sentences to the LoopInfo object from their first occurrence
@@ -217,8 +214,10 @@ class LoopOptimizer:
         for section in sections:
             # Only optimize section if it hasn't been touched yet. i.e. doesn't have a label
             if len(section.loopInfo) == 1 and section.loopInfo[0].label is None:
-                loopinfos = self._lz77(section.sentences)
+                matches = self._lz77(section.sentences)
+                loopinfos = self._make_loop_info(section.sentences, matches)
 
+                # assign labels to matching loopinfos
                 loopInfo: List[LoopInfo] = []
                 for j, info in enumerate(loopinfos):
                     newLoopInfo = LoopInfo(info.sentenceIndices, None, False, info.numLoops)
@@ -371,79 +370,46 @@ class LoopOptimizer:
                 if loop.label in multed_labels and loop.isRepeat:
                     loop.numLoops *= multed_labels[loop.label]
 
-    def _lz77(self, sentences: List[MMLSentence]) -> List[LoopInfo]:
-        """compression alg for MML sentences"""
-        
-        loopInfo: List[LoopInfo] = []
+    def _make_loop_info(self, sentences: List[MMLSentence], matches: List[Tuple[List[int], int]]) -> List[LoopInfo]:
+        """Crafts a set of loop info opbjects given a sentence group and a list of matches
+        Handles consecutive repeat metadata, but not labels"""
 
-        search_buffer: List[MMLSentence] = []
-        lookahead_buffer: List[MMLSentence] = copy.deepcopy(sentences)
-        last_match: List[MMLSentence] = None
-        # absolute buffer start indices
-        search_pos = 0
-        la_pos = 0
-        while len(lookahead_buffer) > 0:
-            found_match = False
-            match_was_consecutive = False
-            for s_idx in range(len(search_buffer)):
-                matched_group: List[MMLSentence] = []
-                _cur_idx = 0
-                _search_idx = s_idx
-                while (_cur_idx < len(lookahead_buffer)) \
-                    and (_search_idx < len(search_buffer)) \
-                    and (search_buffer[_search_idx] == lookahead_buffer[_cur_idx]):
-                    matched_group.append(lookahead_buffer[_cur_idx])
-                    _cur_idx += 1
-                    _search_idx += 1
+        # where we are traversing through the sentences
+        loopInfos: List[LoopInfo] = []
+        for match in matches:
+            match_idxs = match[0]
+            match_len = match[1]
+            if match_len == 0:
+                print("WHAT")
+            cur_idx = 0
+            for idx in match_idxs:
+                if cur_idx == idx and cur_idx != 0:
+                    loopInfos[-1].numLoops += 1
+                else:
+                    cur_idx = idx
+                    loopInfos.append(LoopInfo(list(range(idx, idx + match_len))))
+                cur_idx += match_len
 
-                match_len = len(matched_group)
-                if match_len > 0:
-                    # we have a match
-                    last_match = matched_group
-                    # set loop info
-                    relative_pos = search_pos + s_idx
-                    if s_idx > 0:
-                        # handle segment prior to match
-                        loopInfo.append(LoopInfo(list(range(search_pos, relative_pos))))
-                    if relative_pos + match_len == la_pos:
-                        # this is a consecutive match, mark as a repeat
-                        loopInfo.append(LoopInfo(list(range(relative_pos, relative_pos + match_len)), None, False, 2))
-                        match_was_consecutive = True
-                    else:
-                        # handle matches and in-between segment
-                        loopInfo.append(LoopInfo(list(range(relative_pos, relative_pos + match_len))))
-                        loopInfo.append(LoopInfo(list(range(relative_pos + match_len, la_pos))))
-                        loopInfo.append(LoopInfo(list(range(la_pos, la_pos + match_len))))
+        loopInfos.sort(key=lambda info: info.sentenceIndices[0])
 
-                    found_match = True
-                    break
+        # fill in the gaps
+        filled_loopinfos = copy.deepcopy(loopInfos)
+        cur_idx = 0
+        for info in loopInfos:
+            start_idx = info.sentenceIndices[0]
+            length = len(info.sentenceIndices) * info.numLoops
+            if cur_idx != start_idx:
+                filled_loopinfos.append(LoopInfo(list(range(cur_idx, start_idx))))
+            cur_idx = start_idx + length
 
-            # update state after this check
-            if found_match:
-                lookahead_buffer = lookahead_buffer[len(last_match):]
-                la_pos += len(last_match)
-                if match_was_consecutive:
-                    # look ahead for more consecutive matches
-                    while len(lookahead_buffer) >= len(last_match) \
-                          and lookahead_buffer[:len(last_match)] == last_match:
-                        lookahead_buffer = lookahead_buffer[len(last_match):]
-                        la_pos += len(last_match)
-                        loopInfo[-1].numLoops += 1
+        if cur_idx != len(sentences):
+            filled_loopinfos.append(LoopInfo(list(range(cur_idx, len(sentences)))))
 
-                # start looking again beyond latest match
-                # TODO: could keep unmatched lines in search buffer, and track matched lines and skip them
-                search_buffer.clear()                
-                search_pos = la_pos
-            else:
-                search_buffer.append(lookahead_buffer.pop(0))
-                la_pos += 1
+        filled_loopinfos.sort(key=lambda info: info.sentenceIndices[0])
 
-        if len(search_buffer) > 0:
-            loopInfo.append(LoopInfo(list(range(search_pos, search_pos + len(search_buffer)))))
-                            
-        return loopInfo
+        return filled_loopinfos
 
-    def _lz77_generic(self, items) -> List[Tuple[List[int], int]]:
+    def _lz77(self, items) -> List[Tuple[List[int], int]]:
         """lz77 implementation for an arbitrary group of objects
            returns of match start indices and the match length for each match found"""
         
