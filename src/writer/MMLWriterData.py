@@ -358,6 +358,10 @@ class MMLSection:
 
     def write_loop(self, info: LoopInfo, mml_state) -> str:
         line_txt = ''
+        if info.label == 45:
+            print("label 45 has " + str(len(self.sentences)))
+            print(" and indices are " + str(info.sentenceIndices))
+            print("and subloop is " + str(info.subLoops))
         if info.subLoops is not None:
             for j, subloop in enumerate(info.subLoops):
                 if subloop.numLoops > 1:
@@ -377,6 +381,8 @@ class MMLSection:
         else:
             for i, idx in enumerate(info.sentenceIndices):
                 line_txt += self.sentences[idx].to_mml(mml_state)
+                if info.label == 45:
+                    print(line_txt)
                 if i != len(info.sentenceIndices) - 1:
                     line_txt += "\n"
 

@@ -103,7 +103,7 @@ class LoopOptimizer:
             # accounting for any extra commands at start of first section
             if not LoopOptimizer.fudge_group_in_dict(group, unique_groups):
                 unique_groups[i] = group
-                section.loopInfo = [LoopInfo(range(len(group)))]
+                section.loopInfo = [LoopInfo(list(range(len(group))))]
             elif not LoopOptimizer.fudge_group_in_dict(group, labels_assigned):
                 # find the first occurrence
                 for order, uniq_grp in unique_groups.items():
@@ -119,7 +119,7 @@ class LoopOptimizer:
                             core_sentences = uniq_grp[1:]
                             # and update the initial section's loop info
                             sections[order].loopInfo.insert(0, LoopInfo([0]))
-                            sections[order].loopInfo[1].sentenceIndices = range(1, len(uniq_grp))
+                            sections[order].loopInfo[1].sentenceIndices = list(range(1, len(uniq_grp)))
                         sections[order].loopInfo[-1].label = label_count
 
                         # Assign a label to this repeated pattern
@@ -160,6 +160,8 @@ class LoopOptimizer:
             if group_candidate is not None and len(section.loopInfo) == 1 and section.loopInfo[0].label is not None and not section.skip_write:
                 label_groups[group_idx].append(LabelInfo(i, 0, section.loopInfo[0].label))
             elif section.loopInfo[-1].label is not None and section.loopInfo[-1].numLoops == 1:
+                if group_candidate is not None:
+                    group_idx += 1
                 group_candidate = section.loopInfo[-1]
                 label_groups.append([LabelInfo(i, len(section.loopInfo) - 1, section.loopInfo[-1].label)])
             else:
@@ -353,14 +355,34 @@ class LoopOptimizer:
         # with a special case that if a label is used outside of a previously recognized pattern,
         # the pattern is removed as an optimization candidate (or just shrunk if possible...)
         for i, grp in enumerate(raw_label_groups):
-            matches = self._lz77(grp)
-            pruned_matches = [match for match in matches if match[1] > 1]
-            if len(pruned_matches) == 0:
+            print(raw_label_groups)
+            matches = self._lz77(grp, min_match_len=2)
+            if len(matches) == 0:
                 continue
-            print(label_groups[i][0].label)
-            print(pruned_matches)
-            
-            
+            matched_label_group = label_groups[i]
+            print(matched_label_group[0].label)
+            print(matches)
+
+            # TODO: disqualify match if a label within it is used elsewhere outside the match
+            for match in matches:
+                start_idxs = match[0]
+                match_len = match[1]
+                for start_idx in start_idxs:
+                    start_label_info = matched_label_group[start_idx]
+                    start_section = sections[start_label_info.section_index]
+                    start_loopinfo = start_section.loopInfo[start_label_info.info_index]
+                    for match_idx in range(start_idx + 1, start_idx + match_len):
+                        cur_label_info = matched_label_group[match_idx]
+                        cur_section = sections[cur_label_info.section_index]
+                        cur_loopinfo = cur_section.loopInfo[cur_label_info.info_index]
+
+                        # hide condensed sections and add their sentences to the start of the match
+                        cur_section.skip_write = True
+                        # not necessary if setences won't be written out anyways
+                        if not start_loopinfo.isRepeat:
+                            new_indices = [cur_loopinfo.sentenceIndices[j] + len(start_section.sentences) for j in range(len(cur_loopinfo.sentenceIndices))]                      
+                            start_loopinfo.subLoops[0].sentenceIndices.extend(new_indices)
+                            start_section.sentences.extend(cur_section.sentences)
 
     def simplify_loops(self, sections: List[MMLSection]):
         # simplify case of single repeated subloop within a loop
@@ -422,7 +444,7 @@ class LoopOptimizer:
 
         return filled_loopinfos
 
-    def _lz77(self, items) -> List[Tuple[List[int], int]]:
+    def _lz77(self, items, min_match_len = 1) -> List[Tuple[List[int], int]]:
         """lz77 implementation for an arbitrary group of objects
            returns of match start indices and the match length for each match found"""
         
@@ -448,7 +470,7 @@ class LoopOptimizer:
                     _search_idx += 1
 
                 match_len = len(matched_group)
-                if match_len > 0:
+                if match_len >= min_match_len:
                     # we have a match
                     last_match = matched_group
                     # set loop info

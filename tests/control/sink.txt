@@ -55,7 +55,7 @@
     "12_Sample_13.brr"    $FF $E0 $80 $01 $00 ;@53
 }
 
-; created with fur2amk 0.6.5
+; created with fur2amk 0.7.0
 
 w174 t37
 

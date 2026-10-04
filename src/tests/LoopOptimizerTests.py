@@ -58,8 +58,8 @@ def label_group_test(sections: List[MMLSection], loop_tick: int, expected: List[
     else:
         print("Pass")
 
-def lz77_test(items: List[int], expected: List[Tuple[List[int], int]]):
-    output = optimizer._lz77(items)
+def lz77_test(items: List[int], min_match_len: int, expected: List[Tuple[List[int], int]]):
+    output = optimizer._lz77(items, min_match_len)
     success, err = check_match(expected, output)
     if not success:
         print(err)
@@ -105,6 +105,7 @@ if __name__ == "__main__":
     section_3 = make_section([LoopInfo([0])])
     section_4 = make_section([LoopInfo([0], 2)])
     section_5 = make_section([LoopInfo([0], 3)])
+    section_pre = make_section([LoopInfo([0]), LoopInfo([0], 4)])
     sections = [section_1, section_2, section_3, section_4, section_5]
 
     info1 = [LabelInfo(0, 0, 0), LabelInfo(1, 0, 1)]
@@ -115,8 +116,16 @@ if __name__ == "__main__":
     info3 = [LabelInfo(2, 0, 2), LabelInfo(3, 0, 1)]
     label_group_test(sections, None, [info3])
 
+    sections = [section_pre, section_1, section_pre, section_2]
+    info4 = [LabelInfo(0, 1, 4), LabelInfo(1, 0, 0)]
+    info5 = [LabelInfo(2, 1, 4), LabelInfo(3, 0, 1)]
+    label_group_test(sections, None, [info4, info5])
+
+
     print("testing _lz77")
     items1 = [0, 1, 2, 3, 0, 1];
     items2 = [0, 1, 1, 1, 2, 3, 3]
-    lz77_test(items1, [([0, 4], 2)])
-    lz77_test(items2, [([1, 2, 3], 1), ([5, 6], 1)])
+    items3 = [36, 37, 38, 39, 35, 40, 35, 41, 42, 43, 44, 36, 37, 38, 39, 35, 40, 35, 41, 42, 43, 44, 36, 37, 38]
+    lz77_test(items1, 1, [([0, 4], 2)])
+    lz77_test(items2, 1, [([1, 2, 3], 1), ([5, 6], 1)])
+    lz77_test(items3, 2, [([0, 11], 11)])

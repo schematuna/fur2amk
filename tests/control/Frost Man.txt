@@ -34,7 +34,7 @@
     "07_DKC-Tambourine_mod.brr"  $FF $ED $80 $05 $1C ;@37
 }
 
-; created with fur2amk 0.6.5
+; created with fur2amk 0.7.0
 
 w128 t30
 
@@ -251,13 +251,10 @@ g+64 r64 g+64 r32^64 f+64 r64 e8
 #3
 ; section 00
 @34 v174
-(19)[o5 d+1]
-; section 01
-(20)[o4 g+1]
+(19)[o5 d+1
+o4 g+1]
 ; section 02
 (19)
-; section 03
-(20)
 /
 ; reset state on loop
 @34 
@@ -307,13 +304,10 @@ b8 a32 r16^32 g+16^32 r32 f+32 r32 f+8 g+32 r32 g+4^8
 #4
 ; section 00
 @34 v162 y7
-(24)[o4 e1]
-; section 01
-(25)[o3 a1]
+(24)[o4 e1
+o3 a1]
 ; section 02
 (24)
-; section 03
-(25)
 /
 ; reset state on loop
 @34 

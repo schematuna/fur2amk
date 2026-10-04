@@ -51,7 +51,7 @@
     "09_jsma502a__2024-06-24_182000_.brr"         $FF $EE $80 $02 $A3 ;@46
 }
 
-; created with fur2amk 0.6.5
+; created with fur2amk 0.7.0
 
 w254 t76
 
@@ -126,13 +126,10 @@ c64 @30 v131 c64 v121 c64 v115 c64 v111 c64 v104 c64 v99 c64 v77 c64 @33 v187 c8
 (5)
 ; section 0D
 (!3, 3) (!4, -1) @45
-(6)[o3 b1^1 o4 f+1]
-; section 0E
-(7)[r1 b1^1]
+(6)[o3 b1^1 o4 f+1
+r1 b1^1]
 ; section 0F
 (6)
-; section 10
-(7)
 ; section 11
 r1^1^1
 ; disable light staccato
@@ -226,21 +223,14 @@ $F4$01
 (15)
 ; section 05
 (!3, 3) (!4, -1) $F4$01 @45 $FE v190
-(16)[o3 b1^1 o4 f+1]
-; section 06
-(17)[o3 b1^1^1]
+(16)[o3 b1^1 o4 f+1
+o3 b1^1^1]
 ; section 07
 (16)
-; section 08
-(17)
 ; section 09
 (16)
-; section 0A
-(17)
 ; section 0B
 (16)
-; section 0C
-(17)
 ; section 0D
 (!99, 0) @46 v187
 (18)[o4 c4^8 g4^8 o3 g4^8 a4^8 o4 e2 c4^8 d8 a4^8 o3 g8]
@@ -264,17 +254,12 @@ r1
 a1^1^1^1
 ; section 05
 (!3, 3) (!4, -1) @45
-(20)[v190 o5 c+2 v137 o6 c+1 o5 f+1^2^4]
-; section 06
-(21)[o4 b1^1^2^4]
+(20)[v190 o5 c+2 v137 o6 c+1 o5 f+1^2^4
+o4 b1^1^2^4]
 ; section 07
 (20)
-; section 08
-(21)
 ; section 09
 (20)
-; section 0A
-(21)
 ; section 0B
 (20)
 ; section 0C
@@ -339,9 +324,6 @@ o4 g+8 a+8
 o5 d+8 c8 o4 a+8 o5 f8
 o6 c8 o5 f8
 g+8 a+8 o6 f8 o5 a+8 o6 c8 d+8
-]
-; section 06
-(25)[
 o5 a+8 f8 g+8 d+8
 c+8 d+8 c8 c+8
 g+8 f8 d+8 o4 a+8
@@ -352,16 +334,10 @@ o5 f8 a+8 d+8 f8
 ]
 ; section 07
 (24)
-; section 08
-(25)
 ; section 09
 (24)
-; section 0A
-(25)
 ; section 0B
 (24)
-; section 0C
-(25)
 ; section 0D
 r1^1^1^1^1^1^1^1^1^1^1^1^1^1^1
 
