@@ -313,6 +313,8 @@ class LoopOptimizer:
         condensed_loops: List[LoopInfo] = []
         condensed_labels: set = set()
         for section in sections:
+            if section.skip_write:
+                continue
             # can't condense across the loop point
             if section.tick() == loop_tick:
                 loop_candidate = None
