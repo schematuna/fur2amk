@@ -58,8 +58,8 @@ def label_group_test(sections: List[MMLSection], loop_tick: int, expected: List[
     else:
         print("Pass")
 
-def generic_lz77_test(items: List[int], expected: List[Tuple[List[int], int]]):
-    output = optimizer._lz77_generic(items)
+def lz77_test(items: List[int], expected: List[Tuple[List[int], int]]):
+    output = optimizer._lz77(items)
     success, err = check_match(expected, output)
     if not success:
         print(err)
@@ -115,8 +115,8 @@ if __name__ == "__main__":
     info3 = [LabelInfo(2, 0, 2), LabelInfo(3, 0, 1)]
     label_group_test(sections, None, [info3])
 
-    print("testing _lz77_generic")
+    print("testing _lz77")
     items1 = [0, 1, 2, 3, 0, 1];
     items2 = [0, 1, 1, 1, 2, 3, 3]
-    generic_lz77_test(items1, [([0, 4], 2)])
-    generic_lz77_test(items2, [([1, 2, 3], 1), ([5, 6], 1)])
+    lz77_test(items1, [([0, 4], 2)])
+    lz77_test(items2, [([1, 2, 3], 1), ([5, 6], 1)])

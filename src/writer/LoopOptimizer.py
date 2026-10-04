@@ -148,16 +148,6 @@ class LoopOptimizer:
                         break
         return label_count
 
-    def condense_sections(self, sections: List[MMLSection], loop_tick: int):
-        # first, gather groups of sections optimised by label_repeated_sections
-        label_groups = self._get_label_groups(sections, loop_tick)
-
-
-        for grp in label_groups:
-            for labelled_sec in grp:
-                label = labelled_sec.label
-
-
     def _get_label_groups(self, sections: List[MMLSection], loop_tick: int) -> List[List[LabelInfo]]:
         group_candidate = None
         label_groups: List[List[LabelInfo]] = []
@@ -167,9 +157,9 @@ class LoopOptimizer:
                 if group_candidate is not None:
                     group_candidate = None
                     group_idx += 1
-            if group_candidate is not None and len(section.loopInfo) == 1 and section.loopInfo[0].label is not None:
+            if group_candidate is not None and len(section.loopInfo) == 1 and section.loopInfo[0].label is not None and not section.skip_write:
                 label_groups[group_idx].append(LabelInfo(i, 0, section.loopInfo[0].label))
-            elif section.loopInfo[-1].label is not None:
+            elif section.loopInfo[-1].label is not None and section.loopInfo[-1].numLoops == 1:
                 group_candidate = section.loopInfo[-1]
                 label_groups.append([LabelInfo(i, len(section.loopInfo) - 1, section.loopInfo[-1].label)])
             else:
@@ -178,12 +168,12 @@ class LoopOptimizer:
                     group_idx += 1
 
         # only want sequences of labelled sections
-        for grp in label_groups:
-            if len(grp) < 2:
-                label_groups.remove(grp)
+        new_label_groups: List[List[LabelInfo]] = []
+        for i, grp in enumerate(label_groups):
+            if len(grp) > 1:
+                new_label_groups.append(grp)
 
-        return label_groups
-
+        return new_label_groups
     
     def optimize_subloops(self, sections: List[MMLSection]):
         """optimize finer tuned intra-section subloops
@@ -313,7 +303,7 @@ class LoopOptimizer:
 
         return label_count
 
-    def condense_sections_original(self, sections: List[MMLSection], loop_tick: int):
+    def rollup_sections(self, sections: List[MMLSection], loop_tick: int):
         # a section that is a candidate for condensation is a section that is one self-contained labelled loop
         # if any following sections are just a repeat of that label, they should be folded into the first instance
         loop_candidate: LoopInfo = None
@@ -348,6 +338,29 @@ class LoopOptimizer:
         for loop in condensed_loops:
             loop.label = None
 
+    def condense_sections(self, sections: List[MMLSection], loop_tick: int):
+        # first, gather groups of sections optimised by label_repeated_sections
+        label_groups = self._get_label_groups(sections, loop_tick)
+
+        raw_label_groups: List[List[int]] = []
+        for grp in label_groups:
+            int_grp: List[int] = []
+            for labelled_sec in grp:
+                int_grp.append(labelled_sec.label)
+            raw_label_groups.append(int_grp)
+
+        # need to use some combination of lz77 and lz77_duplex here...
+        # with a special case that if a label is used outside of a previously recognized pattern,
+        # the pattern is removed as an optimization candidate (or just shrunk if possible...)
+        for i, grp in enumerate(raw_label_groups):
+            matches = self._lz77(grp)
+            pruned_matches = [match for match in matches if match[1] > 1]
+            if len(pruned_matches) == 0:
+                continue
+            print(label_groups[i][0].label)
+            print(pruned_matches)
+            
+            
 
     def simplify_loops(self, sections: List[MMLSection]):
         # simplify case of single repeated subloop within a loop
