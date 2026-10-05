@@ -258,7 +258,6 @@ class MMLWriter:
 
         txt = ''
         for c in range(self.mml_data.num_channels):
-            print("DOING CHANNEL " + str(c))
             if len(self.mml_data.notes[c]) == 0 and len(self.mml_data.commands[c]) == 0:
                 continue
             word_txt = ''

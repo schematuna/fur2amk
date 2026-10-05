@@ -153,11 +153,13 @@ class LoopOptimizer:
         label_groups: List[List[LabelInfo]] = []
         group_idx: int = 0
         for i, section in enumerate(sections):
+            if section.skip_write:
+                continue
             if section.tick() == loop_tick:
                 if group_candidate is not None:
                     group_candidate = None
                     group_idx += 1
-            if group_candidate is not None and len(section.loopInfo) == 1 and section.loopInfo[0].label is not None and not section.skip_write:
+            if group_candidate is not None and len(section.loopInfo) == 1 and section.loopInfo[0].label is not None:
                 label_groups[group_idx].append(LabelInfo(i, 0, section.loopInfo[0].label))
             elif section.loopInfo[-1].label is not None and section.loopInfo[-1].numLoops == 1:
                 if group_candidate is not None:
@@ -312,6 +314,7 @@ class LoopOptimizer:
         # labels we condensed. Store for performant cleanup
         condensed_loops: List[LoopInfo] = []
         condensed_labels: set = set()
+        sections_to_remove: List[MMLSection] = []
         for section in sections:
             if section.skip_write:
                 continue
@@ -322,6 +325,7 @@ class LoopOptimizer:
                 # fold this section into the candidate and skip writing it
                 loop_candidate.numLoops += section.loopInfo[0].numLoops
                 section.skip_write = True
+                sections_to_remove.append(section)
                 if loop_candidate not in condensed_loops and not loop_candidate.isRepeat:
                     condensed_loops.append(loop_candidate)
                     condensed_labels.add(loop_candidate.label)
@@ -342,6 +346,10 @@ class LoopOptimizer:
         for loop in condensed_loops:
             loop.label = None
 
+        # TODO: why on earth does adding this break everything
+        # for sec in sections_to_remove:
+        #     sections.remove(sec)
+
     def condense_sections(self, sections: List[MMLSection], loop_tick: int):
         # first, gather groups of sections optimised by label_repeated_sections
         label_groups = self._get_label_groups(sections, loop_tick)
@@ -356,14 +364,12 @@ class LoopOptimizer:
         # need to use some combination of lz77 and lz77_duplex here...
         # with a special case that if a label is used outside of a previously recognized pattern,
         # the pattern is removed as an optimization candidate (or just shrunk if possible...)
+        sections_to_remove: List[MMLSection] = []
         for i, grp in enumerate(raw_label_groups):
-            print(raw_label_groups)
             matches = self._lz77(grp, min_match_len=2)
             if len(matches) == 0:
                 continue
             matched_label_group = label_groups[i]
-            print(matched_label_group[0].label)
-            print(matches)
 
             # TODO: disqualify match if a label within it is used elsewhere outside the match
             for match in matches:
@@ -380,11 +386,16 @@ class LoopOptimizer:
 
                         # hide condensed sections and add their sentences to the start of the match
                         cur_section.skip_write = True
+                        sections_to_remove.append(cur_section)
                         # not necessary if setences won't be written out anyways
                         if not start_loopinfo.isRepeat:
                             new_indices = [cur_loopinfo.sentenceIndices[j] + len(start_section.sentences) for j in range(len(cur_loopinfo.sentenceIndices))]                      
+                            # TODO: this isn't right... should really do all this before subloop creation
                             start_loopinfo.subLoops[0].sentenceIndices.extend(new_indices)
                             start_section.sentences.extend(cur_section.sentences)
+
+        for sec in sections_to_remove:
+            sections.remove(sec)
 
     def simplify_loops(self, sections: List[MMLSection]):
         # simplify case of single repeated subloop within a loop
