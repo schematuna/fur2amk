@@ -314,8 +314,8 @@ class LoopOptimizer:
         # labels we condensed. Store for performant cleanup
         condensed_loops: List[LoopInfo] = []
         condensed_labels: set = set()
-        sections_to_remove: List[MMLSection] = []
-        for section in sections:
+        sections_to_remove: List[int] = []
+        for i, section in enumerate(sections):
             if section.skip_write:
                 continue
             # can't condense across the loop point
@@ -325,7 +325,7 @@ class LoopOptimizer:
                 # fold this section into the candidate and skip writing it
                 loop_candidate.numLoops += section.loopInfo[0].numLoops
                 section.skip_write = True
-                sections_to_remove.append(section)
+                sections_to_remove.append(i)
                 if loop_candidate not in condensed_loops and not loop_candidate.isRepeat:
                     condensed_loops.append(loop_candidate)
                     condensed_labels.add(loop_candidate.label)
@@ -346,9 +346,9 @@ class LoopOptimizer:
         for loop in condensed_loops:
             loop.label = None
 
-        # TODO: why on earth does adding this break everything
-        # for sec in sections_to_remove:
-        #     sections.remove(sec)
+        for sec in reversed(sections_to_remove):
+            sections.pop(sec)
+            
 
     def condense_sections(self, sections: List[MMLSection], loop_tick: int):
         # first, gather groups of sections optimised by label_repeated_sections
@@ -364,7 +364,7 @@ class LoopOptimizer:
         # need to use some combination of lz77 and lz77_duplex here...
         # with a special case that if a label is used outside of a previously recognized pattern,
         # the pattern is removed as an optimization candidate (or just shrunk if possible...)
-        sections_to_remove: List[MMLSection] = []
+        sections_to_remove: List[int] = []
         for i, grp in enumerate(raw_label_groups):
             matches = self._lz77(grp, min_match_len=2)
             if len(matches) == 0:
@@ -386,7 +386,7 @@ class LoopOptimizer:
 
                         # hide condensed sections and add their sentences to the start of the match
                         cur_section.skip_write = True
-                        sections_to_remove.append(cur_section)
+                        sections_to_remove.append(cur_label_info.section_index)
                         # not necessary if setences won't be written out anyways
                         if not start_loopinfo.isRepeat:
                             new_indices = [cur_loopinfo.sentenceIndices[j] + len(start_section.sentences) for j in range(len(cur_loopinfo.sentenceIndices))]                      
@@ -394,8 +394,8 @@ class LoopOptimizer:
                             start_loopinfo.subLoops[0].sentenceIndices.extend(new_indices)
                             start_section.sentences.extend(cur_section.sentences)
 
-        for sec in sections_to_remove:
-            sections.remove(sec)
+        for sec in reversed(sections_to_remove):
+            sections.pop(sec)
 
     def simplify_loops(self, sections: List[MMLSection]):
         # simplify case of single repeated subloop within a loop
