@@ -153,8 +153,6 @@ class LoopOptimizer:
         label_groups: List[List[LabelInfo]] = []
         group_idx: int = 0
         for i, section in enumerate(sections):
-            if section.skip_write:
-                continue
             if section.tick() == loop_tick:
                 if group_candidate is not None:
                     group_candidate = None
@@ -316,15 +314,14 @@ class LoopOptimizer:
         condensed_labels: set = set()
         sections_to_remove: List[int] = []
         for i, section in enumerate(sections):
-            if section.skip_write:
-                continue
             # can't condense across the loop point
             if section.tick() == loop_tick:
                 loop_candidate = None
+            marked_for_removal: bool = False
             if loop_candidate and len(section.loopInfo) == 1 and section.loopInfo[0].label == loop_candidate.label:
                 # fold this section into the candidate and skip writing it
                 loop_candidate.numLoops += section.loopInfo[0].numLoops
-                section.skip_write = True
+                marked_for_removal = True
                 sections_to_remove.append(i)
                 if loop_candidate not in condensed_loops and not loop_candidate.isRepeat:
                     condensed_loops.append(loop_candidate)
@@ -335,7 +332,7 @@ class LoopOptimizer:
                 loop_candidate = None
 
             # keep track track of standalone labels that will no longer be needed
-            if not section.skip_write:
+            if not marked_for_removal:
                 section_labels = [loop.label for loop in section.loopInfo if loop.label is not None]
                 repeated_labels = [label for label in section_labels if label in condensed_labels]
                 for loop in condensed_loops:
@@ -384,8 +381,7 @@ class LoopOptimizer:
                         cur_section = sections[cur_label_info.section_index]
                         cur_loopinfo = cur_section.loopInfo[cur_label_info.info_index]
 
-                        # hide condensed sections and add their sentences to the start of the match
-                        cur_section.skip_write = True
+                        # remove condensed sections and add their sentences to the start of the match
                         sections_to_remove.append(cur_label_info.section_index)
                         # not necessary if setences won't be written out anyways
                         if not start_loopinfo.isRepeat:

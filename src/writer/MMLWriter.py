@@ -317,8 +317,6 @@ class MMLWriter:
                 return txt
 
             for i, section in enumerate(sections):
-                if section.skip_write:
-                    continue
                 if not has_loop_point and i == 0:
                     word_txt += get_commands_text(post_loop_commands, 'reset state on loop')
                 elif has_loop_point and section.tick() == self.mml_data.loop_tick:
