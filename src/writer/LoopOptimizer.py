@@ -362,9 +362,7 @@ class LoopOptimizer:
                 int_grp.append(labelled_sec.label)
             raw_label_groups.append(int_grp)
 
-        # need to use some combination of lz77 and lz77_duplex here...
-        # with a special case that if a label is used outside of a previously recognized pattern,
-        # the pattern is removed as an optimization candidate (or just shrunk if possible...)
+        # perform lz77 on these label groups
         sections_to_remove: List[int] = []
         for i, grp in enumerate(raw_label_groups):
             matches = self._lz77(grp, min_match_len=2)
@@ -376,14 +374,14 @@ class LoopOptimizer:
                 start_idxs = match[0]
                 match_len = match[1]
 
-                # condensing removes or grows the labelled loops in the match, so repeats of those labels
-                # outside the match lose their definition. Make them plain loops with their own sentences.
-                # TODO: rewrite this to be more readable
-                match_infos = [matched_label_group[j] for s in start_idxs for j in range(s, s + match_len)]
-                # the first occurrence has to be an initial loop to absorb the match
+                # The start of the match must be a label definition
                 if all(sections[matched_label_group[s].section_index].loopInfo[matched_label_group[s].info_index].isRepeat
                        for s in start_idxs):
                     continue
+
+                # any label definitions that got condensed can't be referenced anymore outside of the match
+                # so turn those outliers into plain unlabelled sentences.
+                match_infos = [matched_label_group[j] for s in start_idxs for j in range(s, s + match_len)]
                 match_secs = {info.section_index for info in match_infos}
                 match_labels = {sections[info.section_index].loopInfo[info.info_index].label for info in match_infos
                                 if not sections[info.section_index].loopInfo[info.info_index].isRepeat}

@@ -15,6 +15,7 @@ class MMLNote:
     pre_note_commands: List[MMLCommand] = field(default_factory=lambda: [])
 
     # commands to be written after a note ends
+    # just legato for now, for pretty printing
     post_note_commands: List[MMLCommand] = field(default_factory=lambda: [])
 
     # pitchbends must occur within the duration of the note

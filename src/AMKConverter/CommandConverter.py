@@ -340,9 +340,9 @@ class LegatoConverter:
                 # No note active, emit as standalone command
                 commands.append(LegatoToggle(region.start_tick))
 
-            # Find note that starts at region end and add OFF toggle to its pre_note_commands
+            # Find note that ends region and add OFF toggle to its post note commands
             # AMK docs say we have to turn legato off in the middle of the previous note, but that
-            # doesn't seem to be necessary.
+            # is only necessary at the very end of the song
             if region.end_tick is not None:
                 end_note = AMKUtil.get_note_ending_at(region.end_tick, notes)
                 if end_note:
