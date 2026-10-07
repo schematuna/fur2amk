@@ -47,6 +47,7 @@ class MMLWord:
     duration: int
     note: Optional[int] = None
     commands: List[MMLCommand] = field(default_factory=list)
+    post_commands: List[MMLCommand] = field(default_factory=list)
 
     def _want_space_after_duration(self, tick: int) -> str:
         # insert a space after the duration if the following tick contains any non-tiebreak commands
@@ -142,6 +143,10 @@ class MMLWord:
         end_tick = self.tick + self.duration
         if cur_tick < end_tick:
             word_txt += DurationFormatter.format(end_tick - cur_tick, cont)
+
+        for cmd in self.post_commands:
+            word_txt += ' '
+            word_txt += cmd.get_text(mml_state).strip()
 
         return word_txt
 

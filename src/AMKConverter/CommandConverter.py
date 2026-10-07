@@ -344,9 +344,9 @@ class LegatoConverter:
             # AMK docs say we have to turn legato off in the middle of the previous note, but that
             # doesn't seem to be necessary.
             if region.end_tick is not None:
-                end_note = AMKUtil.get_note_starting_at(region.end_tick, notes)
+                end_note = AMKUtil.get_note_ending_at(region.end_tick, notes)
                 if end_note:
-                    end_note.pre_note_commands.append(LegatoToggle(end_note.tick))
+                    end_note.post_note_commands.append(LegatoToggle(end_note.tick + end_note.duration))
                 else:
                     # No note starts at end_tick, emit as standalone command
                     commands.append(LegatoToggle(region.end_tick))

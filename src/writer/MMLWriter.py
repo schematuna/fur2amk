@@ -91,7 +91,7 @@ class MMLWriter:
             if isinstance(duration, MMLRest):
                 word = MMLWord(duration.tick, duration.duration, None)
             else:
-                word = MMLWord(duration.tick, duration.duration, duration.note, duration.pre_note_commands)
+                word = MMLWord(duration.tick, duration.duration, duration.note, duration.pre_note_commands, duration.post_note_commands)
 
                 if duration.instrument != cur_ins:
                     word.commands.append(InstrumentChange(duration.tick, duration.instrument))
@@ -186,6 +186,11 @@ class MMLWriter:
                     cur_tremolo = command
                 if isinstance(command, TremoloOff):
                     tremolo_on = False
+
+            # check for legato post command
+            for command in word.post_commands:
+                if isinstance(command, LegatoToggle):
+                    legato_on = not legato_on
 
             # need to explicitly handle instrument change at loop point, so it's correct on loop
             if first_note_after_loop:

@@ -378,6 +378,7 @@ class LoopOptimizer:
 
                 # condensing removes or grows the labelled loops in the match, so repeats of those labels
                 # outside the match lose their definition. Make them plain loops with their own sentences.
+                # TODO: rewrite this to be more readable
                 match_infos = [matched_label_group[j] for s in start_idxs for j in range(s, s + match_len)]
                 # the first occurrence has to be an initial loop to absorb the match
                 if all(sections[matched_label_group[s].section_index].loopInfo[matched_label_group[s].info_index].isRepeat

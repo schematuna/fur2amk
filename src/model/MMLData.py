@@ -14,6 +14,9 @@ class MMLNote:
     # e.g. setting/resetting note state
     pre_note_commands: List[MMLCommand] = field(default_factory=lambda: [])
 
+    # commands to be written after a note ends
+    post_note_commands: List[MMLCommand] = field(default_factory=lambda: [])
+
     # pitchbends must occur within the duration of the note
     # Unused since switched off $DD onto $EB
     pitch_bends: List[PitchBend] = field(default_factory=lambda: [])

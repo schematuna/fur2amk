@@ -51,6 +51,14 @@ class AMKUtil:
             if note.tick == tick:
                 return note
         return None
+
+    @staticmethod
+    def get_note_ending_at(tick: int, notes: List[MMLNote]) -> Optional[MMLNote]:
+        """Find the note that end at the given tick."""
+        for note in notes:
+            if note.tick + note.duration == tick:
+                return note
+        return None
     
     @staticmethod
     def split_note(note, tick) -> Tuple[MMLNote, MMLNote]:
