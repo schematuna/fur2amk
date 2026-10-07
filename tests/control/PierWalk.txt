@@ -105,18 +105,51 @@ v213
 v196 o3 c4^8 v174 o2 b2 v185 e2
 v174 g8 v185 g8 r8 @55 v219 $E5$00$1C$57 o4 c+1^1^8
 ; section 15
-[v221 d1^1
-v223 c+1^1^8
-v219 o3 a4^8 b2 v228 o4 c+2 v247 d+2^8
-v219 c+4^8 d+4^8 f2^8 v218 c+8 v224 c+8 r8 v219 g+1^1^1^1^4
-v221 o3 b4^8 a+2 o4 d+2 v206 o3 f+2^8
-v221 b4^8 a+2 d+2 v219 g+2^8
-bv221 1^1^1^1^4^8 a+2 o4 d+2 v206 o3 f+2^8
-v221 b4^8 a+2 d+2 v219 f2^8
-v221 b4^8 a+2 d+2 v219 f2^8
-v233 o4 c4^8 v221 o3 b2 v233 e2 g2^8
-v219 o4 c4^8 o3 b2 v233 e2 v224 a2^8
-v233 o4 c4^8 v206 o3 b2 v219 e2 v206 g8 v219 g8 r8 v239 o4 c+1^1^8]3
+(7)[v221 d1^1]
+; section 16
+(8)[v223 c+1^1^8]
+; section 18
+(9)[v219 o3 a4^8 b2 v228 o4 c+2 v247 d+2^8]
+; section 19
+(10)[v219 c+4^8 d+4^8 f2^8 v218 c+8 v224 c+8 r8 v219 g+1^1^1^1^4]
+; section 1C
+(6)[v221 o3 b4^8 a+2 o4 d+2 v206 o3 f+2^8]
+; section 1D
+(11)[v221 b4^8 a+2 d+2 v219 g+2^8]
+; section 1E
+(6)
+; section 1F
+(12)[v221 b4^8 a+2 d+2 v219 f2^8]
+; section 20
+(13)[v233 o4 c4^8 v221 o3 b2 v233 e2 g2^8]
+; section 21
+(14)[v219 o4 c4^8 o3 b2 v233 e2 v224 a2^8]
+; section 22
+(15)[v233 o4 c4^8 v206 o3 b2 v219 e2 v206 g8 v219 g8 r8 v239 o4 c+1^1^8]
+; section 23
+(7)
+; section 24
+(8)
+; section 26
+(9)
+; section 27
+(10)
+; section 2A
+(6)
+; section 2B
+(11)
+; section 2C
+(6)
+; section 2D
+(12)
+; section 2E
+(13)
+; section 2F
+(14)
+; section 30
+(15)
+; section 31
+(7)
 ; section 32
 (8)
 ; section 34
@@ -317,18 +350,51 @@ o4 c+4^8 c4^8 v162 d2^8 v206 o3 a+8 a+8 r8 v185 o4 c+1^1^1^1^4
 v162 g4^8 v185 c+2 v206 o3 f+2
 v156 a8 v185 a8 r8 @55 v221 $E5$00$1C$57 o4 a1^1^8
 ; section 15
-[v192 a1^1
-v221 b1^1^8
-v192 a4^8 v185 g2 v228 a2 v219 b2^8
-a+4^8 g+4^8 v233 a+2^8 v219 f8 v206 f8 r8 v239 o5 c+1^1^1^1^4
-v221 c+4^8 c2 v219 d2 v208 o4 g+2^8
-v221 o5 c+4^8 c2 f2 v208 o4 a+2^8
-o5 c+v221 1^1^1^1^4^8 c2 v219 d2 v208 o4 g+2^8
-v221 o5 c+4^8 c2 f2 v219 e2^8
-v221 c+4^8 c2 f2 v219 e2^8
-v192 g4^8 v219 c+2 v221 d+2 r2^8
-v206 g4^8 v192 a2 b2 v233 e2^8
-v192 g4^8 v219 c+2 v221 o4 f+2 v185 a8 v219 a8 r8 v239 a1^1^8]3
+(36)[v192 a1^1]
+; section 16
+(37)[v221 b1^1^8]
+; section 18
+(38)[v192 a4^8 v185 g2 v228 a2 v219 b2^8]
+; section 19
+(39)[a+4^8 g+4^8 v233 a+2^8 v219 f8 v206 f8 r8 v239 o5 c+1^1^1^1^4]
+; section 1C
+(35)[v221 c+4^8 c2 v219 d2 v208 o4 g+2^8]
+; section 1D
+(40)[v221 o5 c+4^8 c2 f2 v208 o4 a+2^8]
+; section 1E
+(35)
+; section 1F
+(41)[v221 o5 c+4^8 c2 f2 v219 e2^8]
+; section 20
+(42)[v192 g4^8 v219 c+2 v221 d+2 r2^8]
+; section 21
+(43)[v206 g4^8 v192 a2 b2 v233 e2^8]
+; section 22
+(44)[v192 g4^8 v219 c+2 v221 o4 f+2 v185 a8 v219 a8 r8 v239 a1^1^8]
+; section 23
+(36)
+; section 24
+(37)
+; section 26
+(38)
+; section 27
+(39)
+; section 2A
+(35)
+; section 2B
+(40)
+; section 2C
+(35)
+; section 2D
+(41)
+; section 2E
+(42)
+; section 2F
+(43)
+; section 30
+(44)
+; section 31
+(36)
 ; section 32
 (37)
 ; section 34

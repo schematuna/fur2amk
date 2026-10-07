@@ -183,8 +183,8 @@ class LoopOptimizer:
 
         for i, section in enumerate(sections):
             for loop in section.loopInfo:
-                # Only optimize if this is the initial labelled loop
-                if loop.label is not None and not loop.isRepeat:
+                # only optimize intial labelled sections and unlabelled repeated sections
+                if (loop.label is not None and not loop.isRepeat) or (loop.label is None and loop.numLoops > 1):
                     looped_sentences: List[MMLSentence] = []
                     for idx in loop.sentenceIndices:
                         looped_sentences.append(section.sentences[idx])
@@ -204,8 +204,8 @@ class LoopOptimizer:
         # links unique groups of sentences to the LoopInfo object from their first occurrence
         unique_groups: List[Tuple[List[MMLSentence], LoopInfo]] = []
         for section in sections:
-            # Only optimize section if it hasn't been touched yet. i.e. doesn't have a label
-            if len(section.loopInfo) == 1 and section.loopInfo[0].label is None:
+            # Only optimize section if it hasn't been touched yet
+            if len(section.loopInfo) == 1 and section.loopInfo[0].label is None and section.loopInfo[0].numLoops == 1 and section.loopInfo[0].subLoops is None:
                 matches = self._lz77(section.sentences)
                 loopinfos = self._make_loop_info(section.sentences, matches)
 
@@ -368,10 +368,25 @@ class LoopOptimizer:
                 continue
             matched_label_group = label_groups[i]
 
-            # TODO: disqualify match if a label within it is used elsewhere outside the match
             for match in matches:
                 start_idxs = match[0]
                 match_len = match[1]
+
+                # disqualify the match if a label defined in a removed section is still referenced by a surviving one
+                removed_secs = set()
+                defined_labels = set()
+                for start_idx in start_idxs:
+                    for match_idx in range(start_idx + 1, start_idx + match_len):
+                        info = matched_label_group[match_idx]
+                        removed_secs.add(info.section_index)
+                        removed_loopinfo = sections[info.section_index].loopInfo[info.info_index]
+                        if not removed_loopinfo.isRepeat:
+                            defined_labels.add(removed_loopinfo.label)
+                if any(loop.isRepeat and loop.label in defined_labels
+                       for sec_idx, sec in enumerate(sections) if sec_idx not in removed_secs
+                       for loop in sec.loopInfo):
+                    continue
+
                 for start_idx in start_idxs:
                     start_label_info = matched_label_group[start_idx]
                     start_section = sections[start_label_info.section_index]
@@ -385,9 +400,8 @@ class LoopOptimizer:
                         sections_to_remove.append(cur_label_info.section_index)
                         # not necessary if setences won't be written out anyways
                         if not start_loopinfo.isRepeat:
-                            new_indices = [cur_loopinfo.sentenceIndices[j] + len(start_section.sentences) for j in range(len(cur_loopinfo.sentenceIndices))]                      
-                            # TODO: this isn't right... should really do all this before subloop creation
-                            start_loopinfo.subLoops[0].sentenceIndices.extend(new_indices)
+                            new_indices = [j + len(start_section.sentences) for j in range(len(cur_section.sentences))]
+                            start_loopinfo.sentenceIndices.extend(new_indices)
                             start_section.sentences.extend(cur_section.sentences)
 
         for sec in reversed(sections_to_remove):

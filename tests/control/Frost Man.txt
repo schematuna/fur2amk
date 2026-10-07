@@ -251,8 +251,10 @@ g+64 r64 g+64 r32^64 f+64 r64 e8
 #3
 ; section 00
 @34 v174
-[o5 d+1
-o4 g+1]2
+[
+o5 d+1
+o4 g+1
+]2
 /
 ; reset state on loop
 @34 
@@ -302,8 +304,10 @@ b8 a32 r16^32 g+16^32 r32 f+32 r32 f+8 g+32 r32 g+4^8
 #4
 ; section 00
 @34 v162 y7
-[o4 e1
-o3 a1]2
+[
+o4 e1
+o3 a1
+]2
 /
 ; reset state on loop
 @34 
