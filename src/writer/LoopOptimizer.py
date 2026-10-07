@@ -45,16 +45,19 @@ class LoopOptimizer:
         # check for equality without initial commands
         if group1_local == group2_local:
             tmp_cmds = initial_cmds2.copy()
-            common_cmds: list[MMLCommand] = []
+            common_cmds1: list[MMLCommand] = []
+            common_cmds2: list[MMLCommand] = []
             for cmd in initial_cmds1:
                 if cmd in tmp_cmds:
-                    common_cmds.append(cmd)
-                    tmp_cmds.remove(cmd)
+                    common_cmds1.append(cmd)
+                    # keep group2's own command object, since commands carry their own tick
+                    common_cmds2.append(tmp_cmds.pop(tmp_cmds.index(cmd)))
+            common_cmds = common_cmds1
 
             # rebuild sections with split initial commands
             if len(common_cmds) > 0:
-                group1_local[0] = LoopOptimizer.rehead_sentence(group1_local[0], common_cmds)
-                group2_local[0] = LoopOptimizer.rehead_sentence(group2_local[0], common_cmds)
+                group1_local[0] = LoopOptimizer.rehead_sentence(group1_local[0], common_cmds1)
+                group2_local[0] = LoopOptimizer.rehead_sentence(group2_local[0], common_cmds2)
 
             unique1 = initial_cmds1.copy()
             for cmd in common_cmds:
@@ -157,7 +160,8 @@ class LoopOptimizer:
                 if group_candidate is not None:
                     group_candidate = None
                     group_idx += 1
-            if group_candidate is not None and len(section.loopInfo) == 1 and section.loopInfo[0].label is not None:
+            if group_candidate is not None and len(section.loopInfo) == 1 and section.loopInfo[0].label is not None \
+                    and section.loopInfo[0].numLoops == 1:
                 label_groups[group_idx].append(LabelInfo(i, 0, section.loopInfo[0].label))
             elif section.loopInfo[-1].label is not None and section.loopInfo[-1].numLoops == 1:
                 if group_candidate is not None:
@@ -372,20 +376,24 @@ class LoopOptimizer:
                 start_idxs = match[0]
                 match_len = match[1]
 
-                # disqualify the match if a label defined in a removed section is still referenced by a surviving one
-                removed_secs = set()
-                defined_labels = set()
-                for start_idx in start_idxs:
-                    for match_idx in range(start_idx + 1, start_idx + match_len):
-                        info = matched_label_group[match_idx]
-                        removed_secs.add(info.section_index)
-                        removed_loopinfo = sections[info.section_index].loopInfo[info.info_index]
-                        if not removed_loopinfo.isRepeat:
-                            defined_labels.add(removed_loopinfo.label)
-                if any(loop.isRepeat and loop.label in defined_labels
-                       for sec_idx, sec in enumerate(sections) if sec_idx not in removed_secs
-                       for loop in sec.loopInfo):
+                # condensing removes or grows the labelled loops in the match, so repeats of those labels
+                # outside the match lose their definition. Make them plain loops with their own sentences.
+                match_infos = [matched_label_group[j] for s in start_idxs for j in range(s, s + match_len)]
+                # the first occurrence has to be an initial loop to absorb the match
+                if all(sections[matched_label_group[s].section_index].loopInfo[matched_label_group[s].info_index].isRepeat
+                       for s in start_idxs):
                     continue
+                match_secs = {info.section_index for info in match_infos}
+                match_labels = {sections[info.section_index].loopInfo[info.info_index].label for info in match_infos
+                                if not sections[info.section_index].loopInfo[info.info_index].isRepeat}
+                for sec_idx, sec in enumerate(sections):
+                    if sec_idx in match_secs:
+                        continue
+                    for loop in sec.loopInfo:
+                        if loop.isRepeat and loop.label in match_labels:
+                            loop.sentenceIndices = list(range(loop.sentenceIndices[0], loop.sentenceIndices[-1]))
+                            loop.label = None
+                            loop.isRepeat = False
 
                 for start_idx in start_idxs:
                     start_label_info = matched_label_group[start_idx]
@@ -394,7 +402,6 @@ class LoopOptimizer:
                     for match_idx in range(start_idx + 1, start_idx + match_len):
                         cur_label_info = matched_label_group[match_idx]
                         cur_section = sections[cur_label_info.section_index]
-                        cur_loopinfo = cur_section.loopInfo[cur_label_info.info_index]
 
                         # remove condensed sections and add their sentences to the start of the match
                         sections_to_remove.append(cur_label_info.section_index)
