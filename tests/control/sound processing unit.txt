@@ -52,8 +52,8 @@ $EF $00 $00 $00
 $F1 $00 $00 $01
 $F5 $00 $00 $00 $00 $00 $00 $00 $00
 
-(!1)[$FA$01$AB] ;Remote gain command for instrument 11: _O
-(!2)[$ED$70$E0] ;Restore ADSR for instrument 11: _O
+(!1)[$FA$01$AB]
+(!2)[$ED$70$E0]
 
 
 #0

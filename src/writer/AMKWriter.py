@@ -157,8 +157,8 @@ class AMKWriter:
         self.txt += '\n'
 
     def add_remote_commands(self) -> None:
-        for command in self.amk_data.remote_defs:
-            self.txt += f"(!{command.command_idx})[{command.amk_command.to_mml()}] ;{command.comment}\n"
+        for remote_def in self.amk_data.remote_defs:
+            self.txt += f"(!{remote_def.command_idx})[{remote_def.command.to_mml()}]\n"
 
         self.txt += "\n\n"
 

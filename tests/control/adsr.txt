@@ -31,9 +31,9 @@ $EF $FF $50 $B0
 $F1 $0F $80 $01
 $F5 $4D $11 $FA $F4 $FA $FB $FA $00
 
-(!1)[$ED$3C$A1] ;Restore ADSR for instrument 0: GlocknFlute
-(!2)[$FA$01$88] ;Remote gain command for instrument 2: square
-(!3)[$ED$49$A3] ;Restore ADSR for instrument 2: square
+(!1)[$ED$3C$A1]
+(!2)[$FA$01$88]
+(!3)[$ED$49$A3]
 
 
 #0

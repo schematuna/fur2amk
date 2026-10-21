@@ -31,6 +31,11 @@ class SnesGain:
         self.mode = mode
         self.gain = gain
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, SnesGain):
+            return NotImplemented
+        return self.mode == other.mode and self.gain == other.gain
+
     def to_byte(self) -> int:
         gain_byte = self.gain
         if self.mode == GainMode.DIRECT:

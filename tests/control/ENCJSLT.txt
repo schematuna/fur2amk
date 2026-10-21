@@ -59,10 +59,10 @@ $EF $40 $48 $48
 $F1 $05 $6C $01
 $F5 $58 $21 $EB $00 $00 $00 $00 $01
 
-(!1)[$FA$01$BF] ;Remote gain command for instrument 14: saw5st
-(!2)[$ED$7F$E0] ;Restore ADSR for instrument 14: saw5st
-(!3)[$FA$01$AC] ;Remote gain command for instrument 15: casio cz ambi
-(!4)[$ED$72$E0] ;Restore ADSR for instrument 15: casio cz ambi
+(!1)[$FA$01$BF]
+(!2)[$ED$7F$E0]
+(!3)[$FA$01$AC]
+(!4)[$ED$72$E0]
 
 
 #0

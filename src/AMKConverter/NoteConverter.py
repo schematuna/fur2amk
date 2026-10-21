@@ -10,8 +10,8 @@ from ..util.MMLUtil import *
 # conversion helper data class
 @dataclass
 class InstrumentInfo:
-    # list of remote command indices associated with this instrument
-    remote_commands: List[AMKRemoteDef] = field(default_factory=list)
+    # list of remote code calls associated with this instrument
+    remote_commands: List[AMKRemoteCodeCall] = field(default_factory=list)
 
 # Convert notes and tightly-coupled commands
 # This includes:
@@ -25,11 +25,11 @@ class NoteConverter():
         # if new instrument, set up remote commands for this instrument
         remote_commands = []
         if chip_ins.index in ins_info:
-            for remote_cmd in ins_info[chip_ins.index].remote_commands:
-                if remote_cmd.wait_ticks is not None:
-                    remote_commands.append(RemoteCommand(note_tick, remote_cmd.command_idx, remote_cmd.timing, remote_cmd.wait_ticks))
+            for remote_call in ins_info[chip_ins.index].remote_commands:
+                if remote_call.wait_ticks is not None:
+                    remote_commands.append(RemoteCommand(note_tick, remote_call.command_idx, remote_call.timing, remote_call.wait_ticks))
                 else:
-                    remote_commands.append(RemoteCommand(note_tick, remote_cmd.command_idx, remote_cmd.timing))
+                    remote_commands.append(RemoteCommand(note_tick, remote_call.command_idx, remote_call.timing))
 
         if len(remote_commands) > 2:
             self.logger.warning(f"Too many remote commands for instrument {chip_ins.index}, only 2 can be active at a time (one key on and one other)")

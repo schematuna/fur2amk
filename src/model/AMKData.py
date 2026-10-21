@@ -30,12 +30,15 @@ class AMKInstrument:
     gain: int = 0
 
 @dataclass
-class AMKRemoteDef():
+class AMKRemoteCodeDef():
     command_idx: int
-    amk_command: MMLCommand
-    comment: str = ""
+    command: MMLCommand
 
-    timing: RemoteCommandTiming = RemoteCommandTiming.AFTER_START
+@dataclass
+class AMKRemoteCodeCall():
+    command_idx: int
+    command: MMLCommand
+    timing: RemoteCommandTiming
     wait_ticks: Optional[int] = None
 
 @dataclass
@@ -87,7 +90,7 @@ class AMKData:
 
     echo_data: SNESEchoData = None
 
-    remote_defs: List[AMKRemoteDef] = field(default_factory=list)
+    remote_defs: List[AMKRemoteCodeDef] = field(default_factory=list)
 
     mml_data: MMLData = field(default_factory=MMLData)
 

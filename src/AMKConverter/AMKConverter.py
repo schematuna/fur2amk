@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import sys
 import logging
+from dataclasses import dataclass
 from typing import Dict, List, Tuple
 
 from ..model.ChiptuneData import *
@@ -89,45 +90,60 @@ class AMKConverter:
         # start at 1, 0 will be reserved for stop remote commands
         command_num = 1
 
+        @dataclass
+        class InsRemoteCommand:
+            command: MMLCommand
+            timing: RemoteCommandTiming
+            delay: Optional[int] = None
+
+        potential_defs: List[Tuple[InsRemoteCommand, ChiptuneInstrument]] = []
         for chip_ins in chiptune_data.instruments:
             self.instrument_info[chip_ins.index] = InstrumentInfo()
             gmacro = chip_ins.gain_values
             if gmacro and len(gmacro) > 1:
                 # just support one gain change for now.
                 # If we want to support more we'll have to set gain manually throughout the note.
-                comment = "Gain toggle for instrument " + str(chip_ins.index)+ ": " + chip_ins.name
                 command = EnableGainCommand(None, SnesGain.from_byte(gmacro[1]))
-                remote_def = AMKRemoteDef(command_num, command, comment, RemoteCommandTiming.AFTER_START, chip_ins.gain_speed)
-                amk_data.remote_defs.append(remote_def)
-                self.instrument_info[chip_ins.index].remote_commands.append(remote_def)
-                command_num += 1
+                potential_defs.append((InsRemoteCommand(command, RemoteCommandTiming.AFTER_START, chip_ins.gain_speed), chip_ins))
 
             if chip_ins.sn_envelope_on and (chip_ins.sustain_mode == SustainMode.EFF_LINEAR or chip_ins.sustain_mode == SustainMode.EFF_EXP):
                 gain_mode = GainMode.DEC_LINEAR if chip_ins.sustain_mode == SustainMode.EFF_LINEAR else GainMode.DEC_LOG
                 gain = SnesGain(gain_mode, chip_ins.sn_release)
-                comment = "Remote gain command for instrument " + str(chip_ins.index)+ ": " + chip_ins.name
                 command = EnableGainCommand(None, gain)
-                remote_def = AMKRemoteDef(command_num, command, comment, RemoteCommandTiming.KEY_OFF)
-                amk_data.remote_defs.append(remote_def)
-                self.instrument_info[chip_ins.index].remote_commands.append(remote_def)
-                command_num += 1
+                potential_defs.append((InsRemoteCommand(command, RemoteCommandTiming.KEY_OFF), chip_ins))
                 # and create the key on command to undo the changes
-                comment = "Restore ADSR for instrument " + str(chip_ins.index)+ ": " + chip_ins.name
                 command = CustomADSR(None, ADSR(chip_ins.sn_attack, chip_ins.sn_decay, chip_ins.sn_sustain, chip_ins.decay2)) # TODO: just enable adsr directly thru register?
-                remote_def = AMKRemoteDef(command_num, command, comment, RemoteCommandTiming.KEY_ON)
-                amk_data.remote_defs.append(remote_def)
-                self.instrument_info[chip_ins.index].remote_commands.append(remote_def)
-                command_num += 1
+                potential_defs.append((InsRemoteCommand(command, RemoteCommandTiming.KEY_ON), chip_ins))
 
             # for delayed release, ADSR changes on note off. Have to restore it on key on.
             if chip_ins.sn_envelope_on and chip_ins.sustain_mode == SustainMode.DELAYED:
-                comment = "Restore ADSR for instrument " + str(chip_ins.index)+ ": " + chip_ins.name
                 command = CustomADSR(None, ADSR(chip_ins.sn_attack, chip_ins.sn_decay, chip_ins.sn_sustain, chip_ins.decay2)) # TODO: modify release directly thru register?
-                remote_def = AMKRemoteDef(command_num, command, comment, RemoteCommandTiming.KEY_ON)
-                amk_data.remote_defs.append(remote_def)
-                self.instrument_info[chip_ins.index].remote_commands.append(remote_def)
-                command_num += 1
+                potential_defs.append((InsRemoteCommand(command, RemoteCommandTiming.KEY_ON), chip_ins))
 
+        # definition index -> remote def
+        remote_defs: List[AMKRemoteCodeDef] = []
+        for candidate in potential_defs:
+            ins_remote_cmd = candidate[0]
+            ins = candidate[1]
+            matched_idx = None
+            for remote_def in remote_defs:
+                if ins_remote_cmd.command == remote_def.command:
+                    matched_idx = remote_def.command_idx
+                    break
+
+            call_idx = None
+            if matched_idx is None:
+                remote_defs.append(AMKRemoteCodeDef(command_num, ins_remote_cmd.command))
+                call_idx = command_num
+                command_num += 1
+            else:
+                call_idx = matched_idx
+
+            self.instrument_info[ins.index].remote_commands.append(AMKRemoteCodeCall(call_idx, ins_remote_cmd.command, ins_remote_cmd.timing, ins_remote_cmd.delay))
+
+        # write out all unique remote defs
+        amk_data.remote_defs.extend(remote_defs)
+        
         # need to indicate where to pick up with labels
         # loop labels and remote command labels can't overlap
         return command_num

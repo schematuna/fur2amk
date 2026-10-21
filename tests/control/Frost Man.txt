@@ -41,8 +41,8 @@ w128 t30
 $EF $F8 $C0 $3F
 $F1 $03 $40 $01
 
-(!1)[$FA$01$92] ;Remote gain command for instrument 3: MM8 Slap Bass
-(!2)[$ED$0F$00] ;Restore ADSR for instrument 3: MM8 Slap Bass
+(!1)[$FA$01$92]
+(!2)[$ED$0F$00]
 
 
 #0
