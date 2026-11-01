@@ -2,6 +2,7 @@ from typing import List
 import copy
 
 from .MMLWriterData import *
+from ..util.lz77 import CompressionUtil
 
 class LoopOptimizer:
     def __init__(self):
@@ -210,7 +211,7 @@ class LoopOptimizer:
         for section in sections:
             # Only optimize section if it hasn't been touched yet
             if len(section.loopInfo) == 1 and section.loopInfo[0].label is None and section.loopInfo[0].numLoops == 1 and section.loopInfo[0].subLoops is None:
-                matches = self._lz77(section.sentences)
+                matches = CompressionUtil._lz77(section.sentences)
                 loopinfos = self._make_loop_info(section.sentences, matches)
 
                 # assign labels to matching loopinfos
@@ -274,7 +275,7 @@ class LoopOptimizer:
         for cur_grp_info in unoptimized_sent_grps:
             matched: bool = False
             for search_idx, search_grp_info in enumerate(search_buffer):
-                matches = self._lz77_duplex(search_grp_info.sentences, cur_grp_info.sentences)
+                matches = CompressionUtil._lz77_duplex(search_grp_info.sentences, cur_grp_info.sentences)
                 if len(matches) == 0:
                     continue
                 matched = True
@@ -365,7 +366,7 @@ class LoopOptimizer:
         # perform lz77 on these label groups
         sections_to_remove: List[int] = []
         for i, grp in enumerate(raw_label_groups):
-            matches = self._lz77(grp, min_match_len=2)
+            matches = CompressionUtil._lz77(grp, min_match_len=2)
             if len(matches) == 0:
                 continue
             matched_label_group = label_groups[i]
@@ -473,63 +474,6 @@ class LoopOptimizer:
 
         return filled_loopinfos
 
-    def _lz77(self, items, min_match_len = 1) -> List[Tuple[List[int], int]]:
-        """lz77 implementation for an arbitrary group of objects
-           returns of match start indices and the match length for each match found"""
-        
-        match_info: List[Tuple[List[int], int]] = []
-
-        search_buffer: List = []
-        lookahead_buffer: List = copy.deepcopy(items)
-        last_match: List = None
-        # absolute buffer start indices
-        search_pos = 0
-        la_pos = 0
-        while len(lookahead_buffer) > 0:
-            found_match = False
-            for s_idx in range(len(search_buffer)):
-                matched_group: List = []
-                _cur_idx = 0
-                _search_idx = s_idx
-                while (_cur_idx < len(lookahead_buffer)) \
-                    and (_search_idx < len(search_buffer)) \
-                    and (search_buffer[_search_idx] == lookahead_buffer[_cur_idx]):
-                    matched_group.append(lookahead_buffer[_cur_idx])
-                    _cur_idx += 1
-                    _search_idx += 1
-
-                match_len = len(matched_group)
-                if match_len >= min_match_len:
-                    # we have a match
-                    last_match = matched_group
-                    # set loop info
-                    relative_pos = search_pos + s_idx
-                    match_info.append(([relative_pos, la_pos], match_len))
-                    found_match = True
-                    break
-
-            # update state after this check
-            if found_match:
-                lookahead_buffer = lookahead_buffer[len(last_match):]
-                la_pos += len(last_match)
-                # look ahead for more consecutive matches
-                # TODO: do this for any future match, not just consecutive
-                while len(lookahead_buffer) >= len(last_match) \
-                        and lookahead_buffer[:len(last_match)] == last_match:
-                    lookahead_buffer = lookahead_buffer[len(last_match):]
-                    match_info[-1][0].append(la_pos)
-                    la_pos += len(last_match)
-
-                # start looking again beyond latest match
-                # TODO: could keep unmatched lines in search buffer, and track matched lines and skip them
-                search_buffer.clear()                
-                search_pos = la_pos
-            else:
-                search_buffer.append(lookahead_buffer.pop(0))
-                la_pos += 1
-                            
-        return match_info
-
     def _rle_lz(self, sentences: List[MMLSentence]) -> List[LoopInfo]:
         """compression alg for MML sentences
            Identifies consecutive repeated sentences and returns loop info for them
@@ -596,35 +540,6 @@ class LoopOptimizer:
             loopInfo.append(LoopInfo(list(range(cur_buffer_pos, cur_buffer_pos + len(search_buffer)))))
                             
         return loopInfo
-
-    def _lz77_duplex(self, group1, group2) -> List[Tuple[List[int], List[int]]]:
-        """modified lz77 for finding repeated groups between two sets of items
-           Returns tuples of group pairs, indexed relative to start of groups passed in."""
-
-        # shallow copy for nomenclature
-        search_buffer = group1
-        lookahead_buffer = group2
-        matches: List[Tuple[List[int], List[int]]] = []
-        for cur_idx in range(len((lookahead_buffer))):
-            for search_idx in range(len(search_buffer)):
-                matched_group: List[MMLSentence] = []
-                _cur_idx = cur_idx
-                _search_idx = search_idx
-                while (_cur_idx < len(lookahead_buffer)) \
-                      and (_search_idx < len(search_buffer)) \
-                      and (search_buffer[_search_idx] == lookahead_buffer[_cur_idx]):
-                    matched_group.append(lookahead_buffer[_cur_idx])
-                    _cur_idx += 1
-                    _search_idx += 1
-
-                if len(matched_group) > 0:
-                    # found one, now catalog it
-                    matches.append((list(range(search_idx, search_idx + len(matched_group))), list(range(cur_idx, cur_idx + len(matched_group)))))
-                    # just return the first match for now
-                    # TODO: return all matches...
-                    return matches
-                    
-        return matches
 
     def _split_loopInfo(self, info: LoopInfo, split_idcs: List[int], label: int = None, isRepeat: bool = False) -> List[LoopInfo]:
         """Splits a loopInfo object into smaller loopinfo objects, given indices you want to split out

@@ -1,6 +1,7 @@
 from ..writer.MMLWriterData import *
 
 from ..writer.LoopOptimizer import LoopOptimizer
+from ..util.lz77 import CompressionUtil
 
 # unit tests, am I a real coder now?
 
@@ -43,7 +44,7 @@ def replace_test(sections: List[MMLSection], group_info: GroupInfo, new_loop_inf
         print("Pass")
 
 def duplex_test(sentences1: List[MMLSentence], sentences2: List[MMLSentence], expected: List[Tuple[List[int], List[int]]]) -> bool:
-    output = optimizer._lz77_duplex(sentences1, sentences2)
+    output = CompressionUtil._lz77_duplex(sentences1, sentences2)
     success, err = check_match(expected, output)
     if not success:
         print(err)
@@ -59,7 +60,7 @@ def label_group_test(sections: List[MMLSection], loop_tick: int, expected: List[
         print("Pass")
 
 def lz77_test(items: List[int], min_match_len: int, expected: List[Tuple[List[int], int]]):
-    output = optimizer._lz77(items, min_match_len)
+    output = CompressionUtil._lz77(items, min_match_len)
     success, err = check_match(expected, output)
     if not success:
         print(err)
